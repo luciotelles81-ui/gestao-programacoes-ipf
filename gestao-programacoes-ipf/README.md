@@ -17,8 +17,19 @@ Aplicação web de arquivo único (`index.html`) para organizar as programaçõe
 - **Backup**: exportação e importação dos dados em JSON.
 - Tema claro, escuro ou automático, layout responsivo para celular e atalhos de teclado (`N` cria uma nova programação, `/` abre a busca e `Esc` fecha janelas).
 
-## Importante
+## Banco de dados (Google Planilhas)
 
-Os dados ficam salvos no **navegador** (`localStorage`). Por isso, cada computador ou navegador tem os próprios dados. Use **Exportar backup** com frequência e **Importar backup** para levar os dados a outro dispositivo.
+O site pode guardar os dados numa planilha do Google, compartilhada por todos os usuários. A configuração é esta:
 
-As senhas são guardadas como hash SHA-256. Mesmo assim, como tudo roda no navegador, este sistema não substitui uma autenticação feita em servidor.
+1. Na planilha, abra **Extensões → Apps Script**, apague o conteúdo e cole o arquivo [`apps-script/Code.gs`](apps-script/Code.gs).
+2. Clique em **Implantar → Nova implantação → App da Web**, com **Executar como: Eu** e **Quem pode acessar: Qualquer pessoa**. Autorize o acesso.
+3. Copie a URL gerada (termina em `/exec`) para o campo `apiUrl` do arquivo `config.js`.
+
+Na primeira chamada, o script cria as abas `Usuarios`, `Ministerios` e `Programacoes` e um administrador com usuário `admin` e senha `admin123`. **Troque essa senha logo no primeiro acesso.**
+
+- As senhas são verificadas no servidor e guardadas apenas como hash SHA-256. O site nunca recebe esses hashes.
+- Cada login gera uma sessão válida por 7 dias. Depois de 5 tentativas erradas, o login fica bloqueado por 5 minutos.
+- O site busca as alterações de outros usuários a cada 60 segundos. Clique em "Planilha conectada" para atualizar na hora.
+- Evite editar as abas diretamente na planilha. Se editar, mantenha a primeira linha (os cabeçalhos) e a coluna `id`.
+
+Com `apiUrl` vazio, o site funciona em **modo local**: os dados ficam só no navegador (`localStorage`). Nesse modo, use **Exportar backup** com frequência. O mesmo backup pode ser importado depois para a planilha.

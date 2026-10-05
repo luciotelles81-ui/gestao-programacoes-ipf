@@ -1,0 +1,2417 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Gestão de programações, ministérios e usuários da Igreja Presbiteriana Filadélfia.">
+  <title>Gestão de Programações · IP Filadélfia</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 110'%3E%3Cpath d='M20 98h32c24 0 36-18 36-48 0-22-10-32-36-36-20-4-32 2-36 6v72c0 4 2 6 4 6z' fill='%23388E52'/%3E%3Cpath d='M50 26v18M50 56v28M32 50h12M56 50h14' stroke='%23fff' stroke-width='8.5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+
+  <style>
+    /* ==========================================================================
+       TOKENS (claro / escuro)
+       ========================================================================== */
+    :root {
+      color-scheme: light;
+      --brand: #388E52;
+      --accent: #2f7d47;
+      --accent-hover: #256a3a;
+      --accent-soft: #e6f3ea;
+      --accent-contrast: #ffffff;
+
+      --bg: #f3f5f8;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --surface-hover: #f1f5f9;
+      --text: #0f172a;
+      --text-2: #334155;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+      --shadow-lg: 0 20px 40px -12px rgba(15, 23, 42, 0.25);
+
+      --pend: #dc2626;  --pend-soft: #fef2f2;  --pend-border: #fecaca;
+      --prog: #d97706;  --prog-soft: #fffbeb;  --prog-border: #fde68a;
+      --done: #059669;  --done-soft: #ecfdf5;  --done-border: #a7f3d0;
+      --danger-soft: #fee2e2; --danger-text: #b91c1c;
+
+      --sidebar-bg: #121821;
+      --sidebar-text: #f8fafc;
+      --sidebar-muted: #94a3b8;
+      --sidebar-hover: #1f2733;
+      --sidebar-border: #232c3a;
+
+      --radius: 12px;
+      --radius-sm: 8px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --accent: #4caf6c;
+        --accent-hover: #5fc07e;
+        --accent-soft: rgba(76, 175, 108, 0.14);
+        --accent-contrast: #07120b;
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface-2: #1b222b;
+        --surface-hover: #212a35;
+        --text: #e8edf3;
+        --text-2: #c3ccd7;
+        --text-muted: #8b97a6;
+        --border: #262f3b;
+        --border-strong: #354151;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 20px 40px -12px rgba(0, 0, 0, 0.6);
+        --pend: #f87171; --pend-soft: rgba(248, 113, 113, 0.12); --pend-border: rgba(248, 113, 113, 0.3);
+        --prog: #fbbf24; --prog-soft: rgba(251, 191, 36, 0.12);  --prog-border: rgba(251, 191, 36, 0.3);
+        --done: #34d399; --done-soft: rgba(52, 211, 153, 0.12);  --done-border: rgba(52, 211, 153, 0.3);
+        --danger-soft: rgba(248, 113, 113, 0.14); --danger-text: #fca5a5;
+        --sidebar-bg: #0a0e13;
+        --sidebar-hover: #18202a;
+        --sidebar-border: #1b232e;
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --accent: #4caf6c;
+      --accent-hover: #5fc07e;
+      --accent-soft: rgba(76, 175, 108, 0.14);
+      --accent-contrast: #07120b;
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1b222b;
+      --surface-hover: #212a35;
+      --text: #e8edf3;
+      --text-2: #c3ccd7;
+      --text-muted: #8b97a6;
+      --border: #262f3b;
+      --border-strong: #354151;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 20px 40px -12px rgba(0, 0, 0, 0.6);
+      --pend: #f87171; --pend-soft: rgba(248, 113, 113, 0.12); --pend-border: rgba(248, 113, 113, 0.3);
+      --prog: #fbbf24; --prog-soft: rgba(251, 191, 36, 0.12);  --prog-border: rgba(251, 191, 36, 0.3);
+      --done: #34d399; --done-soft: rgba(52, 211, 153, 0.12);  --done-border: rgba(52, 211, 153, 0.3);
+      --danger-soft: rgba(248, 113, 113, 0.14); --danger-text: #fca5a5;
+      --sidebar-bg: #0a0e13;
+      --sidebar-hover: #18202a;
+      --sidebar-border: #1b232e;
+    }
+
+    /* ==========================================================================
+       BASE
+       ========================================================================== */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    [hidden] { display: none !important; }
+
+    /* ==========================================================================
+       LOGIN
+       ========================================================================== */
+    #auth-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem 1rem;
+      background:
+        radial-gradient(circle at 15% 15%, color-mix(in srgb, var(--brand) 18%, transparent) 0%, transparent 55%),
+        radial-gradient(circle at 85% 90%, color-mix(in srgb, var(--brand) 10%, transparent) 0%, transparent 50%),
+        var(--bg);
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      padding: 2.25rem 2rem;
+    }
+    .auth-logo { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.75rem; margin-bottom: 1.75rem; }
+    .auth-logo h1 { font-size: 1.25rem; margin: 0; }
+    .auth-logo p { font-size: 0.85rem; color: var(--text-muted); margin: 0.2rem 0 0; }
+    .church-logo-svg { flex-shrink: 0; filter: drop-shadow(0 2px 5px rgba(56, 142, 82, 0.28)); }
+    .auth-hint {
+      margin-top: 1.5rem; padding: 0.85rem; border-radius: var(--radius-sm);
+      background: var(--surface-2); border: 1px dashed var(--border-strong);
+      font-size: 0.8rem; color: var(--text-muted);
+    }
+    .auth-hint code { background: var(--surface-hover); padding: 0 0.3rem; border-radius: 4px; color: var(--text); }
+    .password-wrap { position: relative; }
+    .password-wrap .form-control { padding-right: 2.75rem; }
+    .password-toggle {
+      position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+      border: 0; background: transparent; color: var(--text-muted); cursor: pointer;
+      padding: 0.35rem 0.5rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600;
+    }
+    .password-toggle:hover { color: var(--text); background: var(--surface-hover); }
+
+    /* ==========================================================================
+       LAYOUT
+       ========================================================================== */
+    #app-screen { min-height: 100vh; }
+    .app-layout { display: flex; min-height: 100vh; }
+
+    .app-sidebar {
+      width: 260px;
+      background: var(--sidebar-bg);
+      color: var(--sidebar-text);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      z-index: 50;
+      border-right: 1px solid var(--sidebar-border);
+      transition: transform 0.25s ease;
+    }
+    .sidebar-header { padding: 1.15rem 1.15rem 1rem; border-bottom: 1px solid var(--sidebar-border); }
+    .sidebar-brand { display: flex; align-items: center; gap: 0.65rem; color: #fff; text-decoration: none; }
+    .sidebar-brand span { font-size: 0.85rem; line-height: 1.25; font-weight: 700; }
+
+    .user-mini-card {
+      margin: 1rem 0.75rem 0.5rem; padding: 0.7rem;
+      background: rgba(255, 255, 255, 0.05); border-radius: var(--radius-sm);
+      display: flex; align-items: center; gap: 0.7rem;
+    }
+    .avatar-circle {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--brand); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 0.85rem; flex-shrink: 0;
+    }
+    .user-mini-info { line-height: 1.25; overflow: hidden; }
+    .user-mini-name { font-size: 0.875rem; font-weight: 600; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+    .user-mini-role { font-size: 0.72rem; color: var(--sidebar-muted); }
+
+    .sidebar-nav { flex: 1; padding: 0.75rem 0.5rem; display: flex; flex-direction: column; gap: 0.2rem; overflow-y: auto; }
+    .nav-item {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.65rem 0.85rem; border-radius: var(--radius-sm);
+      color: var(--sidebar-muted); font-size: 0.9rem; font-weight: 500;
+      cursor: pointer; border: none; background: transparent; width: 100%; text-align: left;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .nav-item:hover { background: var(--sidebar-hover); color: #fff; }
+    .nav-item.active { background: var(--brand); color: #fff; font-weight: 600; }
+    .nav-item .nav-count {
+      margin-left: auto; font-size: 0.7rem; font-weight: 600;
+      background: rgba(255,255,255,0.1); padding: 0.05rem 0.45rem; border-radius: 999px;
+    }
+
+    .sidebar-footer { padding: 0.75rem; border-top: 1px solid var(--sidebar-border); display: flex; flex-direction: column; gap: 0.35rem; }
+    .sidebar-btn {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%;
+      padding: 0.5rem 0.75rem; border-radius: var(--radius-sm);
+      background: transparent; border: none; color: var(--sidebar-muted);
+      font-size: 0.8rem; font-weight: 500; cursor: pointer; text-align: left;
+    }
+    .sidebar-btn:hover { background: var(--sidebar-hover); color: #fff; }
+    .sidebar-btn.danger:hover { background: rgba(220, 38, 38, 0.18); color: #fca5a5; }
+
+    .app-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .app-topbar {
+      height: 64px; background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      padding: 0 1.5rem; position: sticky; top: 0; z-index: 30;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+    .topbar-title { font-size: 1.2rem; font-weight: 700; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topbar-right { display: flex; gap: 0.5rem; align-items: center; }
+    .menu-toggle-btn { display: none; }
+
+    .content-body { padding: 1.5rem; flex: 1; max-width: 1400px; width: 100%; margin: 0 auto; }
+
+    .view-panel { display: none; }
+    .view-panel.active { display: block; animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+    .view-intro { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .view-intro p { color: var(--text-muted); font-size: 0.9rem; margin: 0; }
+
+    /* ==========================================================================
+       COMPONENTES
+       ========================================================================== */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+
+    /* Botões */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+      padding: 0.5rem 0.9rem; font-size: 0.85rem; font-weight: 600; line-height: 1.2;
+      border-radius: var(--radius-sm); border: 1px solid transparent; cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      white-space: nowrap; text-decoration: none;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: var(--accent-contrast); }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--surface); color: var(--text-2); border-color: var(--border-strong); }
+    .btn-secondary:hover { background: var(--surface-hover); }
+    .btn-ghost { background: transparent; color: var(--text-muted); }
+    .btn-ghost:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-danger { background: var(--danger-soft); color: var(--danger-text); }
+    .btn-danger:hover { filter: brightness(0.96); }
+    .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: 6px; }
+    .btn-icon {
+      width: 32px; height: 32px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 6px; border: 1px solid transparent; background: transparent;
+      color: var(--text-muted); cursor: pointer;
+    }
+    .btn-icon:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-icon.danger:hover { background: var(--danger-soft); color: var(--danger-text); }
+    .btn-icon svg, .btn svg { flex-shrink: 0; }
+
+    /* Formulários */
+    .form-group { margin-bottom: 1rem; }
+    .form-label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.35rem; }
+    .form-label .req { color: var(--pend); }
+    .form-control {
+      width: 100%; padding: 0.55rem 0.75rem;
+      border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+      font-size: 0.9rem; color: var(--text); background: var(--surface);
+      outline: none; transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+    textarea.form-control { resize: vertical; min-height: 80px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
+    .form-check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; cursor: pointer; user-select: none; }
+    .form-check input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem; }
+    input[type="color"].form-control { height: 40px; padding: 3px 4px; cursor: pointer; }
+
+    /* Filtros */
+    .filter-panel { padding: 0.9rem 1.1rem; margin-bottom: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .filter-row { display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; }
+    .filter-row.split { justify-content: space-between; }
+    .filter-title { font-weight: 600; font-size: 0.875rem; }
+    .filter-item { display: flex; align-items: center; gap: 0.4rem; }
+    .filter-item.grow { flex: 1; min-width: 170px; }
+    .filter-item label { white-space: nowrap; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); }
+    .filter-item .form-control { padding: 0.35rem 0.6rem; font-size: 0.825rem; height: 36px; }
+    .filter-results-badge {
+      display: inline-flex; align-items: center; font-size: 0.78rem; font-weight: 600;
+      color: var(--text-2); background: var(--surface-2); padding: 0.3rem 0.65rem;
+      border-radius: 6px; border: 1px solid var(--border); white-space: nowrap;
+    }
+    .search-box { position: relative; flex: 1; max-width: 420px; min-width: 200px; }
+    .search-box svg { position: absolute; left: 0.65rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+    .search-box .form-control { padding-left: 2.1rem; height: 36px; font-size: 0.85rem; }
+
+    /* KPIs */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+    .stat-card { padding: 1.1rem 1.2rem; display: flex; align-items: center; gap: 1rem; }
+    .stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .stat-val { font-size: 1.6rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .stat-val small { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-left: 0.3rem; }
+    .stat-lbl { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; font-weight: 500; }
+    .ic-total { background: var(--accent-soft); color: var(--accent); }
+    .ic-pend { background: var(--pend-soft); color: var(--pend); }
+    .ic-prog { background: var(--prog-soft); color: var(--prog); }
+    .ic-done { background: var(--done-soft); color: var(--done); }
+
+    /* Barra de distribuição */
+    .dist-bar-card { padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+    .dist-bar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.65rem; font-size: 0.85rem; font-weight: 600; }
+    .dist-bar-header span:last-child { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+    .dist-track { height: 12px; width: 100%; background: var(--surface-hover); border-radius: 999px; display: flex; overflow: hidden; }
+    .dist-seg { height: 100%; transition: width 0.3s ease; }
+    .seg-done { background: var(--done); }
+    .seg-prog { background: var(--prog); }
+    .seg-pend { background: var(--pend); }
+    .dist-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin-top: 0.65rem; font-size: 0.78rem; color: var(--text-muted); }
+    .dist-legend-item { display: flex; align-items: center; gap: 0.35rem; font-weight: 500; }
+    .dist-legend-item strong { color: var(--text); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+    /* Painéis do dashboard */
+    .dashboard-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.15fr); gap: 1.25rem; }
+    .panel-box { padding: 1.15rem; }
+    .panel-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
+      margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);
+    }
+    .panel-title { font-size: 1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.5rem; }
+
+    /* Calendário */
+    .calendar-controls { display: flex; align-items: center; gap: 0.35rem; }
+    .cal-current-label { font-weight: 600; font-size: 0.95rem; min-width: 130px; text-align: center; }
+    .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 0.72rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .cal-days-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+    .cal-cell {
+      min-height: 88px; background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px; font-size: 0.75rem;
+      display: flex; flex-direction: column; gap: 2px; overflow: hidden; cursor: pointer;
+      transition: background 0.1s ease, border-color 0.1s ease;
+    }
+    .cal-cell:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+    .cal-cell.other-month { opacity: 0.4; cursor: default; }
+    .cal-cell.other-month:hover { background: var(--surface-2); border-color: var(--border); }
+    .cal-cell.is-today { border: 1.5px solid var(--accent); background: var(--accent-soft); }
+    .cal-day-num {
+      font-weight: 600; color: var(--text-2); width: 22px; height: 22px; line-height: 22px;
+      text-align: center; border-radius: 50%; flex-shrink: 0;
+    }
+    .cal-cell.is-today .cal-day-num { background: var(--accent); color: var(--accent-contrast); }
+    .cal-event-pill {
+      font-size: 0.68rem; font-weight: 600; padding: 2px 5px; border-radius: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff;
+      border: 0; text-align: left; cursor: pointer; width: 100%;
+    }
+    .cal-event-pill.is-done { opacity: 0.6; text-decoration: line-through; }
+    .cal-more { font-size: 0.66rem; color: var(--text-muted); font-weight: 600; padding-left: 4px; }
+
+    /* Próximas programações */
+    .upcoming-item { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem 0.25rem; border-bottom: 1px solid var(--border); cursor: pointer; border-radius: 6px; }
+    .upcoming-item:hover { background: var(--surface-2); }
+    .upcoming-item:last-child { border-bottom: none; }
+    .upcoming-date-badge { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.35rem 0.5rem; text-align: center; min-width: 50px; }
+    .upcoming-day { font-size: 1.1rem; font-weight: 700; line-height: 1.1; }
+    .upcoming-month { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
+    .upcoming-title { font-weight: 600; font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .upcoming-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+    .upcoming-tags { margin-top: 0.35rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+    .rel-day { font-size: 0.68rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.03em; }
+
+    /* Tags e status */
+    .event-tag {
+      display: inline-flex; align-items: center; max-width: 100%;
+      font-size: 0.72rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 4px;
+      color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .event-tag.muted { background: var(--surface-hover); color: var(--text-muted); }
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      font-size: 0.74rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 999px;
+      white-space: nowrap; border: 1px solid;
+    }
+    .status-pill .dot { width: 6px; height: 6px; background: currentColor; }
+    .st-pend { background: var(--pend-soft); color: var(--pend); border-color: var(--pend-border); }
+    .st-prog { background: var(--prog-soft); color: var(--prog); border-color: var(--prog-border); }
+    .st-done { background: var(--done-soft); color: var(--done); border-color: var(--done-border); }
+    .badge {
+      display: inline-flex; align-items: center; font-size: 0.74rem; font-weight: 600;
+      padding: 0.2rem 0.55rem; border-radius: 999px;
+    }
+    .badge-active { background: var(--done-soft); color: var(--done); }
+    .badge-inactive { background: var(--pend-soft); color: var(--pend); }
+    .badge-admin { background: var(--accent-soft); color: var(--accent); }
+    .badge-user { background: var(--surface-hover); color: var(--text-muted); }
+    .badge-you { background: var(--surface-hover); color: var(--text-muted); font-size: 0.68rem; margin-left: 0.35rem; }
+
+    /* Tabelas */
+    .table-wrap { overflow: hidden; }
+    .table-scroll { overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
+    .data-table th {
+      background: var(--surface-2); padding: 0.75rem 1rem; font-weight: 600;
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
+      white-space: nowrap; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .data-table th.sortable { cursor: pointer; user-select: none; }
+    .data-table th.sortable:hover { color: var(--text); }
+    .data-table td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover { background: var(--surface-2); }
+    .data-table tr.is-past td:first-child .cell-strong { color: var(--text-muted); }
+    .cell-strong { font-weight: 600; }
+    .cell-sub { font-size: 0.75rem; color: var(--text-muted); }
+    .cell-desc { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row-actions { display: inline-flex; align-items: center; gap: 0.2rem; }
+    .text-right { text-align: right; }
+
+    .empty-state { padding: 2.5rem 1rem; text-align: center; color: var(--text-muted); }
+    .empty-state .empty-icon { width: 48px; height: 48px; margin: 0 auto 0.75rem; border-radius: 50%; background: var(--surface-hover); display: flex; align-items: center; justify-content: center; }
+    .empty-state strong { display: block; color: var(--text); margin-bottom: 0.25rem; }
+    .empty-state p { margin: 0 0 1rem; font-size: 0.85rem; }
+
+    /* Ministérios */
+    .ministries-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.15rem; }
+    .ministry-card {
+      padding: 1.2rem; display: flex; flex-direction: column; justify-content: space-between; gap: 0.75rem;
+      border-top: 4px solid var(--tag-color, var(--accent));
+    }
+    .ministry-card h4 { font-size: 1.05rem; margin: 0 0 0.4rem; }
+    .ministry-card .leader { font-size: 0.85rem; color: var(--text-2); margin: 0 0 0.5rem; }
+    .ministry-card .desc { font-size: 0.8rem; color: var(--text-muted); margin: 0; line-height: 1.45; }
+    .ministry-foot { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+    .ministry-stats { display: flex; gap: 0.5rem; align-items: center; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+    .mini-bar { width: 70px; height: 6px; border-radius: 999px; background: var(--surface-hover); overflow: hidden; }
+    .mini-bar span { display: block; height: 100%; background: var(--done); }
+
+    /* Modais */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(2px);
+      display: none; align-items: center; justify-content: center; z-index: 100; padding: 1rem;
+    }
+    .modal-overlay.active { display: flex; animation: fadeIn 0.15s ease-out; }
+    .modal-box {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;
+      box-shadow: var(--shadow-lg); padding: 1.5rem;
+    }
+    .modal-box.sm { max-width: 420px; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin: 0; }
+    .modal-text { font-size: 0.9rem; color: var(--text-2); margin: 0; }
+
+    /* Toasts */
+    #toast-container {
+      position: fixed; top: 1rem; right: 1rem; z-index: 9999;
+      display: flex; flex-direction: column; gap: 0.5rem; pointer-events: none;
+      max-width: calc(100vw - 2rem);
+    }
+    .toast {
+      min-width: 260px; max-width: 400px; padding: 0.75rem 1rem; border-radius: var(--radius-sm);
+      font-size: 0.875rem; font-weight: 500; color: #fff; box-shadow: var(--shadow-lg);
+      animation: slideIn 0.2s ease-out; pointer-events: auto;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .toast.out { opacity: 0; transform: translateY(-8px); }
+    .toast-success { background: #059669; }
+    .toast-error { background: #dc2626; }
+    .toast-info { background: #2563eb; }
+    @keyframes slideIn { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+    .sidebar-backdrop { display: none; }
+
+    /* Sincronização com a planilha */
+    .sync-status {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
+      padding: 0.3rem 0.6rem; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border);
+      white-space: nowrap; cursor: pointer;
+    }
+    .sync-status .dot { background: var(--done); }
+    .sync-status.busy .dot { background: var(--prog); animation: pulse 1s ease-in-out infinite; }
+    .sync-status.error .dot { background: var(--pend); }
+    @keyframes pulse { 50% { opacity: 0.3; } }
+    #loading-screen {
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+      color: var(--text-muted); font-size: 0.9rem;
+    }
+    .spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 720px) { .sync-label { display: none; } }
+
+    /* ==========================================================================
+       RESPONSIVO
+       ========================================================================== */
+    @media (max-width: 1100px) {
+      .dashboard-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 900px) {
+      .app-sidebar { position: fixed; top: 0; bottom: 0; left: 0; transform: translateX(-100%); }
+      .app-sidebar.open { transform: none; box-shadow: var(--shadow-lg); }
+      .menu-toggle-btn { display: inline-flex; }
+      .sidebar-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 40; }
+      .sidebar-backdrop.active { display: block; }
+    }
+    @media (max-width: 720px) {
+      .content-body { padding: 1rem; }
+      .app-topbar { padding: 0 1rem; }
+      .topbar-new-label { display: none; }
+      .form-row { grid-template-columns: 1fr; }
+      .filter-item, .filter-item.grow { flex: 1 1 100%; }
+      .filter-item label { min-width: 88px; }
+      .search-box { max-width: none; flex-basis: 100%; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+      .stat-card { padding: 0.85rem; gap: 0.65rem; }
+      .stat-icon { width: 36px; height: 36px; }
+      .stat-val { font-size: 1.3rem; }
+
+      .cal-cell { min-height: 54px; padding: 3px; }
+      .cal-event-pill { font-size: 0; height: 6px; padding: 0; border-radius: 3px; }
+      .cal-more { font-size: 0.6rem; padding: 0; }
+      .cal-current-label { min-width: 0; }
+
+      /* Tabelas viram cartões */
+      .data-table thead { display: none; }
+      .data-table, .data-table tbody, .data-table tr, .data-table td { display: block; width: 100%; }
+      .data-table tr { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); }
+      .data-table tbody tr:last-child { border-bottom: none; }
+      .data-table td { border: none; padding: 0.2rem 0; }
+      .data-table td[data-label] { display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 0.5rem; align-items: baseline; }
+      .data-table td[data-label] > * { grid-column: 2; justify-self: start; max-width: 100%; }
+      .data-table td[data-label]::before {
+        content: attr(data-label); grid-column: 1; grid-row: 1 / span 3;
+        font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);
+      }
+      .data-table td.text-right { text-align: left; padding-top: 0.5rem; }
+      .cell-desc { white-space: normal; }
+    }
+    @media (max-width: 420px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .auth-card { padding: 1.75rem 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container" role="status" aria-live="polite"></div>
+
+  <!-- Logo reutilizável -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="ipf-logo" viewBox="0 0 100 110">
+      <path d="M 20 98 L 52 98 C 76 98 88 80 88 50 C 88 28 78 18 52 14 C 32 10 20 16 16 20 C 16 20 16 24 16 92 C 16 96 18 98 20 98 Z" fill="#388E52" stroke="#2e7d44" stroke-width="2"/>
+      <path d="M 50 26 L 50 44 M 50 56 L 50 84 M 32 50 L 44 50 M 56 50 L 70 50" stroke="#FFFFFF" stroke-width="8.5" stroke-linecap="round"/>
+    </symbol>
+  </svg>
+
+  <!-- ======================= CARREGANDO ======================= -->
+  <div id="loading-screen">
+    <div class="spinner" aria-hidden="true"></div>
+    <span id="loading-text">Carregando…</span>
+  </div>
+
+  <!-- ======================= LOGIN ======================= -->
+  <div id="auth-screen" hidden>
+    <div class="auth-card">
+      <div class="auth-logo">
+        <svg class="church-logo-svg" width="70" height="77" role="img" aria-label="Logo Igreja Presbiteriana Filadélfia"><use href="#ipf-logo"/></svg>
+        <div>
+          <h1>Igreja Presbiteriana Filadélfia</h1>
+          <p>Gestão de programações</p>
+        </div>
+      </div>
+
+      <form id="login-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="login-username">Usuário</label>
+          <input type="text" id="login-username" class="form-control" placeholder="Seu usuário" required autocomplete="username" autocapitalize="none" spellcheck="false">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Senha</label>
+          <div class="password-wrap">
+            <input type="password" id="login-password" class="form-control" placeholder="Sua senha" required autocomplete="current-password">
+            <button type="button" class="password-toggle" data-toggle-password="login-password" aria-label="Mostrar senha">Mostrar</button>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; margin-top: 0.5rem; font-size: 0.95rem;">Entrar</button>
+      </form>
+
+      <div class="auth-hint" id="auth-hint">
+        <strong>Acesso de demonstração:</strong><br>
+        Usuário <code>admin</code> · Senha <code>admin123</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= APP ======================= -->
+  <div id="app-screen" hidden>
+    <div class="app-layout">
+      <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+      <aside class="app-sidebar" id="app-sidebar" aria-label="Menu principal">
+        <div class="sidebar-header">
+          <a href="#dashboard" class="sidebar-brand">
+            <svg class="church-logo-svg" width="30" height="33" aria-hidden="true"><use href="#ipf-logo"/></svg>
+            <span>Igreja Presbiteriana Filadélfia</span>
+          </a>
+        </div>
+
+        <div class="user-mini-card">
+          <div class="avatar-circle" id="user-avatar">AD</div>
+          <div class="user-mini-info">
+            <div class="user-mini-name" id="user-display-name">—</div>
+            <div class="user-mini-role" id="user-display-role">—</div>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav">
+          <button class="nav-item active" data-view="dashboard">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Dashboard
+          </button>
+          <button class="nav-item" data-view="events">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Programações
+            <span class="nav-count" id="nav-count-events">0</span>
+          </button>
+          <button class="nav-item" data-view="ministries">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Ministérios
+            <span class="nav-count" id="nav-count-ministries">0</span>
+          </button>
+          <button class="nav-item" data-view="users" id="nav-users-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Usuários
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <button class="sidebar-btn" id="btn-theme">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <span id="btn-theme-label">Tema: automático</span>
+          </button>
+          <div id="admin-tools">
+            <button class="sidebar-btn" id="btn-export">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Exportar backup
+            </button>
+            <button class="sidebar-btn" id="btn-import">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Importar backup
+            </button>
+            <input type="file" id="import-file" accept="application/json,.json" hidden>
+            <button class="sidebar-btn" id="btn-reset-demo">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+              Restaurar demonstração
+            </button>
+          </div>
+          <button class="sidebar-btn danger" id="btn-logout">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sair
+          </button>
+        </div>
+      </aside>
+
+      <main class="app-main">
+        <header class="app-topbar">
+          <div class="topbar-left">
+            <button class="btn-icon menu-toggle-btn" id="mobile-toggle" aria-label="Abrir menu" aria-controls="app-sidebar" aria-expanded="false">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <h2 class="topbar-title" id="page-title">Dashboard</h2>
+          </div>
+          <div class="topbar-right">
+            <span class="sync-status" id="sync-status" role="status" title="Clique para atualizar" hidden>
+              <span class="dot"></span><span class="sync-label" id="sync-label">Planilha conectada</span>
+            </span>
+            <button class="btn btn-primary" id="btn-quick-new-event" title="Cadastrar programação (N)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span class="topbar-new-label">Cadastrar programação</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="content-body">
+
+          <!-- ============ DASHBOARD ============ -->
+          <section id="view-dashboard" class="view-panel active" aria-labelledby="page-title">
+            <div class="card filter-panel">
+              <div class="filter-row split">
+                <div class="filter-title">Filtrar programações</div>
+                <div class="filter-row">
+                  <span class="filter-results-badge" id="dash-filter-count">0 programações</span>
+                  <button type="button" class="btn btn-secondary btn-sm" data-clear-filters="dash">Limpar filtros</button>
+                </div>
+              </div>
+              <div class="filter-row">
+                <div class="filter-item">
+                  <label for="dash-filter-date-start">De</label>
+                  <input type="date" id="dash-filter-date-start" class="form-control" data-filter="dash">
+                </div>
+                <div class="filter-item">
+                  <label for="dash-filter-date-end">Até</label>
+                  <input type="date" id="dash-filter-date-end" class="form-control" data-filter="dash">
+                </div>
+                <div class="filter-item grow">
+                  <label for="dash-filter-ministry">Ministério</label>
+                  <select id="dash-filter-ministry" class="form-control" data-filter="dash"></select>
+                </div>
+                <div class="filter-item grow">
+                  <label for="dash-filter-responsible">Responsável</label>
+                  <select id="dash-filter-responsible" class="form-control" data-filter="dash"></select>
+                </div>
+              </div>
+            </div>
+
+            <div class="kpi-grid">
+              <div class="card stat-card">
+                <div class="stat-icon ic-total"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+                <div><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">Total de programações</div></div>
+              </div>
+              <div class="card stat-card">
+                <div class="stat-icon ic-pend"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                <div><div class="stat-val" id="stat-pend">0</div><div class="stat-lbl">Pendente</div></div>
+              </div>
+              <div class="card stat-card">
+                <div class="stat-icon ic-prog"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+                <div><div class="stat-val" id="stat-prog">0</div><div class="stat-lbl">Em andamento</div></div>
+              </div>
+              <div class="card stat-card">
+                <div class="stat-icon ic-done"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></div>
+                <div><div class="stat-val" id="stat-done">0</div><div class="stat-lbl">Concluída</div></div>
+              </div>
+            </div>
+
+            <div class="card dist-bar-card">
+              <div class="dist-bar-header">
+                <span>Distribuição por status</span>
+                <span id="dist-total">0 programações</span>
+              </div>
+              <div class="dist-track" role="img" id="dist-track" aria-label="Distribuição por status">
+                <div class="dist-seg seg-done" id="seg-done"></div>
+                <div class="dist-seg seg-prog" id="seg-prog"></div>
+                <div class="dist-seg seg-pend" id="seg-pend"></div>
+              </div>
+              <div class="dist-legend">
+                <div class="dist-legend-item"><span class="dot" style="background: var(--done)"></span>Concluída: <strong id="leg-done">0</strong></div>
+                <div class="dist-legend-item"><span class="dot" style="background: var(--prog)"></span>Em andamento: <strong id="leg-prog">0</strong></div>
+                <div class="dist-legend-item"><span class="dot" style="background: var(--pend)"></span>Pendente: <strong id="leg-pend">0</strong></div>
+              </div>
+            </div>
+
+            <div class="dashboard-layout">
+              <div class="card panel-box">
+                <div class="panel-head">
+                  <h3 class="panel-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    Calendário
+                  </h3>
+                  <div class="calendar-controls">
+                    <button class="btn-icon" id="cal-prev" aria-label="Mês anterior">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <div class="cal-current-label" id="cal-month-year" aria-live="polite">—</div>
+                    <button class="btn-icon" id="cal-next" aria-label="Próximo mês">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="cal-today">Hoje</button>
+                  </div>
+                </div>
+                <div class="cal-weekdays" aria-hidden="true">
+                  <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+                </div>
+                <div class="cal-days-grid" id="calendar-days"></div>
+              </div>
+
+              <div class="card panel-box">
+                <div class="panel-head">
+                  <h3 class="panel-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Próximas programações
+                  </h3>
+                </div>
+                <div id="upcoming-events-list"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ============ PROGRAMAÇÕES ============ -->
+          <section id="view-events" class="view-panel">
+            <div class="card filter-panel">
+              <div class="filter-row split">
+                <div class="search-box">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <label for="filter-event-search" class="sr-only">Buscar</label>
+                  <input type="search" id="filter-event-search" class="form-control" placeholder="Buscar por título, local ou responsável…  ( / )" data-filter="events">
+                </div>
+                <div class="filter-row">
+                  <span class="filter-results-badge" id="event-filter-count">0 programações</span>
+                  <button type="button" class="btn btn-secondary btn-sm" data-clear-filters="events">Limpar filtros</button>
+                </div>
+              </div>
+              <div class="filter-row" style="padding-top: 0.5rem; border-top: 1px solid var(--border);">
+                <div class="filter-item">
+                  <label for="filter-event-date-start">De</label>
+                  <input type="date" id="filter-event-date-start" class="form-control" data-filter="events">
+                </div>
+                <div class="filter-item">
+                  <label for="filter-event-date-end">Até</label>
+                  <input type="date" id="filter-event-date-end" class="form-control" data-filter="events">
+                </div>
+                <div class="filter-item grow">
+                  <label for="filter-event-ministry">Ministério</label>
+                  <select id="filter-event-ministry" class="form-control" data-filter="events"></select>
+                </div>
+                <div class="filter-item grow">
+                  <label for="filter-event-responsible">Responsável</label>
+                  <select id="filter-event-responsible" class="form-control" data-filter="events"></select>
+                </div>
+                <div class="filter-item">
+                  <label for="filter-event-status">Status</label>
+                  <select id="filter-event-status" class="form-control" data-filter="events">
+                    <option value="">Todos</option>
+                    <option value="Pendente">Pendente</option>
+                    <option value="Em andamento">Em andamento</option>
+                    <option value="Concluída">Concluída</option>
+                  </select>
+                </div>
+                <label class="form-check" style="font-size: 0.8rem; color: var(--text-muted);">
+                  <input type="checkbox" id="filter-event-upcoming" data-filter="events"> Somente futuras
+                </label>
+              </div>
+            </div>
+
+            <div class="card table-wrap">
+              <div class="table-scroll">
+                <table class="data-table" id="events-table">
+                  <thead>
+                    <tr>
+                      <th class="sortable" data-sort="date" style="width: 140px;">Data e hora <span data-sort-ind></span></th>
+                      <th class="sortable" data-sort="title">Título <span data-sort-ind></span></th>
+                      <th style="width: 170px;">Ministério</th>
+                      <th style="width: 170px;">Responsável</th>
+                      <th style="width: 150px;">Local</th>
+                      <th class="sortable" data-sort="status" style="width: 140px;">Status <span data-sort-ind></span></th>
+                      <th class="text-right" style="width: 150px;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="events-list-body"></tbody>
+                </table>
+              </div>
+              <div id="events-empty-state" class="empty-state" hidden>
+                <div class="empty-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+                <strong id="events-empty-title">Nenhuma programação encontrada</strong>
+                <p id="events-empty-text">Ajuste os filtros ou cadastre uma nova programação.</p>
+                <button class="btn btn-primary btn-sm" data-action="new-event">Cadastrar programação</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- ============ MINISTÉRIOS ============ -->
+          <section id="view-ministries" class="view-panel">
+            <div class="view-intro">
+              <p>Organize os ministérios da igreja e acompanhe o andamento das programações de cada um.</p>
+              <button class="btn btn-primary" id="btn-open-new-ministry">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Cadastrar ministério
+              </button>
+            </div>
+            <div class="ministries-grid" id="ministries-list"></div>
+          </section>
+
+          <!-- ============ USUÁRIOS ============ -->
+          <section id="view-users" class="view-panel">
+            <div class="view-intro">
+              <p>Gerencie quem tem acesso ao sistema.</p>
+              <button class="btn btn-primary" id="btn-open-new-user">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Cadastrar usuário
+              </button>
+            </div>
+            <div class="card table-wrap">
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Nome</th>
+                      <th>Usuário</th>
+                      <th>Perfil</th>
+                      <th>Status</th>
+                      <th class="text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="users-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ======================= MODAIS ======================= -->
+  <div class="modal-overlay" id="modal-event" role="dialog" aria-modal="true" aria-labelledby="modal-event-title">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h4 class="modal-title" id="modal-event-title">Cadastrar programação</h4>
+        <button class="btn-icon" data-close-modal aria-label="Fechar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form id="form-event">
+        <input type="hidden" id="event-id">
+        <div class="form-group">
+          <label class="form-label" for="event-title-input">Título da programação <span class="req">*</span></label>
+          <input type="text" id="event-title-input" class="form-control" required maxlength="120" placeholder="ex: Culto de celebração">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="event-ministry-select">Ministério <span class="req">*</span></label>
+            <select id="event-ministry-select" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="event-status-select">Status</label>
+            <select id="event-status-select" class="form-control">
+              <option value="Pendente">Pendente</option>
+              <option value="Em andamento">Em andamento</option>
+              <option value="Concluída">Concluída</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="event-date-input">Data <span class="req">*</span></label>
+            <input type="date" id="event-date-input" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="event-time-input">Horário <span class="req">*</span></label>
+            <input type="time" id="event-time-input" class="form-control" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="event-location-input">Local <span class="req">*</span></label>
+            <input type="text" id="event-location-input" class="form-control" required list="locations-list" placeholder="ex: Templo central">
+            <datalist id="locations-list"></datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="event-responsible-input">Responsável(is) <span class="req">*</span></label>
+            <input type="text" id="event-responsible-input" class="form-control" required list="responsibles-list" placeholder="ex: Pastor João">
+            <datalist id="responsibles-list"></datalist>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="event-desc-input">Ações / descrição</label>
+          <textarea id="event-desc-input" class="form-control" rows="3" placeholder="ex: Ordem do culto e orientações"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-danger" id="btn-delete-event-modal" style="margin-right: auto;" hidden>Excluir</button>
+          <button type="button" class="btn btn-secondary" id="btn-duplicate-event" hidden>Duplicar</button>
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-ministry" role="dialog" aria-modal="true" aria-labelledby="modal-ministry-title">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h4 class="modal-title" id="modal-ministry-title">Cadastrar ministério</h4>
+        <button class="btn-icon" data-close-modal aria-label="Fechar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form id="form-ministry">
+        <input type="hidden" id="ministry-id">
+        <div class="form-group">
+          <label class="form-label" for="ministry-name-input">Nome do ministério <span class="req">*</span></label>
+          <input type="text" id="ministry-name-input" class="form-control" required maxlength="60" placeholder="ex: Louvor e adoração">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="ministry-leader-input">Responsável(is) <span class="req">*</span></label>
+            <input type="text" id="ministry-leader-input" class="form-control" required placeholder="ex: David Silva">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ministry-color-input">Cor</label>
+            <input type="color" id="ministry-color-input" class="form-control" value="#4f46e5">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ministry-desc-input">Ações / descrição</label>
+          <textarea id="ministry-desc-input" class="form-control" rows="3" placeholder="ex: Atividades de louvor e adoração"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-user" role="dialog" aria-modal="true" aria-labelledby="modal-user-title">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h4 class="modal-title" id="modal-user-title">Cadastrar usuário</h4>
+        <button class="btn-icon" data-close-modal aria-label="Fechar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form id="form-user">
+        <input type="hidden" id="user-id">
+        <div class="form-group">
+          <label class="form-label" for="user-name-input">Nome <span class="req">*</span></label>
+          <input type="text" id="user-name-input" class="form-control" required placeholder="ex: Maria Silva">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="user-username-input">Usuário <span class="req">*</span></label>
+            <input type="text" id="user-username-input" class="form-control" required autocapitalize="none" spellcheck="false" placeholder="ex: maria">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-role-select">Perfil</label>
+            <select id="user-role-select" class="form-control">
+              <option value="user">Usuário</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" id="user-password-group">
+          <label class="form-label" for="user-pass-input">Senha <span class="req">*</span></label>
+          <div class="password-wrap">
+            <input type="password" id="user-pass-input" class="form-control" minlength="4" autocomplete="new-password" placeholder="Mínimo de 4 caracteres">
+            <button type="button" class="password-toggle" data-toggle-password="user-pass-input" aria-label="Mostrar senha">Mostrar</button>
+          </div>
+        </div>
+        <label class="form-check">
+          <input type="checkbox" id="user-active-checkbox" checked> Usuário ativo
+        </label>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-reset-pass" role="dialog" aria-modal="true" aria-labelledby="modal-reset-title">
+    <div class="modal-box sm">
+      <div class="modal-header">
+        <h4 class="modal-title" id="modal-reset-title">Redefinir senha</h4>
+        <button class="btn-icon" data-close-modal aria-label="Fechar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form id="form-reset-pass">
+        <input type="hidden" id="reset-user-id">
+        <p class="modal-text" id="reset-user-name-txt" style="margin-bottom: 1rem;"></p>
+        <div class="form-group">
+          <label class="form-label" for="new-pass-input">Nova senha</label>
+          <div class="password-wrap">
+            <input type="password" id="new-pass-input" class="form-control" required minlength="4" autocomplete="new-password" placeholder="Mínimo de 4 caracteres">
+            <button type="button" class="password-toggle" data-toggle-password="new-pass-input" aria-label="Mostrar senha">Mostrar</button>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+    <div class="modal-box sm">
+      <div class="modal-header">
+        <h4 class="modal-title" id="confirm-title">Confirmar</h4>
+      </div>
+      <p class="modal-text" id="confirm-text"></p>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="confirm-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="confirm-ok">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Configuração da conexão com a planilha (URL do Google Apps Script) -->
+  <script src="config.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    /* ==========================================================================
+       CONSTANTES
+       ========================================================================== */
+    const STORAGE_KEY = 'igreja_asana_data_v1';   // mantido para preservar dados já salvos
+    const SESSION_KEY = 'igreja_asana_session_v1';
+    const THEME_KEY = 'igreja_theme';
+    const STATUSES = ['Pendente', 'Em andamento', 'Concluída'];
+    const STATUS_CLASS = { 'Pendente': 'st-pend', 'Em andamento': 'st-prog', 'Concluída': 'st-done' };
+    const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const MONTHS_SHORT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    const WEEKDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+    const FALLBACK_COLOR = '#64748b';
+
+    // Com uma URL configurada em config.js, os dados ficam na planilha do Google.
+    // Sem ela, o sistema funciona em modo local (dados apenas neste navegador).
+    const API_URL = ((window.IPF_CONFIG && window.IPF_CONFIG.apiUrl) || '').trim();
+    const REMOTE = /^https:\/\/script\.google(usercontent)?\.com\//.test(API_URL);
+    const REFRESH_MS = 60000;
+
+    const $ = (id) => document.getElementById(id);
+
+    /* ==========================================================================
+       ARMAZENAMENTO SEGURO
+       ========================================================================== */
+    const store = {
+      get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
+      set(key, val) { try { localStorage.setItem(key, val); return true; } catch (e) { return false; } },
+      remove(key) { try { localStorage.removeItem(key); } catch (e) { /* ignora */ } }
+    };
+
+    /* ==========================================================================
+       DADOS DE DEMONSTRAÇÃO
+       ========================================================================== */
+    function getSampleData() {
+      const now = new Date();
+      const ym = (offset) => {
+        const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+      };
+      const m0 = ym(0), m1 = ym(1);
+      return {
+        users: [
+          { id: 'u-admin', name: 'Pastor Administrador', username: 'admin', password: 'admin123', role: 'admin', active: true },
+          { id: 'u-lider', name: 'Diácono Lucas Silva', username: 'lucas', password: '1234', role: 'user', active: true }
+        ],
+        ministries: [
+          { id: 'm-louvor', name: 'Louvor & Adoração', leader: 'David Silva', color: '#4f46e5', description: 'Banda, ministros de louvor, coral e sonoplastia.' },
+          { id: 'm-diaconia', name: 'Diaconia & Acolhimento', leader: 'Marta Souza', color: '#059669', description: 'Recepção, portaria, organização da ceia e assistência.' },
+          { id: 'm-infantil', name: 'Ministério Infantil', leader: 'Ana Ribeiro', color: '#db2777', description: 'Escola dominical das crianças e berçário.' }
+        ],
+        events: [
+          { id: 'e-1', title: 'Culto da Família e Santa Ceia', ministryId: 'm-diaconia', description: 'Preparação do templo, distribuição dos cálices e acolhimento aos visitantes.', responsible: 'Marta Souza', date: `${m0}-08`, time: '19:00', location: 'Templo Central', status: 'Concluída' },
+          { id: 'e-2', title: 'Ensaio Geral com a Banda', ministryId: 'm-louvor', description: 'Passagem do repertório para o culto de celebração de domingo.', responsible: 'David Silva', date: `${m0}-16`, time: '19:30', location: 'Espaço de Louvor', status: 'Em andamento' },
+          { id: 'e-3', title: 'Vigília de Oração e Intercessão', ministryId: 'm-diaconia', description: 'Reunião de oração pelas famílias e alinhamento dos novos voluntários.', responsible: 'Pastor Administrador', date: `${m0}-24`, time: '22:00', location: 'Capela de Oração', status: 'Pendente' },
+          { id: 'e-4', title: 'Dia das Crianças', ministryId: 'm-infantil', description: 'Gincanas, lanche e apresentação especial no culto.', responsible: 'Ana Ribeiro', date: `${m0}-12`, time: '09:00', location: 'Salão Social', status: 'Em andamento' },
+          { id: 'e-5', title: 'Culto de Celebração', ministryId: 'm-louvor', description: '', responsible: 'David Silva', date: `${m1}-03`, time: '18:00', location: 'Templo Central', status: 'Pendente' }
+        ]
+      };
+    }
+
+    /* ==========================================================================
+       ESTADO
+       ========================================================================== */
+    let appData = null;
+    let currentUser = null;
+    let currentCalDate = startOfMonth(new Date());
+    let currentView = 'dashboard';
+    let eventSort = { key: 'date', dir: 1 };
+
+    function isValidData(d) {
+      return d && Array.isArray(d.users) && Array.isArray(d.ministries) && Array.isArray(d.events);
+    }
+
+    function loadState() {
+      if (REMOTE) return;   // no modo planilha os dados vêm do servidor
+      const raw = store.get(STORAGE_KEY);
+      let parsed = null;
+      try { parsed = raw ? JSON.parse(raw) : null; } catch (e) { parsed = null; }
+      appData = isValidData(parsed) ? parsed : getSampleData();
+      if (!isValidData(parsed)) saveState();
+
+      const sessRaw = store.get(SESSION_KEY);
+      if (sessRaw) {
+        try {
+          const sess = JSON.parse(sessRaw);
+          currentUser = appData.users.find(u => u.id === sess.id && u.active) || null;
+        } catch (e) { currentUser = null; }
+        if (!currentUser) store.remove(SESSION_KEY);
+      }
+    }
+
+    function saveState() {
+      if (REMOTE) return;
+      if (!store.set(STORAGE_KEY, JSON.stringify(appData))) {
+        showToast('Não foi possível salvar no navegador. Verifique o armazenamento.', 'error');
+      }
+    }
+
+    /* ==========================================================================
+       PLANILHA (Google Apps Script)
+       ========================================================================== */
+    let sessionToken = null;
+    let pendingRequests = 0;
+    let lastSyncAt = null;
+
+    async function api(action, payload) {
+      let res;
+      try {
+        // corpo em texto simples evita a requisição de "preflight" que o Apps Script não aceita
+        res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action, token: sessionToken, payload }) });
+      } catch (e) {
+        throw Object.assign(new Error('Sem conexão com a planilha. Verifique a internet.'), { code: 'NETWORK' });
+      }
+      let json;
+      try { json = await res.json(); } catch (e) { json = null; }
+      if (!json) throw Object.assign(new Error('Resposta inválida da planilha. Verifique a implantação do Apps Script.'), { code: 'BAD_RESPONSE' });
+      if (!json.ok) throw Object.assign(new Error(json.error || 'Erro na planilha.'), { code: json.code });
+      return json;
+    }
+
+    function setSyncState(state, label) {
+      const el = $('sync-status');
+      if (!el) return;
+      el.hidden = !REMOTE || !currentUser;
+      el.classList.toggle('busy', state === 'busy');
+      el.classList.toggle('error', state === 'error');
+      $('sync-label').textContent = label;
+      if (lastSyncAt) el.title = `Última sincronização: ${lastSyncAt.toLocaleTimeString('pt-BR')}. Clique para atualizar.`;
+    }
+
+    function applyRemoteData(data, me) {
+      appData = {
+        users: (data.users || []).map(u => ({ ...u, active: u.active !== false })),
+        ministries: data.ministries || [],
+        events: data.events || []
+      };
+      if (me) currentUser = appData.users.find(u => u.id === me.id) || me;
+      lastSyncAt = new Date();
+    }
+
+    function storeSession(token, userId) {
+      sessionToken = token;
+      store.set(SESSION_KEY, JSON.stringify({ token, id: userId }));
+    }
+
+    function dropSession() {
+      sessionToken = null;
+      currentUser = null;
+      store.remove(SESSION_KEY);
+    }
+
+    async function remoteCall(action, payload, successMsg, toastType = 'success') {
+      pendingRequests++;
+      setSyncState('busy', 'Salvando…');
+      try {
+        const r = await api(action, payload);
+        if (r.data) applyRemoteData(r.data, r.me);
+        if (successMsg) showToast(successMsg, toastType);
+        setSyncState('ok', 'Planilha conectada');
+        return true;
+      } catch (err) {
+        handleApiError(err);
+        return false;
+      } finally {
+        pendingRequests--;
+        checkAuthView();
+      }
+    }
+
+    function handleApiError(err) {
+      if (err.code === 'AUTH') {
+        dropSession();
+        showToast(err.message, 'error');
+        return;
+      }
+      setSyncState('error', 'Erro de sincronização');
+      showToast(err.message || 'Erro ao comunicar com a planilha.', 'error');
+      refreshFromServer(true);   // desfaz a alteração otimista recarregando os dados reais
+    }
+
+    async function refreshFromServer(silent = false) {
+      if (!REMOTE || !sessionToken || pendingRequests > 0) return;
+      if (!silent) setSyncState('busy', 'Atualizando…');
+      try {
+        const r = await api('getAll');
+        if (pendingRequests > 0) return;   // uma gravação começou nesse meio-tempo
+        applyRemoteData(r.data, r.me);
+        setSyncState('ok', 'Planilha conectada');
+        if (currentUser) renderAll(); else checkAuthView();
+      } catch (err) {
+        if (err.code === 'AUTH') { dropSession(); checkAuthView(); showToast(err.message, "error"); }
+        else setSyncState('error', 'Sem conexão');
+      }
+    }
+
+    // Grava uma alteração já aplicada em appData: localmente ou na planilha
+    async function commit(action, payload, successMsg, toastType = 'success') {
+      if (!REMOTE) {
+        saveState();
+        renderAll();
+        if (successMsg) showToast(successMsg, toastType);
+        return true;
+      }
+      renderAll();   // atualização otimista; a resposta do servidor confirma ou corrige
+      return remoteCall(action, payload, successMsg, toastType);
+    }
+
+    const uid = (prefix) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const isAdmin = () => currentUser && currentUser.role === 'admin';
+
+    /* ==========================================================================
+       SENHAS (hash SHA-256 com migração automática de senhas antigas)
+       ========================================================================== */
+    async function hashPassword(pass) {
+      if (window.crypto && crypto.subtle && window.TextEncoder) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('ipf::' + pass));
+        return 'sha256:' + Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+      return 'plain:' + pass;
+    }
+
+    async function setPassword(user, pass) {
+      user.passwordHash = await hashPassword(pass);
+      delete user.password;
+    }
+
+    async function checkPassword(user, pass) {
+      if (user.passwordHash) return user.passwordHash === await hashPassword(pass);
+      if (typeof user.password === 'string' && user.password === pass) {
+        await setPassword(user, pass);   // migra senha em texto puro
+        saveState();
+        return true;
+      }
+      return false;
+    }
+
+    /* ==========================================================================
+       UTILITÁRIOS
+       ========================================================================== */
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+    function toISODate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+    function todayISO() { return toISODate(new Date()); }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function safeColor(c) { return /^#[0-9a-f]{3,8}$/i.test(c || '') ? c : FALLBACK_COLOR; }
+
+    function formatDatePt(dateStr) {
+      if (!dateStr) return 'Sem data';
+      const p = dateStr.split('-');
+      return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : dateStr;
+    }
+
+    function parseISO(dateStr) {
+      const [y, m, d] = (dateStr || '').split('-').map(Number);
+      return y ? new Date(y, (m || 1) - 1, d || 1) : null;
+    }
+
+    function relativeDay(dateStr) {
+      const d = parseISO(dateStr);
+      if (!d) return '';
+      const t = parseISO(todayISO());
+      const diff = Math.round((d - t) / 86400000);
+      if (diff === 0) return 'Hoje';
+      if (diff === 1) return 'Amanhã';
+      if (diff > 1 && diff < 7) return WEEKDAYS[d.getDay()];
+      return '';
+    }
+
+    function plural(n, one, many) { return `${n} ${n === 1 ? one : many}`; }
+    function pct(n, total) { return total > 0 ? Math.round((n / total) * 100) : 0; }
+    function eventSortKey(e) { return `${e.date || '9999-12-31'}T${e.time || '00:00'}`; }
+    function ministryById(id) { return appData.ministries.find(m => m.id === id) || null; }
+    function normalize(s) { return (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); }
+
+    function ministryTag(ministry, extraStyle = '') {
+      if (!ministry) return `<span class="event-tag muted" style="${extraStyle}">Sem ministério</span>`;
+      return `<span class="event-tag" style="background: ${safeColor(ministry.color)};${extraStyle}">${escapeHtml(ministry.name)}</span>`;
+    }
+
+    function statusPill(status) {
+      const s = STATUSES.includes(status) ? status : 'Pendente';
+      return `<span class="status-pill ${STATUS_CLASS[s]}"><span class="dot"></span>${s}</span>`;
+    }
+
+    const ICONS = {
+      edit: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
+      trash: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
+      key: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>',
+      power: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>'
+    };
+
+    /* ==========================================================================
+       TOASTS E CONFIRMAÇÃO
+       ========================================================================== */
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      $('toast-container').appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('out');
+        setTimeout(() => toast.remove(), 250);
+      }, 3200);
+    }
+
+    let confirmResolver = null;
+    function confirmDialog(text, { title = 'Confirmar', okLabel = 'Confirmar', danger = false } = {}) {
+      $('confirm-title').textContent = title;
+      $('confirm-text').textContent = text;
+      const ok = $('confirm-ok');
+      ok.textContent = okLabel;
+      ok.className = `btn ${danger ? 'btn-danger' : 'btn-primary'}`;
+      openModal('modal-confirm', ok);
+      return new Promise(resolve => { confirmResolver = resolve; });
+    }
+    function resolveConfirm(value) {
+      $('modal-confirm').classList.remove('active');
+      if (confirmResolver) { confirmResolver(value); confirmResolver = null; }
+    }
+
+    /* ==========================================================================
+       MODAIS
+       ========================================================================== */
+    let lastFocused = null;
+    function openModal(id, focusEl) {
+      lastFocused = document.activeElement;
+      const modal = $(id);
+      modal.classList.add('active');
+      const target = focusEl || modal.querySelector('input:not([type=hidden]), select, textarea, button');
+      if (target) setTimeout(() => target.focus(), 30);
+    }
+    function closeModal(modal) {
+      if (!modal) return;
+      if (modal.id === 'modal-confirm') return resolveConfirm(false);
+      modal.classList.remove('active');
+      if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+    }
+    function closeTopModal() {
+      const open = Array.from(document.querySelectorAll('.modal-overlay.active'));
+      if (open.length) { closeModal(open[open.length - 1]); return true; }
+      return false;
+    }
+
+    /* ==========================================================================
+       TEMA
+       ========================================================================== */
+    function applyTheme(mode) {
+      const root = document.documentElement;
+      if (mode === 'light' || mode === 'dark') root.setAttribute('data-theme', mode);
+      else root.removeAttribute('data-theme');
+      const labels = { light: 'Tema: claro', dark: 'Tema: escuro', auto: 'Tema: automático' };
+      $('btn-theme-label').textContent = labels[mode] || labels.auto;
+    }
+    function cycleTheme() {
+      const order = ['auto', 'light', 'dark'];
+      const cur = store.get(THEME_KEY) || 'auto';
+      const next = order[(order.indexOf(cur) + 1) % order.length];
+      store.set(THEME_KEY, next);
+      applyTheme(next);
+    }
+
+    /* ==========================================================================
+       AUTENTICAÇÃO E NAVEGAÇÃO
+       ========================================================================== */
+    function checkAuthView() {
+      const loggedIn = !!currentUser;
+      $('loading-screen').hidden = true;
+      $('auth-screen').hidden = loggedIn;
+      $('app-screen').hidden = !loggedIn;
+      if (!loggedIn) {
+        // a dica só aparece enquanto a senha padrão de demonstração não foi alterada
+        const admin = REMOTE ? null : appData.users.find(u => u.username === 'admin');
+        $('auth-hint').hidden = true;
+        if (admin) {
+          if (admin.password === 'admin123') $('auth-hint').hidden = false;
+          else if (admin.passwordHash) hashPassword('admin123').then(h => { $('auth-hint').hidden = h !== admin.passwordHash; });
+        }
+        setTimeout(() => $('login-username').focus(), 30);
+        return;
+      }
+
+      $('user-display-name').textContent = currentUser.name;
+      $('user-display-role').textContent = isAdmin() ? 'Administrador' : 'Usuário';
+      const initials = currentUser.name.split(/\s+/).filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
+      $('user-avatar').textContent = initials || 'US';
+      $('nav-users-btn').hidden = !isAdmin();
+      $('admin-tools').hidden = !isAdmin();
+      $('btn-reset-demo').hidden = REMOTE;   // nunca apagar a planilha real com dados de exemplo
+      if (REMOTE && $('sync-status').hidden) setSyncState('ok', 'Planilha conectada');
+
+      const fromHash = location.hash.replace('#', '');
+      switchView(['dashboard', 'events', 'ministries', 'users'].includes(fromHash) ? fromHash : currentView, false);
+    }
+
+    function switchView(viewName, pushHash = true) {
+      if (viewName === 'users' && !isAdmin()) viewName = 'dashboard';
+      currentView = viewName;
+
+      document.querySelectorAll('.view-panel').forEach(p => p.classList.toggle('active', p.id === `view-${viewName}`));
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === viewName));
+
+      const titles = { dashboard: 'Dashboard', events: 'Programações', ministries: 'Ministérios', users: 'Usuários' };
+      $('page-title').textContent = titles[viewName];
+      document.title = `${titles[viewName]} · Gestão de Programações · IP Filadélfia`;
+      if (pushHash && location.hash !== `#${viewName}`) history.replaceState(null, '', `#${viewName}`);
+
+      renderAll();
+      closeSidebar();
+    }
+
+    function openSidebar() {
+      $('app-sidebar').classList.add('open');
+      $('sidebar-backdrop').classList.add('active');
+      $('mobile-toggle').setAttribute('aria-expanded', 'true');
+    }
+    function closeSidebar() {
+      $('app-sidebar').classList.remove('open');
+      $('sidebar-backdrop').classList.remove('active');
+      $('mobile-toggle').setAttribute('aria-expanded', 'false');
+    }
+
+    function renderAll() {
+      if (!currentUser) return;
+      syncFilterDropdowns();
+      $('nav-count-events').textContent = appData.events.length;
+      $('nav-count-ministries').textContent = appData.ministries.length;
+      if (currentView === 'dashboard') renderDashboard();
+      if (currentView === 'events') renderEvents();
+      if (currentView === 'ministries') renderMinistries();
+      if (currentView === 'users' && isAdmin()) renderUsers();
+    }
+
+    /* ==========================================================================
+       FILTROS
+       ========================================================================== */
+    function fillSelect(select, placeholder, options) {
+      const cur = select.value;
+      select.innerHTML = '';
+      select.append(new Option(placeholder, ''));
+      options.forEach(([value, label]) => select.append(new Option(label, value)));
+      select.value = options.some(([v]) => v === cur) ? cur : '';
+    }
+
+    function syncFilterDropdowns() {
+      const responsibles = Array.from(new Set(appData.events.map(e => (e.responsible || '').trim()).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      const ministries = [...appData.ministries]
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+        .map(m => [m.id, m.name]);
+      const respOpts = responsibles.map(r => [r, r]);
+
+      ['dash', 'filter-event'].forEach(prefix => {
+        const p = prefix === 'dash' ? 'dash-filter' : 'filter-event';
+        fillSelect($(`${p}-ministry`), 'Todos os ministérios', ministries);
+        fillSelect($(`${p}-responsible`), 'Todos os responsáveis', respOpts);
+      });
+
+      const locations = Array.from(new Set(appData.events.map(e => (e.location || '').trim()).filter(Boolean)));
+      $('locations-list').innerHTML = locations.map(l => `<option value="${escapeHtml(l)}">`).join('');
+      const allResp = new Set(responsibles);
+      appData.ministries.forEach(m => m.leader && allResp.add(m.leader));
+      $('responsibles-list').innerHTML = Array.from(allResp).map(r => `<option value="${escapeHtml(r)}">`).join('');
+    }
+
+    function getFilteredEvents(scope) {
+      const p = scope === 'dash' ? 'dash-filter' : 'filter-event';
+      const dStart = $(`${p}-date-start`).value;
+      const dEnd = $(`${p}-date-end`).value;
+      const minId = $(`${p}-ministry`).value;
+      const resp = $(`${p}-responsible`).value;
+      const status = scope === 'events' ? $('filter-event-status').value : '';
+      const onlyUpcoming = scope === 'events' && $('filter-event-upcoming').checked;
+      const search = scope === 'events' ? normalize($('filter-event-search').value) : '';
+      const today = todayISO();
+
+      return appData.events.filter(e => {
+        if (dStart && (!e.date || e.date < dStart)) return false;
+        if (dEnd && (!e.date || e.date > dEnd)) return false;
+        if (minId && e.ministryId !== minId) return false;
+        if (resp && (e.responsible || '').trim() !== resp) return false;
+        if (status && (e.status || 'Pendente') !== status) return false;
+        if (onlyUpcoming && (!e.date || e.date < today)) return false;
+        if (search) {
+          const ministry = ministryById(e.ministryId);
+          const hay = normalize([e.title, e.location, e.responsible, e.description, ministry && ministry.name].join(' '));
+          if (!hay.includes(search)) return false;
+        }
+        return true;
+      });
+    }
+
+    function clearFilters(scope) {
+      const panel = $(`view-${scope === 'dash' ? 'dashboard' : 'events'}`);
+      panel.querySelectorAll('[data-filter]').forEach(el => {
+        if (el.type === 'checkbox') el.checked = false; else el.value = '';
+      });
+      renderAll();
+    }
+
+    /* ==========================================================================
+       DASHBOARD
+       ========================================================================== */
+    function renderDashboard() {
+      const events = getFilteredEvents('dash');
+      const total = events.length;
+      const count = (s) => events.filter(e => (e.status || 'Pendente') === s).length;
+      const pend = count('Pendente'), prog = count('Em andamento'), done = count('Concluída');
+      const pPend = pct(pend, total), pProg = pct(prog, total), pDone = pct(done, total);
+
+      $('stat-total').textContent = total;
+      $('stat-pend').innerHTML = `${pend}<small>${pPend}%</small>`;
+      $('stat-prog').innerHTML = `${prog}<small>${pProg}%</small>`;
+      $('stat-done').innerHTML = `${done}<small>${pDone}%</small>`;
+
+      $('dash-filter-count').textContent = plural(total, 'programação', 'programações');
+      $('dist-total').textContent = plural(total, 'programação', 'programações');
+
+      // larguras calculadas sem arredondamento para a barra sempre fechar em 100%
+      const w = (n) => total ? (n / total * 100) + '%' : '0%';
+      $('seg-done').style.width = w(done);
+      $('seg-prog').style.width = w(prog);
+      $('seg-pend').style.width = w(pend);
+      $('dist-track').setAttribute('aria-label', `Concluída ${pDone}%, Em andamento ${pProg}%, Pendente ${pPend}%`);
+
+      $('leg-done').textContent = `${done} (${pDone}%)`;
+      $('leg-prog').textContent = `${prog} (${pProg}%)`;
+      $('leg-pend').textContent = `${pend} (${pPend}%)`;
+
+      renderCalendar(events);
+      renderUpcomingList(events);
+    }
+
+    function renderCalendar(events) {
+      const year = currentCalDate.getFullYear();
+      const month = currentCalDate.getMonth();
+      $('cal-month-year').textContent = `${MONTHS[month]} ${year}`;
+
+      const grid = $('calendar-days');
+      grid.innerHTML = '';
+
+      const firstDay = new Date(year, month, 1).getDay();
+      const totalDays = new Date(year, month + 1, 0).getDate();
+      const prevDays = new Date(year, month, 0).getDate();
+      const today = todayISO();
+
+      const byDate = {};
+      events.forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e); });
+      Object.values(byDate).forEach(list => list.sort((a, b) => (a.time || '').localeCompare(b.time || '')));
+
+      const frag = document.createDocumentFragment();
+      const filler = (n) => {
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell other-month';
+        cell.setAttribute('aria-hidden', 'true');
+        cell.innerHTML = `<span class="cal-day-num">${n}</span>`;
+        frag.appendChild(cell);
+      };
+
+      for (let x = firstDay; x > 0; x--) filler(prevDays - x + 1);
+
+      const MAX_PILLS = 3;
+      for (let day = 1; day <= totalDays; day++) {
+        const dateStr = `${year}-${pad(month + 1)}-${pad(day)}`;
+        const dayEvents = byDate[dateStr] || [];
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell' + (dateStr === today ? ' is-today' : '');
+        cell.dataset.date = dateStr;
+        cell.tabIndex = 0;
+        cell.setAttribute('role', 'button');
+        cell.setAttribute('aria-label', `${day} de ${MONTHS[month]}: ${plural(dayEvents.length, 'programação', 'programações')}. Clique para cadastrar.`);
+        cell.innerHTML = `<span class="cal-day-num">${day}</span>`;
+
+        dayEvents.slice(0, MAX_PILLS).forEach(evt => {
+          const ministry = ministryById(evt.ministryId);
+          const pill = document.createElement('button');
+          pill.type = 'button';
+          pill.className = 'cal-event-pill' + (evt.status === 'Concluída' ? ' is-done' : '');
+          pill.style.backgroundColor = ministry ? safeColor(ministry.color) : FALLBACK_COLOR;
+          pill.dataset.eventId = evt.id;
+          pill.textContent = `${evt.time ? evt.time + ' ' : ''}${evt.title}`;
+          pill.title = `${evt.time || ''} ${evt.title} · ${evt.status} · ${evt.location || ''}`.trim();
+          cell.appendChild(pill);
+        });
+        if (dayEvents.length > MAX_PILLS) {
+          const more = document.createElement('span');
+          more.className = 'cal-more';
+          more.textContent = `+${dayEvents.length - MAX_PILLS} mais`;
+          cell.appendChild(more);
+        }
+        frag.appendChild(cell);
+      }
+
+      const remaining = (7 - ((firstDay + totalDays) % 7)) % 7;
+      for (let i = 1; i <= remaining; i++) filler(i);
+
+      grid.appendChild(frag);
+    }
+
+    function renderUpcomingList(events) {
+      const container = $('upcoming-events-list');
+      const today = todayISO();
+      const upcoming = events
+        .filter(e => e.date && e.date >= today && e.status !== 'Concluída')
+        .sort((a, b) => eventSortKey(a).localeCompare(eventSortKey(b)))
+        .slice(0, 6);
+
+      if (upcoming.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <strong>Nenhuma programação futura</strong>
+            <p>Não há programações pendentes a partir de hoje.</p>
+            <button class="btn btn-primary btn-sm" data-action="new-event">Cadastrar programação</button>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = upcoming.map(evt => {
+        const ministry = ministryById(evt.ministryId);
+        const d = parseISO(evt.date);
+        const rel = relativeDay(evt.date);
+        return `
+          <div class="upcoming-item" data-event-id="${escapeHtml(evt.id)}" tabindex="0" role="button" aria-label="Editar ${escapeHtml(evt.title)}">
+            <div class="upcoming-date-badge">
+              <div class="upcoming-day">${pad(d.getDate())}</div>
+              <div class="upcoming-month">${MONTHS_SHORT[d.getMonth()]}</div>
+            </div>
+            <div style="flex: 1; min-width: 0;">
+              ${rel ? `<div class="rel-day">${rel}</div>` : ''}
+              <div class="upcoming-title">${escapeHtml(evt.title)}</div>
+              <div class="upcoming-meta">${escapeHtml(evt.time || '--:--')} · ${escapeHtml(evt.location || 'Local a definir')}</div>
+              <div class="upcoming-tags">
+                ${ministryTag(ministry, 'font-size: 0.66rem;')}
+                ${statusPill(evt.status)}
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    /* ==========================================================================
+       PROGRAMAÇÕES
+       ========================================================================== */
+    function renderEvents() {
+      const filtered = getFilteredEvents('events');
+      const { key, dir } = eventSort;
+      filtered.sort((a, b) => {
+        let r;
+        if (key === 'title') r = (a.title || '').localeCompare(b.title || '', 'pt-BR');
+        else if (key === 'status') r = STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status) || eventSortKey(a).localeCompare(eventSortKey(b));
+        else r = eventSortKey(a).localeCompare(eventSortKey(b));
+        return r * dir;
+      });
+
+      document.querySelectorAll('#events-table th[data-sort]').forEach(th => {
+        const active = th.dataset.sort === key;
+        th.querySelector('[data-sort-ind]').textContent = active ? (dir === 1 ? '↑' : '↓') : '';
+        th.setAttribute('aria-sort', active ? (dir === 1 ? 'ascending' : 'descending') : 'none');
+      });
+
+      $('event-filter-count').textContent = plural(filtered.length, 'programação', 'programações');
+
+      const tbody = $('events-list-body');
+      const empty = $('events-empty-state');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        empty.hidden = false;
+        const noData = appData.events.length === 0;
+        $('events-empty-title').textContent = noData ? 'Nenhuma programação cadastrada' : 'Nenhuma programação encontrada';
+        $('events-empty-text').textContent = noData ? 'Cadastre a primeira programação da igreja.' : 'Ajuste os filtros ou cadastre uma nova programação.';
+        return;
+      }
+      empty.hidden = true;
+
+      const today = todayISO();
+      tbody.innerHTML = filtered.map(evt => {
+        const ministry = ministryById(evt.ministryId);
+        const status = evt.status || 'Pendente';
+        const next = { 'Pendente': ['Iniciar', 'Marcar como em andamento'], 'Em andamento': ['Concluir', 'Marcar como concluída'], 'Concluída': ['Reabrir', 'Reabrir programação'] }[status] || ['Iniciar', ''];
+        const id = escapeHtml(evt.id);
+        const isPast = evt.date && evt.date < today;
+        return `
+          <tr class="${isPast ? 'is-past' : ''}">
+            <td data-label="Data">
+              <div class="cell-strong" style="white-space: nowrap;">${formatDatePt(evt.date)}</div>
+              <div class="cell-sub">${escapeHtml(evt.time || '--:--')}${relativeDay(evt.date) ? ' · ' + relativeDay(evt.date) : ''}</div>
+            </td>
+            <td data-label="Título">
+              <div class="cell-strong">${escapeHtml(evt.title)}</div>
+              ${evt.description ? `<div class="cell-desc" title="${escapeHtml(evt.description)}">${escapeHtml(evt.description)}</div>` : ''}
+            </td>
+            <td data-label="Ministério">${ministryTag(ministry)}</td>
+            <td data-label="Responsável">${escapeHtml(evt.responsible || 'Sem responsável')}</td>
+            <td data-label="Local">${escapeHtml(evt.location || 'Local a definir')}</td>
+            <td data-label="Status">${statusPill(status)}</td>
+            <td class="text-right">
+              <div class="row-actions">
+                <button class="btn ${status === 'Concluída' ? 'btn-secondary' : 'btn-primary'} btn-sm" data-action="advance-event" data-id="${id}" title="${next[1]}">${next[0]}</button>
+                <button class="btn-icon" data-action="edit-event" data-id="${id}" aria-label="Editar" title="Editar">${ICONS.edit}</button>
+                <button class="btn-icon danger" data-action="delete-event" data-id="${id}" aria-label="Excluir" title="Excluir">${ICONS.trash}</button>
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    function advanceEventStatus(id) {
+      const evt = appData.events.find(e => e.id === id);
+      if (!evt) return;
+      const flow = { 'Pendente': 'Em andamento', 'Em andamento': 'Concluída', 'Concluída': 'Em andamento' };
+      evt.status = flow[evt.status] || 'Em andamento';
+      commit('upsertEvent', { ...evt }, `Status alterado para “${evt.status}”.`, evt.status === 'Concluída' ? 'success' : 'info');
+    }
+
+    function openEventModal(eventId = null, prefillDate = null, duplicateFrom = null) {
+      if (appData.ministries.length === 0) {
+        showToast('Cadastre um ministério antes de criar programações.', 'error');
+        switchView('ministries');
+        return;
+      }
+      const form = $('form-event');
+      form.reset();
+
+      const select = $('event-ministry-select');
+      select.innerHTML = '<option value="">Selecione um ministério…</option>';
+      [...appData.ministries].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+        .forEach(m => select.append(new Option(m.name, m.id)));
+
+      const source = eventId ? appData.events.find(e => e.id === eventId) : duplicateFrom;
+      if (eventId && !source) return;
+
+      $('modal-event-title').textContent = eventId ? 'Editar programação' : (duplicateFrom ? 'Duplicar programação' : 'Cadastrar programação');
+      $('event-id').value = eventId || '';
+      $('btn-delete-event-modal').hidden = !eventId;
+      $('btn-duplicate-event').hidden = !eventId;
+
+      if (source) {
+        $('event-title-input').value = source.title || '';
+        select.value = ministryById(source.ministryId) ? source.ministryId : '';
+        $('event-status-select').value = duplicateFrom ? 'Pendente' : (source.status || 'Pendente');
+        $('event-date-input').value = source.date || '';
+        $('event-time-input').value = source.time || '19:30';
+        $('event-location-input').value = source.location || '';
+        $('event-responsible-input').value = source.responsible || '';
+        $('event-desc-input').value = source.description || '';
+      } else {
+        $('event-date-input').value = prefillDate || todayISO();
+        $('event-time-input').value = '19:30';
+        const minFilter = $('filter-event-ministry').value || $('dash-filter-ministry').value;
+        if (minFilter) select.value = minFilter;
+      }
+      openModal('modal-event');
+    }
+
+    async function deleteEvent(id) {
+      const evt = appData.events.find(e => e.id === id);
+      if (!evt) return false;
+      const ok = await confirmDialog(`Excluir “${evt.title}”? Esta ação não pode ser desfeita.`, { title: 'Excluir programação', okLabel: 'Excluir', danger: true });
+      if (!ok) return false;
+      appData.events = appData.events.filter(e => e.id !== id);
+      commit('deleteEvent', { id }, 'Programação excluída.');
+      return true;
+    }
+
+    function saveEventFromForm() {
+      const id = $('event-id').value;
+      const data = {
+        title: $('event-title-input').value.trim(),
+        ministryId: $('event-ministry-select').value,
+        status: $('event-status-select').value,
+        date: $('event-date-input').value,
+        time: $('event-time-input').value,
+        location: $('event-location-input').value.trim(),
+        responsible: $('event-responsible-input').value.trim(),
+        description: $('event-desc-input').value.trim()
+      };
+      if (!data.title || !data.ministryId || !data.date || !data.time || !data.location || !data.responsible) {
+        showToast('Preencha todos os campos obrigatórios.', 'error');
+        return;
+      }
+      let evt = id ? appData.events.find(e => e.id === id) : null;
+      if (evt) Object.assign(evt, data);
+      else { evt = { id: uid('e'), ...data }; appData.events.push(evt); }
+      $('modal-event').classList.remove('active');
+
+      // leva o calendário até o mês da programação salva
+      const d = parseISO(data.date);
+      if (d) currentCalDate = startOfMonth(d);
+      commit('upsertEvent', { ...evt }, id ? 'Programação atualizada.' : 'Programação cadastrada.');
+    }
+
+    /* ==========================================================================
+       MINISTÉRIOS
+       ========================================================================== */
+    function renderMinistries() {
+      const container = $('ministries-list');
+      if (appData.ministries.length === 0) {
+        container.innerHTML = `
+          <div class="card empty-state" style="grid-column: 1 / -1;">
+            <strong>Nenhum ministério cadastrado</strong>
+            <p>Cadastre o primeiro ministério para começar a organizar as programações.</p>
+          </div>`;
+        return;
+      }
+      container.innerHTML = [...appData.ministries]
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+        .map(min => {
+          const evs = appData.events.filter(e => e.ministryId === min.id);
+          const done = evs.filter(e => e.status === 'Concluída').length;
+          const id = escapeHtml(min.id);
+          return `
+            <div class="card ministry-card" style="--tag-color: ${safeColor(min.color)};">
+              <div>
+                <h4>${escapeHtml(min.name)}</h4>
+                <p class="leader"><strong>Responsável(is):</strong> ${escapeHtml(min.leader || 'Não informado')}</p>
+                <p class="desc">${escapeHtml(min.description || 'Sem descrição.')}</p>
+              </div>
+              <div class="ministry-foot">
+                <div class="ministry-stats" title="${done} de ${evs.length} concluídas">
+                  <span>${plural(evs.length, 'programação', 'programações')}</span>
+                  ${evs.length ? `<span class="mini-bar"><span style="width: ${pct(done, evs.length)}%"></span></span>` : ''}
+                </div>
+                <div class="row-actions">
+                  <button class="btn-icon" data-action="edit-ministry" data-id="${id}" aria-label="Editar" title="Editar">${ICONS.edit}</button>
+                  <button class="btn-icon danger" data-action="delete-ministry" data-id="${id}" aria-label="Excluir" title="Excluir">${ICONS.trash}</button>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+    }
+
+    function openMinistryModal(minId = null) {
+      $('form-ministry').reset();
+      const min = minId ? ministryById(minId) : null;
+      if (minId && !min) return;
+      $('modal-ministry-title').textContent = min ? 'Editar ministério' : 'Cadastrar ministério';
+      $('ministry-id').value = min ? min.id : '';
+      $('ministry-name-input').value = min ? min.name : '';
+      $('ministry-leader-input').value = min ? (min.leader || '') : '';
+      $('ministry-color-input').value = min ? safeColor(min.color) : '#4f46e5';
+      $('ministry-desc-input').value = min ? (min.description || '') : '';
+      openModal('modal-ministry');
+    }
+
+    async function deleteMinistry(id) {
+      const min = ministryById(id);
+      if (!min) return;
+      const linked = appData.events.filter(e => e.ministryId === id).length;
+      const msg = linked
+        ? `“${min.name}” possui ${plural(linked, 'programação vinculada', 'programações vinculadas')}. Elas ficarão sem ministério. Deseja excluir mesmo assim?`
+        : `Excluir o ministério “${min.name}”? Esta ação não pode ser desfeita.`;
+      if (!await confirmDialog(msg, { title: 'Excluir ministério', okLabel: 'Excluir', danger: true })) return;
+      appData.ministries = appData.ministries.filter(m => m.id !== id);
+      appData.events.forEach(e => { if (e.ministryId === id) e.ministryId = ''; });
+      commit('deleteMinistry', { id }, 'Ministério excluído.');
+    }
+
+    function saveMinistryFromForm() {
+      const id = $('ministry-id').value;
+      const data = {
+        name: $('ministry-name-input').value.trim(),
+        leader: $('ministry-leader-input').value.trim(),
+        color: $('ministry-color-input').value,
+        description: $('ministry-desc-input').value.trim()
+      };
+      if (!data.name || !data.leader) {
+        showToast('Preencha todos os campos obrigatórios.', 'error');
+        return;
+      }
+      const dup = appData.ministries.find(m => m.id !== id && normalize(m.name) === normalize(data.name));
+      if (dup) {
+        showToast('Já existe um ministério com esse nome.', 'error');
+        return;
+      }
+      let min = id ? ministryById(id) : null;
+      if (min) Object.assign(min, data);
+      else { min = { id: uid('m'), ...data }; appData.ministries.push(min); }
+      $('modal-ministry').classList.remove('active');
+      commit('upsertMinistry', { ...min }, id ? 'Ministério atualizado.' : 'Ministério cadastrado.');
+    }
+
+    /* ==========================================================================
+       USUÁRIOS (somente administradores)
+       ========================================================================== */
+    function renderUsers() {
+      const tbody = $('users-table-body');
+      tbody.innerHTML = [...appData.users]
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+        .map(u => {
+          const id = escapeHtml(u.id);
+          const isMe = u.id === currentUser.id;
+          return `
+            <tr>
+              <td data-label="Nome"><span class="cell-strong">${escapeHtml(u.name)}</span>${isMe ? '<span class="badge badge-you">você</span>' : ''}</td>
+              <td data-label="Usuário">${escapeHtml(u.username)}</td>
+              <td data-label="Perfil"><span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">${u.role === 'admin' ? 'Administrador' : 'Usuário'}</span></td>
+              <td data-label="Status"><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Ativo' : 'Inativo'}</span></td>
+              <td class="text-right">
+                <div class="row-actions">
+                  <button class="btn-icon" data-action="toggle-user" data-id="${id}" ${isMe ? 'disabled' : ''} aria-label="${u.active ? 'Desativar' : 'Ativar'}" title="${isMe ? 'Você não pode desativar a si mesmo' : (u.active ? 'Desativar' : 'Ativar')}">${ICONS.power}</button>
+                  <button class="btn-icon" data-action="reset-pass" data-id="${id}" aria-label="Redefinir senha" title="Redefinir senha">${ICONS.key}</button>
+                  <button class="btn-icon" data-action="edit-user" data-id="${id}" aria-label="Editar" title="Editar">${ICONS.edit}</button>
+                  <button class="btn-icon danger" data-action="delete-user" data-id="${id}" ${isMe ? 'disabled' : ''} aria-label="Excluir" title="${isMe ? 'Você não pode excluir a si mesmo' : 'Excluir'}">${ICONS.trash}</button>
+                </div>
+              </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function activeAdminCount(excludeId) {
+      return appData.users.filter(u => u.role === 'admin' && u.active && u.id !== excludeId).length;
+    }
+
+    function toggleUserStatus(id) {
+      const u = appData.users.find(x => x.id === id);
+      if (!u) return;
+      if (u.id === currentUser.id) { showToast('Você não pode desativar o seu próprio usuário.', 'error'); return; }
+      if (u.active && u.role === 'admin' && activeAdminCount(u.id) === 0) { showToast('É necessário manter ao menos um administrador ativo.', 'error'); return; }
+      u.active = !u.active;
+      commit('upsertUser', userPayload(u), `${u.name} agora está ${u.active ? 'ativo' : 'inativo'}.`);
+    }
+
+    // dados enviados à planilha (nunca inclui o hash da senha)
+    function userPayload(u, password) {
+      const p = { id: u.id, name: u.name, username: u.username, role: u.role, active: u.active !== false };
+      if (password) p.password = password;
+      return p;
+    }
+
+    function openUserModal(userId = null) {
+      $('form-user').reset();
+      const u = userId ? appData.users.find(x => x.id === userId) : null;
+      if (userId && !u) return;
+      $('modal-user-title').textContent = u ? 'Editar usuário' : 'Cadastrar usuário';
+      $('user-id').value = u ? u.id : '';
+      $('user-name-input').value = u ? u.name : '';
+      $('user-username-input').value = u ? u.username : '';
+      $('user-role-select').value = u ? u.role : 'user';
+      $('user-active-checkbox').checked = u ? u.active !== false : true;
+      $('user-password-group').hidden = !!u;
+      $('user-pass-input').required = !u;
+      openModal('modal-user');
+    }
+
+    async function deleteUser(id) {
+      const u = appData.users.find(x => x.id === id);
+      if (!u) return;
+      if (id === currentUser.id) { showToast('Você não pode excluir o seu próprio usuário.', 'error'); return; }
+      if (u.role === 'admin' && activeAdminCount(u.id) === 0) { showToast('É necessário manter ao menos um administrador ativo.', 'error'); return; }
+      if (!await confirmDialog(`Excluir o usuário “${u.name}”? Esta ação não pode ser desfeita.`, { title: 'Excluir usuário', okLabel: 'Excluir', danger: true })) return;
+      appData.users = appData.users.filter(x => x.id !== id);
+      commit('deleteUser', { id }, 'Usuário excluído.');
+    }
+
+    async function saveUserFromForm() {
+      const id = $('user-id').value;
+      const name = $('user-name-input').value.trim();
+      const username = $('user-username-input').value.trim();
+      const role = $('user-role-select').value;
+      const active = $('user-active-checkbox').checked;
+      const pass = $('user-pass-input').value;
+
+      if (!name || !username || (!id && !pass)) { showToast('Preencha todos os campos obrigatórios.', 'error'); return; }
+      if (!/^[a-zA-Z0-9._-]{2,}$/.test(username)) { showToast('Usuário deve ter ao menos 2 caracteres, sem espaços ou acentos.', 'error'); return; }
+      if (!id && pass.length < 4) { showToast('A senha deve ter ao menos 4 caracteres.', 'error'); return; }
+      if (appData.users.some(x => x.id !== id && x.username.toLowerCase() === username.toLowerCase())) {
+        showToast('Esse nome de usuário já está em uso.', 'error');
+        return;
+      }
+
+      if (id) {
+        const u = appData.users.find(x => x.id === id);
+        if (!u) return;
+        if (u.id === currentUser.id && (!active || role !== 'admin') && u.role === 'admin') {
+          showToast('Você não pode remover o seu próprio acesso de administrador.', 'error');
+          return;
+        }
+        if (u.role === 'admin' && (role !== 'admin' || !active) && activeAdminCount(u.id) === 0) {
+          showToast('É necessário manter ao menos um administrador ativo.', 'error');
+          return;
+        }
+        Object.assign(u, { name, username, role, active });
+        $('modal-user').classList.remove('active');
+        if (u.id === currentUser.id) checkAuthView();
+        commit('upsertUser', userPayload(u), 'Usuário atualizado.');
+      } else {
+        const user = { id: uid('u'), name, username, role, active };
+        if (!REMOTE) await setPassword(user, pass);   // na planilha o hash é gerado no servidor
+        appData.users.push(user);
+        $('modal-user').classList.remove('active');
+        commit('upsertUser', userPayload(user, pass), 'Usuário cadastrado.');
+      }
+    }
+
+    function openResetPassModal(id) {
+      const u = appData.users.find(x => x.id === id);
+      if (!u) return;
+      $('reset-user-id').value = u.id;
+      $('reset-user-name-txt').textContent = `Defina uma nova senha para ${u.name} (${u.username}).`;
+      $('new-pass-input').value = '';
+      openModal('modal-reset-pass');
+    }
+
+    /* ==========================================================================
+       BACKUP
+       ========================================================================== */
+    function exportBackup() {
+      const blob = new Blob([JSON.stringify({ app: 'ipf-programacoes', exportedAt: new Date().toISOString(), data: appData }, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `backup-programacoes-${todayISO()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      showToast('Backup exportado.');
+    }
+
+    function importBackup(file) {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        let parsed;
+        try { parsed = JSON.parse(reader.result); } catch (e) { showToast('Arquivo inválido.', 'error'); return; }
+        const data = parsed && parsed.data ? parsed.data : parsed;
+        if (!isValidData(data)) { showToast('O arquivo não contém um backup válido.', 'error'); return; }
+        if (!data.users.some(u => u.role === 'admin' && u.active)) { showToast('O backup não possui nenhum administrador ativo.', 'error'); return; }
+        const where = REMOTE ? 'na planilha' : 'neste navegador';
+        const ok = await confirmDialog(`Importar ${plural(data.events.length, 'programação', 'programações')}, ${plural(data.ministries.length, 'ministério', 'ministérios')} e ${plural(data.users.length, 'usuário', 'usuários')}? Os dados atuais ${where} serão substituídos.`, { title: 'Importar backup', okLabel: 'Importar', danger: true });
+        if (!ok) return;
+        if (REMOTE) {
+          await remoteCall('importAll', data, 'Backup importado para a planilha.');
+          return;
+        }
+        appData = data;
+        saveState();
+        currentUser = appData.users.find(u => u.id === currentUser.id && u.active) || null;
+        if (!currentUser) store.remove(SESSION_KEY);
+        showToast('Backup importado.');
+        checkAuthView();
+      };
+      reader.readAsText(file);
+    }
+
+    /* ==========================================================================
+       EVENTOS DE INTERFACE
+       ========================================================================== */
+    document.addEventListener('DOMContentLoaded', () => {
+      applyTheme(store.get(THEME_KEY) || 'auto');
+      if (REMOTE) {
+        appData = { users: [], ministries: [], events: [] };
+        let sess = null;
+        try { sess = JSON.parse(store.get(SESSION_KEY) || 'null'); } catch (e) { sess = null; }
+        if (sess && sess.token) {
+          sessionToken = sess.token;
+          $('loading-text').textContent = 'Carregando dados da planilha…';
+          api('getAll')
+            .then(r => { applyRemoteData(r.data, r.me); })
+            .catch(err => {
+              if (err.code === 'AUTH') dropSession();
+              else { dropSession(); showToast(err.message, 'error'); }
+            })
+            .finally(checkAuthView);
+        } else {
+          checkAuthView();
+        }
+        // mantém os dados atualizados com as alterações feitas por outras pessoas
+        setInterval(() => { if (document.visibilityState === 'visible') refreshFromServer(true); }, REFRESH_MS);
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible' && lastSyncAt && Date.now() - lastSyncAt > 15000) refreshFromServer(true);
+        });
+        $('sync-status').addEventListener('click', () => refreshFromServer());
+      } else {
+        loadState();
+        checkAuthView();
+      }
+
+      // Login
+      $('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = $('login-username').value.trim().toLowerCase();
+        const pass = $('login-password').value;
+        if (!username || !pass) { showToast('Informe usuário e senha.', 'error'); return; }
+        const submitBtn = $('login-form').querySelector('[type=submit]');
+
+        let user;
+        if (REMOTE) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Entrando…';
+          try {
+            const r = await api('login', { username, password: pass });
+            applyRemoteData(r.data, r.me);
+            storeSession(r.token, r.me.id);
+            user = currentUser;
+          } catch (err) {
+            showToast(err.message, 'error');
+            $('login-password').select();
+            return;
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Entrar';
+          }
+        } else {
+          user = appData.users.find(u => u.username.toLowerCase() === username);
+          if (!user || !user.active || !(await checkPassword(user, pass))) {
+            showToast('Usuário ou senha incorretos.', 'error');
+            $('login-password').select();
+            return;
+          }
+          currentUser = user;
+          store.set(SESSION_KEY, JSON.stringify({ id: user.id }));
+        }
+        $('login-form').reset();
+        showToast(`Bem-vindo(a), ${user.name.split(' ')[0]}!`);
+        checkAuthView();
+      });
+
+      $('btn-logout').addEventListener('click', () => {
+        if (REMOTE && sessionToken) api('logout').catch(() => {});
+        sessionToken = null;
+        currentUser = null;
+        store.remove(SESSION_KEY);
+        history.replaceState(null, '', location.pathname + location.search);
+        checkAuthView();
+        showToast('Você saiu do sistema.', 'info');
+      });
+
+      $('btn-reset-demo').addEventListener('click', async () => {
+        if (!await confirmDialog('Todos os dados atuais serão substituídos pelos dados de demonstração. Esta ação não pode ser desfeita.', { title: 'Restaurar demonstração', okLabel: 'Restaurar', danger: true })) return;
+        appData = getSampleData();
+        saveState();
+        currentUser = appData.users.find(u => u.username === 'admin');
+        store.set(SESSION_KEY, JSON.stringify({ id: currentUser.id }));
+        showToast('Demonstração restaurada.');
+        checkAuthView();
+      });
+
+      $('btn-theme').addEventListener('click', cycleTheme);
+      $('btn-export').addEventListener('click', exportBackup);
+      $('btn-import').addEventListener('click', () => $('import-file').click());
+      $('import-file').addEventListener('change', (e) => {
+        if (e.target.files[0]) importBackup(e.target.files[0]);
+        e.target.value = '';
+      });
+
+      // Mostrar/ocultar senha
+      document.querySelectorAll('[data-toggle-password]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const input = $(btn.dataset.togglePassword);
+          const show = input.type === 'password';
+          input.type = show ? 'text' : 'password';
+          btn.textContent = show ? 'Ocultar' : 'Mostrar';
+          btn.setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
+        });
+      });
+
+      // Menu lateral
+      $('mobile-toggle').addEventListener('click', () => {
+        $('app-sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
+      });
+      $('sidebar-backdrop').addEventListener('click', closeSidebar);
+      document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
+      window.addEventListener('hashchange', () => {
+        const v = location.hash.replace('#', '');
+        if (currentUser && v && v !== currentView && $(`view-${v}`)) switchView(v, false);
+      });
+
+      // Botões de criação
+      $('btn-quick-new-event').addEventListener('click', () => openEventModal());
+      $('btn-open-new-ministry').addEventListener('click', () => openMinistryModal());
+      $('btn-open-new-user').addEventListener('click', () => openUserModal());
+
+      // Filtros
+      document.querySelectorAll('[data-filter]').forEach(el => {
+        el.addEventListener(el.type === 'search' ? 'input' : 'change', () => {
+          el.dataset.filter === 'dash' ? renderDashboard() : renderEvents();
+        });
+      });
+      document.querySelectorAll('[data-clear-filters]').forEach(btn => btn.addEventListener('click', () => clearFilters(btn.dataset.clearFilters)));
+
+      // Ordenação da tabela
+      document.querySelectorAll('#events-table th[data-sort]').forEach(th => {
+        th.tabIndex = 0;
+        const sort = () => {
+          const key = th.dataset.sort;
+          eventSort = { key, dir: eventSort.key === key ? -eventSort.dir : 1 };
+          renderEvents();
+        };
+        th.addEventListener('click', sort);
+        th.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sort(); } });
+      });
+
+      // Calendário
+      $('cal-prev').addEventListener('click', () => { currentCalDate = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth() - 1, 1); renderDashboard(); });
+      $('cal-next').addEventListener('click', () => { currentCalDate = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth() + 1, 1); renderDashboard(); });
+      $('cal-today').addEventListener('click', () => { currentCalDate = startOfMonth(new Date()); renderDashboard(); });
+      $('calendar-days').addEventListener('click', (e) => {
+        const pill = e.target.closest('[data-event-id]');
+        if (pill) { openEventModal(pill.dataset.eventId); return; }
+        const cell = e.target.closest('.cal-cell[data-date]');
+        if (cell) openEventModal(null, cell.dataset.date);
+      });
+      $('calendar-days').addEventListener('keydown', (e) => {
+        const cell = e.target.closest('.cal-cell[data-date]');
+        if (cell && e.target === cell && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openEventModal(null, cell.dataset.date); }
+      });
+
+      // Próximas programações
+      $('upcoming-events-list').addEventListener('click', (e) => {
+        const item = e.target.closest('[data-event-id]');
+        if (item) openEventModal(item.dataset.eventId);
+      });
+      $('upcoming-events-list').addEventListener('keydown', (e) => {
+        const item = e.target.closest('[data-event-id]');
+        if (item && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openEventModal(item.dataset.eventId); }
+      });
+
+      // Ações delegadas (tabelas e cartões)
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn || btn.disabled) return;
+        const id = btn.dataset.id;
+        switch (btn.dataset.action) {
+          case 'new-event': openEventModal(); break;
+          case 'advance-event': advanceEventStatus(id); break;
+          case 'edit-event': openEventModal(id); break;
+          case 'delete-event': deleteEvent(id); break;
+          case 'edit-ministry': openMinistryModal(id); break;
+          case 'delete-ministry': deleteMinistry(id); break;
+          case 'toggle-user': toggleUserStatus(id); break;
+          case 'reset-pass': openResetPassModal(id); break;
+          case 'edit-user': openUserModal(id); break;
+          case 'delete-user': deleteUser(id); break;
+        }
+      });
+
+      // Modais
+      document.querySelectorAll('[data-close-modal]').forEach(el => el.addEventListener('click', () => closeModal(el.closest('.modal-overlay'))));
+      document.querySelectorAll('.modal-overlay').forEach(modal => {
+        modal.addEventListener('mousedown', (e) => { if (e.target === modal) closeModal(modal); });
+      });
+      $('confirm-ok').addEventListener('click', () => resolveConfirm(true));
+      $('confirm-cancel').addEventListener('click', () => resolveConfirm(false));
+
+      $('btn-delete-event-modal').addEventListener('click', async () => {
+        const id = $('event-id').value;
+        if (await deleteEvent(id)) $('modal-event').classList.remove('active');
+      });
+      $('btn-duplicate-event').addEventListener('click', () => {
+        const src = appData.events.find(e => e.id === $('event-id').value);
+        if (src) openEventModal(null, null, src);
+      });
+
+      // Formulários
+      $('form-event').addEventListener('submit', (e) => { e.preventDefault(); saveEventFromForm(); });
+      $('form-ministry').addEventListener('submit', (e) => { e.preventDefault(); saveMinistryFromForm(); });
+      $('form-user').addEventListener('submit', (e) => { e.preventDefault(); saveUserFromForm(); });
+      $('form-reset-pass').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const u = appData.users.find(x => x.id === $('reset-user-id').value);
+        const pass = $('new-pass-input').value;
+        if (pass.length < 4) { showToast('A senha deve ter ao menos 4 caracteres.', 'error'); return; }
+        if (!u) return;
+        $('modal-reset-pass').classList.remove('active');
+        if (!REMOTE) await setPassword(u, pass);
+        commit('setPassword', { id: u.id, password: pass }, `Senha de ${u.name} redefinida.`);
+      });
+
+      // Atalhos de teclado: Esc fecha, N cria programação, / busca
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          if (closeTopModal()) return;
+          closeSidebar();
+          return;
+        }
+        if (!currentUser || document.querySelector('.modal-overlay.active')) return;
+        const tag = (e.target.tagName || '').toLowerCase();
+        if (['input', 'textarea', 'select'].includes(tag) || e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openEventModal(); }
+        if (e.key === '/') { e.preventDefault(); switchView('events'); $('filter-event-search').focus(); }
+      });
+
+      // Mantém múltiplas abas sincronizadas
+      window.addEventListener('storage', (e) => {
+        if (REMOTE || e.key !== STORAGE_KEY) return;
+        loadState();
+        checkAuthView();
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

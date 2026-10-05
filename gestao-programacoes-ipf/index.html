@@ -497,6 +497,25 @@
 
     .sidebar-backdrop { display: none; }
 
+    /* Sincronização com a planilha */
+    .sync-status {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
+      padding: 0.3rem 0.6rem; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border);
+      white-space: nowrap; cursor: pointer;
+    }
+    .sync-status .dot { background: var(--done); }
+    .sync-status.busy .dot { background: var(--prog); animation: pulse 1s ease-in-out infinite; }
+    .sync-status.error .dot { background: var(--pend); }
+    @keyframes pulse { 50% { opacity: 0.3; } }
+    #loading-screen {
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+      color: var(--text-muted); font-size: 0.9rem;
+    }
+    .spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 720px) { .sync-label { display: none; } }
+
     /* ==========================================================================
        RESPONSIVO
        ========================================================================== */
@@ -560,6 +579,12 @@
       <path d="M 50 26 L 50 44 M 50 56 L 50 84 M 32 50 L 44 50 M 56 50 L 70 50" stroke="#FFFFFF" stroke-width="8.5" stroke-linecap="round"/>
     </symbol>
   </svg>
+
+  <!-- ======================= CARREGANDO ======================= -->
+  <div id="loading-screen">
+    <div class="spinner" aria-hidden="true"></div>
+    <span id="loading-text">Carregando…</span>
+  </div>
 
   <!-- ======================= LOGIN ======================= -->
   <div id="auth-screen" hidden>
@@ -672,6 +697,9 @@
             <h2 class="topbar-title" id="page-title">Dashboard</h2>
           </div>
           <div class="topbar-right">
+            <span class="sync-status" id="sync-status" role="status" title="Clique para atualizar" hidden>
+              <span class="dot"></span><span class="sync-label" id="sync-label">Planilha conectada</span>
+            </span>
             <button class="btn btn-primary" id="btn-quick-new-event" title="Cadastrar programação (N)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               <span class="topbar-new-label">Cadastrar programação</span>
@@ -1083,6 +1111,8 @@
     </div>
   </div>
 
+  <!-- Configuração da conexão com a planilha (URL do Google Apps Script) -->
+  <script src="config.js"></script>
   <script>
   (function () {
     'use strict';
@@ -1099,6 +1129,12 @@
     const MONTHS_SHORT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
     const WEEKDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
     const FALLBACK_COLOR = '#64748b';
+
+    // Com uma URL configurada em config.js, os dados ficam na planilha do Google.
+    // Sem ela, o sistema funciona em modo local (dados apenas neste navegador).
+    const API_URL = ((window.IPF_CONFIG && window.IPF_CONFIG.apiUrl) || '').trim();
+    const REMOTE = /^https:\/\/script\.google(usercontent)?\.com\//.test(API_URL);
+    const REFRESH_MS = 60000;
 
     const $ = (id) => document.getElementById(id);
 
@@ -1155,6 +1191,7 @@
     }
 
     function loadState() {
+      if (REMOTE) return;   // no modo planilha os dados vêm do servidor
       const raw = store.get(STORAGE_KEY);
       let parsed = null;
       try { parsed = raw ? JSON.parse(raw) : null; } catch (e) { parsed = null; }
@@ -1172,9 +1209,119 @@
     }
 
     function saveState() {
+      if (REMOTE) return;
       if (!store.set(STORAGE_KEY, JSON.stringify(appData))) {
         showToast('Não foi possível salvar no navegador. Verifique o armazenamento.', 'error');
       }
+    }
+
+    /* ==========================================================================
+       PLANILHA (Google Apps Script)
+       ========================================================================== */
+    let sessionToken = null;
+    let pendingRequests = 0;
+    let lastSyncAt = null;
+
+    async function api(action, payload) {
+      let res;
+      try {
+        // corpo em texto simples evita a requisição de "preflight" que o Apps Script não aceita
+        res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action, token: sessionToken, payload }) });
+      } catch (e) {
+        throw Object.assign(new Error('Sem conexão com a planilha. Verifique a internet.'), { code: 'NETWORK' });
+      }
+      let json;
+      try { json = await res.json(); } catch (e) { json = null; }
+      if (!json) throw Object.assign(new Error('Resposta inválida da planilha. Verifique a implantação do Apps Script.'), { code: 'BAD_RESPONSE' });
+      if (!json.ok) throw Object.assign(new Error(json.error || 'Erro na planilha.'), { code: json.code });
+      return json;
+    }
+
+    function setSyncState(state, label) {
+      const el = $('sync-status');
+      if (!el) return;
+      el.hidden = !REMOTE || !currentUser;
+      el.classList.toggle('busy', state === 'busy');
+      el.classList.toggle('error', state === 'error');
+      $('sync-label').textContent = label;
+      if (lastSyncAt) el.title = `Última sincronização: ${lastSyncAt.toLocaleTimeString('pt-BR')}. Clique para atualizar.`;
+    }
+
+    function applyRemoteData(data, me) {
+      appData = {
+        users: (data.users || []).map(u => ({ ...u, active: u.active !== false })),
+        ministries: data.ministries || [],
+        events: data.events || []
+      };
+      if (me) currentUser = appData.users.find(u => u.id === me.id) || me;
+      lastSyncAt = new Date();
+    }
+
+    function storeSession(token, userId) {
+      sessionToken = token;
+      store.set(SESSION_KEY, JSON.stringify({ token, id: userId }));
+    }
+
+    function dropSession() {
+      sessionToken = null;
+      currentUser = null;
+      store.remove(SESSION_KEY);
+    }
+
+    async function remoteCall(action, payload, successMsg, toastType = 'success') {
+      pendingRequests++;
+      setSyncState('busy', 'Salvando…');
+      try {
+        const r = await api(action, payload);
+        if (r.data) applyRemoteData(r.data, r.me);
+        if (successMsg) showToast(successMsg, toastType);
+        setSyncState('ok', 'Planilha conectada');
+        return true;
+      } catch (err) {
+        handleApiError(err);
+        return false;
+      } finally {
+        pendingRequests--;
+        checkAuthView();
+      }
+    }
+
+    function handleApiError(err) {
+      if (err.code === 'AUTH') {
+        dropSession();
+        showToast(err.message, 'error');
+        return;
+      }
+      setSyncState('error', 'Erro de sincronização');
+      showToast(err.message || 'Erro ao comunicar com a planilha.', 'error');
+      refreshFromServer(true);   // desfaz a alteração otimista recarregando os dados reais
+    }
+
+    async function refreshFromServer(silent = false) {
+      if (!REMOTE || !sessionToken || pendingRequests > 0) return;
+      if (!silent) setSyncState('busy', 'Atualizando…');
+      try {
+        const r = await api('getAll');
+        if (pendingRequests > 0) return;   // uma gravação começou nesse meio-tempo
+        applyRemoteData(r.data, r.me);
+        setSyncState('ok', 'Planilha conectada');
+        if (currentUser) renderAll(); else checkAuthView();
+      } catch (err) {
+        if (err.code === 'AUTH') { dropSession(); checkAuthView(); showToast(err.message, "error"); }
+        else setSyncState('error', 'Sem conexão');
+      }
+    }
+
+    // Grava uma alteração já aplicada em appData: localmente ou na planilha
+    async function commit(action, payload, successMsg, toastType = 'success') {
+      if (!REMOTE) {
+        saveState();
+        renderAll();
+        if (successMsg) showToast(successMsg, toastType);
+        return true;
+      }
+      renderAll();   // atualização otimista; a resposta do servidor confirma ou corrige
+      return remoteCall(action, payload, successMsg, toastType);
     }
 
     const uid = (prefix) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -1343,11 +1490,12 @@
        ========================================================================== */
     function checkAuthView() {
       const loggedIn = !!currentUser;
+      $('loading-screen').hidden = true;
       $('auth-screen').hidden = loggedIn;
       $('app-screen').hidden = !loggedIn;
       if (!loggedIn) {
         // a dica só aparece enquanto a senha padrão de demonstração não foi alterada
-        const admin = appData.users.find(u => u.username === 'admin');
+        const admin = REMOTE ? null : appData.users.find(u => u.username === 'admin');
         $('auth-hint').hidden = true;
         if (admin) {
           if (admin.password === 'admin123') $('auth-hint').hidden = false;
@@ -1363,6 +1511,8 @@
       $('user-avatar').textContent = initials || 'US';
       $('nav-users-btn').hidden = !isAdmin();
       $('admin-tools').hidden = !isAdmin();
+      $('btn-reset-demo').hidden = REMOTE;   // nunca apagar a planilha real com dados de exemplo
+      if (REMOTE && $('sync-status').hidden) setSyncState('ok', 'Planilha conectada');
 
       const fromHash = location.hash.replace('#', '');
       switchView(['dashboard', 'events', 'ministries', 'users'].includes(fromHash) ? fromHash : currentView, false);
@@ -1684,9 +1834,7 @@
       if (!evt) return;
       const flow = { 'Pendente': 'Em andamento', 'Em andamento': 'Concluída', 'Concluída': 'Em andamento' };
       evt.status = flow[evt.status] || 'Em andamento';
-      saveState();
-      renderAll();
-      showToast(`Status alterado para “${evt.status}”.`, evt.status === 'Concluída' ? 'success' : 'info');
+      commit('upsertEvent', { ...evt }, `Status alterado para “${evt.status}”.`, evt.status === 'Concluída' ? 'success' : 'info');
     }
 
     function openEventModal(eventId = null, prefillDate = null, duplicateFrom = null) {
@@ -1735,9 +1883,7 @@
       const ok = await confirmDialog(`Excluir “${evt.title}”? Esta ação não pode ser desfeita.`, { title: 'Excluir programação', okLabel: 'Excluir', danger: true });
       if (!ok) return false;
       appData.events = appData.events.filter(e => e.id !== id);
-      saveState();
-      renderAll();
-      showToast('Programação excluída.');
+      commit('deleteEvent', { id }, 'Programação excluída.');
       return true;
     }
 
@@ -1757,21 +1903,15 @@
         showToast('Preencha todos os campos obrigatórios.', 'error');
         return;
       }
-      if (id) {
-        const evt = appData.events.find(e => e.id === id);
-        if (evt) Object.assign(evt, data);
-        showToast('Programação atualizada.');
-      } else {
-        appData.events.push({ id: uid('e'), ...data });
-        showToast('Programação cadastrada.');
-      }
-      saveState();
+      let evt = id ? appData.events.find(e => e.id === id) : null;
+      if (evt) Object.assign(evt, data);
+      else { evt = { id: uid('e'), ...data }; appData.events.push(evt); }
       $('modal-event').classList.remove('active');
 
       // leva o calendário até o mês da programação salva
       const d = parseISO(data.date);
       if (d) currentCalDate = startOfMonth(d);
-      renderAll();
+      commit('upsertEvent', { ...evt }, id ? 'Programação atualizada.' : 'Programação cadastrada.');
     }
 
     /* ==========================================================================
@@ -1837,9 +1977,7 @@
       if (!await confirmDialog(msg, { title: 'Excluir ministério', okLabel: 'Excluir', danger: true })) return;
       appData.ministries = appData.ministries.filter(m => m.id !== id);
       appData.events.forEach(e => { if (e.ministryId === id) e.ministryId = ''; });
-      saveState();
-      renderAll();
-      showToast('Ministério excluído.');
+      commit('deleteMinistry', { id }, 'Ministério excluído.');
     }
 
     function saveMinistryFromForm() {
@@ -1859,17 +1997,11 @@
         showToast('Já existe um ministério com esse nome.', 'error');
         return;
       }
-      if (id) {
-        const min = ministryById(id);
-        if (min) Object.assign(min, data);
-        showToast('Ministério atualizado.');
-      } else {
-        appData.ministries.push({ id: uid('m'), ...data });
-        showToast('Ministério cadastrado.');
-      }
-      saveState();
+      let min = id ? ministryById(id) : null;
+      if (min) Object.assign(min, data);
+      else { min = { id: uid('m'), ...data }; appData.ministries.push(min); }
       $('modal-ministry').classList.remove('active');
-      renderAll();
+      commit('upsertMinistry', { ...min }, id ? 'Ministério atualizado.' : 'Ministério cadastrado.');
     }
 
     /* ==========================================================================
@@ -1910,9 +2042,14 @@
       if (u.id === currentUser.id) { showToast('Você não pode desativar o seu próprio usuário.', 'error'); return; }
       if (u.active && u.role === 'admin' && activeAdminCount(u.id) === 0) { showToast('É necessário manter ao menos um administrador ativo.', 'error'); return; }
       u.active = !u.active;
-      saveState();
-      renderUsers();
-      showToast(`${u.name} agora está ${u.active ? 'ativo' : 'inativo'}.`);
+      commit('upsertUser', userPayload(u), `${u.name} agora está ${u.active ? 'ativo' : 'inativo'}.`);
+    }
+
+    // dados enviados à planilha (nunca inclui o hash da senha)
+    function userPayload(u, password) {
+      const p = { id: u.id, name: u.name, username: u.username, role: u.role, active: u.active !== false };
+      if (password) p.password = password;
+      return p;
     }
 
     function openUserModal(userId = null) {
@@ -1937,9 +2074,7 @@
       if (u.role === 'admin' && activeAdminCount(u.id) === 0) { showToast('É necessário manter ao menos um administrador ativo.', 'error'); return; }
       if (!await confirmDialog(`Excluir o usuário “${u.name}”? Esta ação não pode ser desfeita.`, { title: 'Excluir usuário', okLabel: 'Excluir', danger: true })) return;
       appData.users = appData.users.filter(x => x.id !== id);
-      saveState();
-      renderUsers();
-      showToast('Usuário excluído.');
+      commit('deleteUser', { id }, 'Usuário excluído.');
     }
 
     async function saveUserFromForm() {
@@ -1970,17 +2105,16 @@
           return;
         }
         Object.assign(u, { name, username, role, active });
+        $('modal-user').classList.remove('active');
         if (u.id === currentUser.id) checkAuthView();
-        showToast('Usuário atualizado.');
+        commit('upsertUser', userPayload(u), 'Usuário atualizado.');
       } else {
         const user = { id: uid('u'), name, username, role, active };
-        await setPassword(user, pass);
+        if (!REMOTE) await setPassword(user, pass);   // na planilha o hash é gerado no servidor
         appData.users.push(user);
-        showToast('Usuário cadastrado.');
+        $('modal-user').classList.remove('active');
+        commit('upsertUser', userPayload(user, pass), 'Usuário cadastrado.');
       }
-      saveState();
-      $('modal-user').classList.remove('active');
-      renderUsers();
     }
 
     function openResetPassModal(id) {
@@ -2015,8 +2149,13 @@
         const data = parsed && parsed.data ? parsed.data : parsed;
         if (!isValidData(data)) { showToast('O arquivo não contém um backup válido.', 'error'); return; }
         if (!data.users.some(u => u.role === 'admin' && u.active)) { showToast('O backup não possui nenhum administrador ativo.', 'error'); return; }
-        const ok = await confirmDialog(`Importar ${plural(data.events.length, 'programação', 'programações')}, ${plural(data.ministries.length, 'ministério', 'ministérios')} e ${plural(data.users.length, 'usuário', 'usuários')}? Os dados atuais serão substituídos.`, { title: 'Importar backup', okLabel: 'Importar', danger: true });
+        const where = REMOTE ? 'na planilha' : 'neste navegador';
+        const ok = await confirmDialog(`Importar ${plural(data.events.length, 'programação', 'programações')}, ${plural(data.ministries.length, 'ministério', 'ministérios')} e ${plural(data.users.length, 'usuário', 'usuários')}? Os dados atuais ${where} serão substituídos.`, { title: 'Importar backup', okLabel: 'Importar', danger: true });
         if (!ok) return;
+        if (REMOTE) {
+          await remoteCall('importAll', data, 'Backup importado para a planilha.');
+          return;
+        }
         appData = data;
         saveState();
         currentUser = appData.users.find(u => u.id === currentUser.id && u.active) || null;
@@ -2032,8 +2171,33 @@
        ========================================================================== */
     document.addEventListener('DOMContentLoaded', () => {
       applyTheme(store.get(THEME_KEY) || 'auto');
-      loadState();
-      checkAuthView();
+      if (REMOTE) {
+        appData = { users: [], ministries: [], events: [] };
+        let sess = null;
+        try { sess = JSON.parse(store.get(SESSION_KEY) || 'null'); } catch (e) { sess = null; }
+        if (sess && sess.token) {
+          sessionToken = sess.token;
+          $('loading-text').textContent = 'Carregando dados da planilha…';
+          api('getAll')
+            .then(r => { applyRemoteData(r.data, r.me); })
+            .catch(err => {
+              if (err.code === 'AUTH') dropSession();
+              else { dropSession(); showToast(err.message, 'error'); }
+            })
+            .finally(checkAuthView);
+        } else {
+          checkAuthView();
+        }
+        // mantém os dados atualizados com as alterações feitas por outras pessoas
+        setInterval(() => { if (document.visibilityState === 'visible') refreshFromServer(true); }, REFRESH_MS);
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible' && lastSyncAt && Date.now() - lastSyncAt > 15000) refreshFromServer(true);
+        });
+        $('sync-status').addEventListener('click', () => refreshFromServer());
+      } else {
+        loadState();
+        checkAuthView();
+      }
 
       // Login
       $('login-form').addEventListener('submit', async (e) => {
@@ -2041,20 +2205,43 @@
         const username = $('login-username').value.trim().toLowerCase();
         const pass = $('login-password').value;
         if (!username || !pass) { showToast('Informe usuário e senha.', 'error'); return; }
-        const user = appData.users.find(u => u.username.toLowerCase() === username);
-        if (!user || !user.active || !(await checkPassword(user, pass))) {
-          showToast('Usuário ou senha incorretos.', 'error');
-          $('login-password').select();
-          return;
+        const submitBtn = $('login-form').querySelector('[type=submit]');
+
+        let user;
+        if (REMOTE) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Entrando…';
+          try {
+            const r = await api('login', { username, password: pass });
+            applyRemoteData(r.data, r.me);
+            storeSession(r.token, r.me.id);
+            user = currentUser;
+          } catch (err) {
+            showToast(err.message, 'error');
+            $('login-password').select();
+            return;
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Entrar';
+          }
+        } else {
+          user = appData.users.find(u => u.username.toLowerCase() === username);
+          if (!user || !user.active || !(await checkPassword(user, pass))) {
+            showToast('Usuário ou senha incorretos.', 'error');
+            $('login-password').select();
+            return;
+          }
+          currentUser = user;
+          store.set(SESSION_KEY, JSON.stringify({ id: user.id }));
         }
-        currentUser = user;
-        store.set(SESSION_KEY, JSON.stringify({ id: user.id }));
         $('login-form').reset();
         showToast(`Bem-vindo(a), ${user.name.split(' ')[0]}!`);
         checkAuthView();
       });
 
       $('btn-logout').addEventListener('click', () => {
+        if (REMOTE && sessionToken) api('logout').catch(() => {});
+        sessionToken = null;
         currentUser = null;
         store.remove(SESSION_KEY);
         history.replaceState(null, '', location.pathname + location.search);
@@ -2198,10 +2385,9 @@
         const pass = $('new-pass-input').value;
         if (pass.length < 4) { showToast('A senha deve ter ao menos 4 caracteres.', 'error'); return; }
         if (!u) return;
-        await setPassword(u, pass);
-        saveState();
         $('modal-reset-pass').classList.remove('active');
-        showToast(`Senha de ${u.name} redefinida.`);
+        if (!REMOTE) await setPassword(u, pass);
+        commit('setPassword', { id: u.id, password: pass }, `Senha de ${u.name} redefinida.`);
       });
 
       // Atalhos de teclado: Esc fecha, N cria programação, / busca
@@ -2220,7 +2406,7 @@
 
       // Mantém múltiplas abas sincronizadas
       window.addEventListener('storage', (e) => {
-        if (e.key !== STORAGE_KEY) return;
+        if (REMOTE || e.key !== STORAGE_KEY) return;
         loadState();
         checkAuthView();
       });
