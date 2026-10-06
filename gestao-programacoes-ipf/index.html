@@ -348,6 +348,8 @@
 
     /* Painéis do dashboard */
     .dashboard-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.15fr); gap: 1.25rem; }
+    /* min-width: 0 impede que o conteúdo (títulos longos, cabeçalho do calendário) alargue a coluna além da tela */
+    .dashboard-layout > *, .kpi-grid > *, .panel-box { min-width: 0; }
     .panel-box { padding: 1.15rem; }
     .panel-head {
       display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
@@ -358,7 +360,7 @@
     /* Calendário */
     .calendar-controls { display: flex; align-items: center; gap: 0.35rem; }
     .cal-current-label { font-weight: 600; font-size: 0.95rem; min-width: 130px; text-align: center; }
-    .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 0.72rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .cal-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; font-size: 0.72rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.03em; }
     .cal-days-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
     .cal-cell {
       min-height: 88px; background: var(--surface-2); border: 1px solid var(--border);
@@ -382,6 +384,22 @@
     }
     .cal-event-pill.is-done { opacity: 0.6; text-decoration: line-through; }
     .cal-more { font-size: 0.66rem; color: var(--text-muted); font-weight: 600; padding-left: 4px; }
+    .cal-cell.is-selected { border-color: var(--text-2); box-shadow: inset 0 0 0 1px var(--text-2); }
+
+    /* Lista do dia selecionado (usada no celular) */
+    .cal-day-list { margin-top: 0.85rem; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+    .cal-day-list-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
+    .cal-day-list-head strong { font-size: 0.9rem; }
+    .cal-day-item {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left;
+      padding: 0.6rem 0.25rem; border: 0; border-bottom: 1px solid var(--border); background: transparent; cursor: pointer;
+    }
+    .cal-day-item:last-child { border-bottom: 0; }
+    .cal-day-item .bar { width: 4px; align-self: stretch; border-radius: 2px; flex-shrink: 0; }
+    .cal-day-item .time { font-size: 0.8rem; font-weight: 700; min-width: 42px; }
+    .cal-day-item .info { min-width: 0; flex: 1; }
+    .cal-day-item .info div:first-child { font-weight: 600; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cal-day-item .info div:last-child { font-size: 0.72rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* Próximas programações */
     .upcoming-item { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem 0.25rem; border-bottom: 1px solid var(--border); cursor: pointer; border-radius: 6px; }
@@ -497,6 +515,23 @@
 
     .sidebar-backdrop { display: none; }
 
+    /* Seletor de ano */
+    .year-picker {
+      display: inline-flex; align-items: center; gap: 0.35rem; height: 36px; padding: 0 0.25rem 0 0.6rem;
+      border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface);
+      color: var(--text-muted); cursor: pointer;
+    }
+    .year-picker:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+    .year-picker select {
+      border: 0; background: transparent; font-weight: 700; font-size: 0.9rem; color: var(--text);
+      padding: 0 0.25rem; height: 100%; cursor: pointer; outline: none;
+    }
+    .year-note {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
+      padding: 0.6rem 0.9rem; margin-bottom: 1rem; border-radius: var(--radius-sm);
+      background: var(--prog-soft); border: 1px solid var(--prog-border); color: var(--text-2); font-size: 0.82rem;
+    }
+
     /* Sincronização com a planilha */
     .sync-status {
       display: inline-flex; align-items: center; gap: 0.4rem;
@@ -514,13 +549,28 @@
     }
     .spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    @media (max-width: 720px) { .sync-label { display: none; } }
+    .filter-toggle { display: none; }
+    @media (max-width: 720px) {
+      .sync-label { display: none; }
+      .sync-status { padding: 0.3rem 0.45rem; }
+      .topbar-title { font-size: 1.05rem; }
+      .topbar-right { gap: 0.35rem; }
+      .year-picker { padding: 0 0 0 0.4rem; }
+      .year-picker svg { display: none; }
+      .year-picker select { max-width: 92px; font-size: 0.85rem; }
+      /* filtros recolhidos no celular: só abrem ao tocar em "Filtros" */
+      .filter-toggle { display: inline-flex; }
+      .filter-panel:not(.open) > .filter-row:not(:first-child) { display: none; }
+      .filter-panel .filter-title { display: none; }
+      .filter-panel:not(.open) [data-clear-filters] { display: none; }
+    }
 
     /* ==========================================================================
        RESPONSIVO
        ========================================================================== */
     @media (max-width: 1100px) {
-      .dashboard-layout { grid-template-columns: 1fr; }
+      .dashboard-layout { grid-template-columns: minmax(0, 1fr); }
+      .topbar-new-label { display: none; }
     }
     @media (max-width: 900px) {
       .app-sidebar { position: fixed; top: 0; bottom: 0; left: 0; transform: translateX(-100%); }
@@ -542,10 +592,16 @@
       .stat-icon { width: 36px; height: 36px; }
       .stat-val { font-size: 1.3rem; }
 
-      .cal-cell { min-height: 54px; padding: 3px; }
-      .cal-event-pill { font-size: 0; height: 6px; padding: 0; border-radius: 3px; }
-      .cal-more { font-size: 0.6rem; padding: 0; }
-      .cal-current-label { min-width: 0; }
+      .panel-box { padding: 0.85rem; }
+      .panel-head { gap: 0.5rem; }
+      .calendar-controls { width: 100%; justify-content: space-between; }
+      .cal-current-label { min-width: 0; flex: 1; font-size: 0.9rem; }
+      .cal-weekdays { font-size: 0.62rem; letter-spacing: 0; }
+      .cal-days-grid { gap: 2px; }
+      .cal-cell { min-height: 46px; padding: 2px; align-items: center; }
+      .cal-day-num { width: 20px; height: 20px; line-height: 20px; font-size: 0.7rem; }
+      .cal-event-pill { font-size: 0; width: 80%; height: 4px; padding: 0; border-radius: 2px; }
+      .cal-more { font-size: 0.58rem; padding: 0; }
 
       /* Tabelas viram cartões */
       .data-table thead { display: none; }
@@ -563,8 +619,13 @@
       .cell-desc { white-space: normal; }
     }
     @media (max-width: 420px) {
-      .kpi-grid { grid-template-columns: 1fr; }
+      .stat-card { padding: 0.75rem; }
+      .stat-icon { display: none; }
+      .stat-val { font-size: 1.25rem; }
       .auth-card { padding: 1.75rem 1.25rem; }
+      .modal-overlay { padding: 0.5rem; }
+      .modal-box { padding: 1.1rem; }
+      .form-actions { flex-wrap: wrap; }
     }
   </style>
 </head>
@@ -700,6 +761,11 @@
             <span class="sync-status" id="sync-status" role="status" title="Clique para atualizar" hidden>
               <span class="dot"></span><span class="sync-label" id="sync-label">Planilha conectada</span>
             </span>
+            <label class="year-picker" title="Ano das programações">
+              <span class="sr-only">Ano</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <select id="year-select" aria-label="Ano das programações"></select>
+            </label>
             <button class="btn btn-primary" id="btn-quick-new-event" title="Cadastrar programação (N)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               <span class="topbar-new-label">Cadastrar programação</span>
@@ -708,6 +774,7 @@
         </header>
 
         <div class="content-body">
+          <div class="year-note" id="year-note" hidden></div>
 
           <!-- ============ DASHBOARD ============ -->
           <section id="view-dashboard" class="view-panel active" aria-labelledby="page-title">
@@ -715,6 +782,7 @@
               <div class="filter-row split">
                 <div class="filter-title">Filtrar programações</div>
                 <div class="filter-row">
+                  <button type="button" class="btn btn-secondary btn-sm filter-toggle" data-filter-toggle aria-expanded="false">Filtros ▾</button>
                   <span class="filter-results-badge" id="dash-filter-count">0 programações</span>
                   <button type="button" class="btn btn-secondary btn-sm" data-clear-filters="dash">Limpar filtros</button>
                 </div>
@@ -797,6 +865,7 @@
                   <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
                 </div>
                 <div class="cal-days-grid" id="calendar-days"></div>
+                <div class="cal-day-list" id="cal-day-list" hidden></div>
               </div>
 
               <div class="card panel-box">
@@ -821,6 +890,7 @@
                   <input type="search" id="filter-event-search" class="form-control" placeholder="Buscar por título, local ou responsável…  ( / )" data-filter="events">
                 </div>
                 <div class="filter-row">
+                  <button type="button" class="btn btn-secondary btn-sm filter-toggle" data-filter-toggle aria-expanded="false">Filtros ▾</button>
                   <span class="filter-results-badge" id="event-filter-count">0 programações</span>
                   <button type="button" class="btn btn-secondary btn-sm" data-clear-filters="events">Limpar filtros</button>
                 </div>
@@ -1123,6 +1193,7 @@
     const STORAGE_KEY = 'igreja_asana_data_v1';   // mantido para preservar dados já salvos
     const SESSION_KEY = 'igreja_asana_session_v1';
     const THEME_KEY = 'igreja_theme';
+    const YEAR_KEY = 'igreja_ano';
     const STATUSES = ['Pendente', 'Em andamento', 'Concluída'];
     const STATUS_CLASS = { 'Pendente': 'st-pend', 'Em andamento': 'st-prog', 'Concluída': 'st-done' };
     const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -1185,6 +1256,10 @@
     let currentCalDate = startOfMonth(new Date());
     let currentView = 'dashboard';
     let eventSort = { key: 'date', dir: 1 };
+    let selectedCalDate = todayISO();   // dia tocado no calendário (celular); começa em hoje
+    // Ano exibido em todo o sistema ('all' = todos os anos). Cada ano guarda o seu histórico.
+    let selectedYear = String(new Date().getFullYear());
+    const isCompact = () => window.matchMedia('(max-width: 720px)').matches;
 
     function isValidData(d) {
       return d && Array.isArray(d.users) && Array.isArray(d.ministries) && Array.isArray(d.events);
@@ -1545,10 +1620,67 @@
       $('mobile-toggle').setAttribute('aria-expanded', 'false');
     }
 
+    /* ==========================================================================
+       ANO (histórico por ano)
+       ========================================================================== */
+    const currentYearStr = () => String(new Date().getFullYear());
+    const inSelectedYear = (e) => selectedYear === 'all' || (e.date || '').slice(0, 4) === selectedYear;
+    const yearLabel = () => selectedYear === 'all' ? 'todos os anos' : selectedYear;
+
+    // anos com programações + o ano atual e o próximo (para já planejar o ano seguinte)
+    function availableYears() {
+      const cy = Number(currentYearStr());
+      const years = new Set([cy, cy + 1]);
+      appData.events.forEach(e => { const y = Number((e.date || '').slice(0, 4)); if (y > 1900) years.add(y); });
+      return [...years].sort((a, b) => b - a).map(String);
+    }
+
+    function syncYearSelect() {
+      const sel = $('year-select');
+      const years = availableYears();
+      if (selectedYear !== 'all' && !years.includes(selectedYear)) years.push(selectedYear);
+      const counts = {};
+      appData.events.forEach(e => { const y = (e.date || '').slice(0, 4); counts[y] = (counts[y] || 0) + 1; });
+      sel.innerHTML = years.map(y => `<option value="${y}">${y}${counts[y] ? ` (${counts[y]})` : ''}</option>`).join('')
+        + `<option value="all">Todos os anos (${appData.events.length})</option>`;
+      sel.value = selectedYear;
+    }
+
+    function setYear(year, { moveCalendar = true } = {}) {
+      selectedYear = year;
+      store.set(YEAR_KEY, year);
+      if (moveCalendar && year !== 'all' && String(currentCalDate.getFullYear()) !== year) {
+        // ano atual: mês de hoje; outros anos: primeiro mês que tem programações (ou janeiro)
+        const first = appData.events.filter(inSelectedYear).map(e => e.date).sort()[0];
+        currentCalDate = year === currentYearStr() ? startOfMonth(new Date()) : (first ? startOfMonth(parseISO(first)) : new Date(Number(year), 0, 1));
+      }
+      renderAll();
+    }
+
+    // navegar no calendário para outro ano troca o ano exibido
+    function moveCalendar(deltaMonths) {
+      currentCalDate = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth() + deltaMonths, 1);
+      const y = String(currentCalDate.getFullYear());
+      if (selectedYear !== 'all' && y !== selectedYear) setYear(y, { moveCalendar: false });
+      else renderDashboard();
+    }
+
+    function renderYearNote() {
+      const note = $('year-note');
+      const cy = currentYearStr();
+      if (selectedYear === 'all' || selectedYear === cy) { note.hidden = true; return; }
+      note.hidden = false;
+      const past = selectedYear < cy;
+      note.innerHTML = `<span>${past ? `Você está vendo o <strong>histórico de ${selectedYear}</strong>.` : `Você está vendo o <strong>planejamento de ${selectedYear}</strong>.`}</span>
+        <button type="button" class="btn btn-secondary btn-sm" data-year-go="${cy}">Voltar para ${cy}</button>`;
+    }
+
     function renderAll() {
       if (!currentUser) return;
+      syncYearSelect();
+      renderYearNote();
       syncFilterDropdowns();
-      $('nav-count-events').textContent = appData.events.length;
+      $('nav-count-events').textContent = appData.events.filter(inSelectedYear).length;
       $('nav-count-ministries').textContent = appData.ministries.length;
       if (currentView === 'dashboard') renderDashboard();
       if (currentView === 'events') renderEvents();
@@ -1568,7 +1700,7 @@
     }
 
     function syncFilterDropdowns() {
-      const responsibles = Array.from(new Set(appData.events.map(e => (e.responsible || '').trim()).filter(Boolean)))
+      const responsibles = Array.from(new Set(appData.events.filter(inSelectedYear).map(e => (e.responsible || '').trim()).filter(Boolean)))
         .sort((a, b) => a.localeCompare(b, 'pt-BR'));
       const ministries = [...appData.ministries]
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
@@ -1600,6 +1732,7 @@
       const today = todayISO();
 
       return appData.events.filter(e => {
+        if (!inSelectedYear(e)) return false;
         if (dStart && (!e.date || e.date < dStart)) return false;
         if (dEnd && (!e.date || e.date > dEnd)) return false;
         if (minId && e.ministryId !== minId) return false;
@@ -1638,8 +1771,8 @@
       $('stat-prog').innerHTML = `${prog}<small>${pProg}%</small>`;
       $('stat-done').innerHTML = `${done}<small>${pDone}%</small>`;
 
-      $('dash-filter-count').textContent = plural(total, 'programação', 'programações');
-      $('dist-total').textContent = plural(total, 'programação', 'programações');
+      $('dash-filter-count').textContent = `${plural(total, 'programação', 'programações')} · ${yearLabel()}`;
+      $('dist-total').textContent = `${plural(total, 'programação', 'programações')} · ${yearLabel()}`;
 
       // larguras calculadas sem arredondamento para a barra sempre fechar em 100%
       const w = (n) => total ? (n / total * 100) + '%' : '0%';
@@ -1689,7 +1822,7 @@
         const dateStr = `${year}-${pad(month + 1)}-${pad(day)}`;
         const dayEvents = byDate[dateStr] || [];
         const cell = document.createElement('div');
-        cell.className = 'cal-cell' + (dateStr === today ? ' is-today' : '');
+        cell.className = 'cal-cell' + (dateStr === today ? ' is-today' : '') + (dateStr === selectedCalDate ? ' is-selected' : '');
         cell.dataset.date = dateStr;
         cell.tabIndex = 0;
         cell.setAttribute('role', 'button');
@@ -1720,6 +1853,34 @@
       for (let i = 1; i <= remaining; i++) filler(i);
 
       grid.appendChild(frag);
+      renderDayList(byDate);
+    }
+
+    // No celular os títulos não cabem nas células: tocar num dia mostra a lista dele abaixo do calendário
+    function renderDayList(byDate) {
+      const box = $('cal-day-list');
+      const inMonth = selectedCalDate && selectedCalDate.slice(0, 7) === `${currentCalDate.getFullYear()}-${pad(currentCalDate.getMonth() + 1)}`;
+      if (!inMonth || !isCompact()) { box.hidden = true; return; }
+      const list = byDate[selectedCalDate] || [];
+      const d = parseISO(selectedCalDate);
+      box.hidden = false;
+      box.innerHTML = `
+        <div class="cal-day-list-head">
+          <strong>${WEEKDAYS[d.getDay()]}, ${pad(d.getDate())}/${pad(d.getMonth() + 1)}</strong>
+          <button type="button" class="btn btn-secondary btn-sm" data-day-new="${selectedCalDate}">+ Cadastrar neste dia</button>
+        </div>
+        ${list.length ? list.map(evt => {
+          const ministry = ministryById(evt.ministryId);
+          return `
+            <button type="button" class="cal-day-item" data-event-id="${escapeHtml(evt.id)}">
+              <span class="bar" style="background: ${ministry ? safeColor(ministry.color) : FALLBACK_COLOR}"></span>
+              <span class="time">${escapeHtml(evt.time || '--:--')}</span>
+              <span class="info">
+                <div>${escapeHtml(evt.title)}</div>
+                <div>${escapeHtml(ministry ? ministry.name : 'Sem ministério')} · ${escapeHtml(evt.location || 'Local a definir')} · ${escapeHtml(evt.status)}</div>
+              </span>
+            </button>`;
+        }).join('') : '<p class="cell-sub" style="margin: 0.5rem 0;">Nenhuma programação neste dia.</p>'}`;
     }
 
     function renderUpcomingList(events) {
@@ -1733,8 +1894,8 @@
       if (upcoming.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
-            <strong>Nenhuma programação futura</strong>
-            <p>Não há programações pendentes a partir de hoje.</p>
+            <strong>Nenhuma programação futura${selectedYear !== 'all' ? ` em ${selectedYear}` : ''}</strong>
+            <p>${selectedYear !== 'all' && selectedYear < currentYearStr() ? `O ano de ${selectedYear} já terminou. Veja o histórico completo em Programações.` : 'Não há programações pendentes a partir de hoje.'}</p>
             <button class="btn btn-primary btn-sm" data-action="new-event">Cadastrar programação</button>
           </div>`;
         return;
@@ -1783,7 +1944,7 @@
         th.setAttribute('aria-sort', active ? (dir === 1 ? 'ascending' : 'descending') : 'none');
       });
 
-      $('event-filter-count').textContent = plural(filtered.length, 'programação', 'programações');
+      $('event-filter-count').textContent = `${plural(filtered.length, 'programação', 'programações')} · ${yearLabel()}`;
 
       const tbody = $('events-list-body');
       const empty = $('events-empty-state');
@@ -1869,7 +2030,9 @@
         $('event-responsible-input').value = source.responsible || '';
         $('event-desc-input').value = source.description || '';
       } else {
-        $('event-date-input').value = prefillDate || todayISO();
+        // fora do ano atual, a nova programação já começa no ano escolhido
+        const defaultDate = (selectedYear === 'all' || selectedYear === currentYearStr()) ? todayISO() : `${selectedYear}-01-01`;
+        $('event-date-input').value = prefillDate || defaultDate;
         $('event-time-input').value = '19:30';
         const minFilter = $('filter-event-ministry').value || $('dash-filter-ministry').value;
         if (minFilter) select.value = minFilter;
@@ -1911,6 +2074,11 @@
       // leva o calendário até o mês da programação salva
       const d = parseISO(data.date);
       if (d) currentCalDate = startOfMonth(d);
+      // salvou em outro ano: passa a exibir esse ano para a programação não "sumir"
+      if (selectedYear !== 'all' && data.date.slice(0, 4) !== selectedYear) {
+        selectedYear = data.date.slice(0, 4);
+        store.set(YEAR_KEY, selectedYear);
+      }
       commit('upsertEvent', { ...evt }, id ? 'Programação atualizada.' : 'Programação cadastrada.');
     }
 
@@ -1930,7 +2098,7 @@
       container.innerHTML = [...appData.ministries]
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
         .map(min => {
-          const evs = appData.events.filter(e => e.ministryId === min.id);
+          const evs = appData.events.filter(e => e.ministryId === min.id && inSelectedYear(e));
           const done = evs.filter(e => e.status === 'Concluída').length;
           const id = escapeHtml(min.id);
           return `
@@ -1942,7 +2110,7 @@
               </div>
               <div class="ministry-foot">
                 <div class="ministry-stats" title="${done} de ${evs.length} concluídas">
-                  <span>${plural(evs.length, 'programação', 'programações')}</span>
+                  <span>${plural(evs.length, 'programação', 'programações')}${selectedYear !== 'all' ? ` em ${selectedYear}` : ''}</span>
                   ${evs.length ? `<span class="mini-bar"><span style="width: ${pct(done, evs.length)}%"></span></span>` : ''}
                 </div>
                 <div class="row-actions">
@@ -2171,6 +2339,9 @@
        ========================================================================== */
     document.addEventListener('DOMContentLoaded', () => {
       applyTheme(store.get(THEME_KEY) || 'auto');
+      const savedYear = store.get(YEAR_KEY);
+      if (savedYear && /^(all|\d{4})$/.test(savedYear)) selectedYear = savedYear;
+      if (selectedYear !== 'all' && selectedYear !== currentYearStr()) currentCalDate = new Date(Number(selectedYear), 0, 1);
       if (REMOTE) {
         appData = { users: [], ministries: [], events: [] };
         let sess = null;
@@ -2315,14 +2486,45 @@
       });
 
       // Calendário
-      $('cal-prev').addEventListener('click', () => { currentCalDate = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth() - 1, 1); renderDashboard(); });
-      $('cal-next').addEventListener('click', () => { currentCalDate = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth() + 1, 1); renderDashboard(); });
-      $('cal-today').addEventListener('click', () => { currentCalDate = startOfMonth(new Date()); renderDashboard(); });
+      $('cal-prev').addEventListener('click', () => moveCalendar(-1));
+      $('cal-next').addEventListener('click', () => moveCalendar(1));
+      $('cal-today').addEventListener('click', () => {
+        selectedCalDate = todayISO();
+        currentCalDate = startOfMonth(new Date());
+        if (selectedYear !== 'all' && selectedYear !== currentYearStr()) setYear(currentYearStr(), { moveCalendar: false });
+        else renderDashboard();
+      });
+
+      // Filtros recolhíveis (celular)
+      document.querySelectorAll('[data-filter-toggle]').forEach(btn => btn.addEventListener('click', () => {
+        const panel = btn.closest('.filter-panel');
+        const open = panel.classList.toggle('open');
+        btn.setAttribute('aria-expanded', String(open));
+        btn.textContent = open ? 'Filtros ▴' : 'Filtros ▾';
+      }));
+
+      // Ano
+      $('year-select').addEventListener('change', (e) => setYear(e.target.value));
+      $('year-note').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-year-go]');
+        if (b) setYear(b.dataset.yearGo);
+      });
       $('calendar-days').addEventListener('click', (e) => {
+        const cell = e.target.closest('.cal-cell[data-date]');
+        if (isCompact()) {
+          // no celular o toque seleciona o dia e mostra a lista abaixo
+          if (cell) { selectedCalDate = cell.dataset.date; renderCalendar(getFilteredEvents('dash')); }
+          return;
+        }
         const pill = e.target.closest('[data-event-id]');
         if (pill) { openEventModal(pill.dataset.eventId); return; }
-        const cell = e.target.closest('.cal-cell[data-date]');
         if (cell) openEventModal(null, cell.dataset.date);
+      });
+      $('cal-day-list').addEventListener('click', (e) => {
+        const item = e.target.closest('[data-event-id]');
+        if (item) { openEventModal(item.dataset.eventId); return; }
+        const add = e.target.closest('[data-day-new]');
+        if (add) openEventModal(null, add.dataset.dayNew);
       });
       $('calendar-days').addEventListener('keydown', (e) => {
         const cell = e.target.closest('.cal-cell[data-date]');
