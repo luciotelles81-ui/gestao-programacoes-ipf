@@ -438,6 +438,27 @@
     .badge-admin { background: var(--accent-soft); color: var(--accent); }
     .badge-user { background: var(--surface-hover); color: var(--text-muted); }
     .badge-you { background: var(--surface-hover); color: var(--text-muted); font-size: 0.68rem; margin-left: 0.35rem; }
+    .badge-alert { background: var(--pend-soft); color: var(--pend); }
+    .nav-item .nav-count.alert { background: var(--pend); color: #fff; }
+
+    /* Registro de ações */
+    .audit-users { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem; }
+    .audit-user-chip {
+      display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+      font-size: 0.8rem; font-weight: 600; color: var(--text-2); cursor: pointer;
+    }
+    .audit-user-chip:hover { background: var(--surface-hover); }
+    .audit-user-chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+    .audit-user-chip small { font-weight: 500; color: var(--text-muted); }
+    .data-table tr.is-alert td { background: var(--pend-soft); }
+    .data-table tr.is-alert td:first-child { box-shadow: inset 3px 0 0 var(--pend); }
+    .audit-details { font-size: 0.78rem; color: var(--text-2); white-space: pre-line; max-width: 460px; }
+    .notify-status { padding: 0.9rem 1.1rem; margin-bottom: 1.25rem; font-size: 0.82rem; color: var(--text-2); display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+    .notify-status .ok { color: var(--done); font-weight: 600; }
+    .notify-status .off { color: var(--prog); font-weight: 600; }
+    .readonly-note { font-size: 0.82rem; color: var(--text-2); background: var(--prog-soft); border: 1px solid var(--prog-border); border-radius: var(--radius-sm); padding: 0.6rem 0.8rem; margin-bottom: 1rem; }
+    .form-hint { font-size: 0.74rem; color: var(--text-muted); margin-top: 0.3rem; }
 
     /* Tabelas */
     .table-wrap { overflow: hidden; }
@@ -720,6 +741,11 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             Usuários
           </button>
+          <button class="nav-item" data-view="audit" id="nav-audit-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Registro de ações
+            <span class="nav-count alert" id="nav-count-alerts" hidden title="Alertas novos">0</span>
+          </button>
         </nav>
 
         <div class="sidebar-footer">
@@ -991,6 +1017,68 @@
               </div>
             </div>
           </section>
+
+          <!-- ============ REGISTRO DE AÇÕES ============ -->
+          <section id="view-audit" class="view-panel">
+            <div class="view-intro">
+              <p>Tudo o que cada login fez no sistema. Linhas em vermelho são alterações ou exclusões feitas na programação de outra pessoa.</p>
+              <button class="btn btn-secondary" id="btn-audit-refresh">Atualizar</button>
+            </div>
+            <div class="card notify-status" id="notify-status" hidden></div>
+            <div class="audit-users" id="audit-users"></div>
+            <div class="card filter-panel">
+              <div class="filter-row">
+                <div class="search-box">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <label for="audit-search" class="sr-only">Buscar</label>
+                  <input type="search" id="audit-search" class="form-control" placeholder="Buscar por item ou detalhe…" data-audit-filter>
+                </div>
+                <div class="filter-item">
+                  <label for="audit-user">Login</label>
+                  <select id="audit-user" class="form-control" data-audit-filter></select>
+                </div>
+                <div class="filter-item">
+                  <label for="audit-action">Ação</label>
+                  <select id="audit-action" class="form-control" data-audit-filter>
+                    <option value="">Todas</option>
+                    <option value="criou">Cadastrou</option>
+                    <option value="editou">Editou</option>
+                    <option value="mudou_status">Mudou status</option>
+                    <option value="excluiu">Excluiu</option>
+                    <option value="login">Entrou</option>
+                    <option value="login_falhou">Senha errada</option>
+                    <option value="senha">Senha</option>
+                    <option value="lembrete">Lembrete enviado</option>
+                    <option value="importou">Importou backup</option>
+                  </select>
+                </div>
+                <label class="form-check" style="font-size: 0.8rem; color: var(--text-muted);">
+                  <input type="checkbox" id="audit-only-alerts" data-audit-filter> Somente alertas
+                </label>
+                <span class="filter-results-badge" id="audit-count">0 registros</span>
+              </div>
+            </div>
+            <div class="card table-wrap">
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 130px;">Quando</th>
+                      <th style="width: 120px;">Login</th>
+                      <th style="width: 130px;">Ação</th>
+                      <th>Item</th>
+                      <th>Detalhes</th>
+                    </tr>
+                  </thead>
+                  <tbody id="audit-body"></tbody>
+                </table>
+              </div>
+              <div id="audit-empty" class="empty-state" hidden>
+                <strong id="audit-empty-title">Nenhum registro encontrado</strong>
+                <p id="audit-empty-text">As ações aparecem aqui assim que alguém usar o sistema.</p>
+              </div>
+            </div>
+          </section>
         </div>
       </main>
     </div>
@@ -1007,6 +1095,7 @@
       </div>
       <form id="form-event">
         <input type="hidden" id="event-id">
+        <div class="readonly-note" id="event-readonly-note" hidden></div>
         <div class="form-group">
           <label class="form-label" for="event-title-input">Título da programação <span class="req">*</span></label>
           <input type="text" id="event-title-input" class="form-control" required maxlength="120" placeholder="ex: Culto de celebração">
@@ -1047,6 +1136,21 @@
             <datalist id="responsibles-list"></datalist>
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="event-resp-email-input">E-mail do responsável</label>
+            <input type="email" id="event-resp-email-input" class="form-control" maxlength="120" autocapitalize="none" spellcheck="false" placeholder="ex: joao@email.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="event-resp-phone-input">WhatsApp do responsável</label>
+            <input type="tel" id="event-resp-phone-input" class="form-control" maxlength="30" placeholder="ex: (11) 98765-4321">
+          </div>
+        </div>
+        <p class="form-hint" style="margin: -0.6rem 0 1rem;">O responsável recebe um lembrete 48 horas antes da programação.</p>
+        <div class="form-group" id="event-owner-group" hidden>
+          <label class="form-label" for="event-owner-select">Cadastrada por (quem pode editar)</label>
+          <select id="event-owner-select" class="form-control"></select>
+        </div>
         <div class="form-group">
           <label class="form-label" for="event-desc-input">Ações / descrição</label>
           <textarea id="event-desc-input" class="form-control" rows="3" placeholder="ex: Ordem do culto e orientações"></textarea>
@@ -1054,8 +1158,8 @@
         <div class="form-actions">
           <button type="button" class="btn btn-danger" id="btn-delete-event-modal" style="margin-right: auto;" hidden>Excluir</button>
           <button type="button" class="btn btn-secondary" id="btn-duplicate-event" hidden>Duplicar</button>
-          <button type="button" class="btn btn-secondary" data-close-modal>Cancelar</button>
-          <button type="submit" class="btn btn-primary">Salvar</button>
+          <button type="button" class="btn btn-secondary" data-close-modal id="btn-cancel-event">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-event">Salvar</button>
         </div>
       </form>
     </div>
@@ -1124,6 +1228,17 @@
             </select>
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="user-email-input">E-mail</label>
+            <input type="email" id="user-email-input" class="form-control" maxlength="120" autocapitalize="none" spellcheck="false" placeholder="ex: maria@email.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-phone-input">WhatsApp</label>
+            <input type="tel" id="user-phone-input" class="form-control" maxlength="30" placeholder="ex: (11) 98765-4321">
+          </div>
+        </div>
+        <p class="form-hint" style="margin: -0.6rem 0 1rem;">Administradores com e-mail recebem os alertas de alteração.</p>
         <div class="form-group" id="user-password-group">
           <label class="form-label" for="user-pass-input">Senha <span class="req">*</span></label>
           <div class="password-wrap">
@@ -1194,6 +1309,7 @@
     const SESSION_KEY = 'igreja_asana_session_v1';
     const THEME_KEY = 'igreja_theme';
     const YEAR_KEY = 'igreja_ano';
+    const ALERTS_SEEN_KEY = 'igreja_alertas_vistos_';   // + id do administrador
     const STATUSES = ['Pendente', 'Em andamento', 'Concluída'];
     const STATUS_CLASS = { 'Pendente': 'st-pend', 'Em andamento': 'st-prog', 'Concluída': 'st-done' };
     const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -1239,11 +1355,11 @@
           { id: 'm-infantil', name: 'Ministério Infantil', leader: 'Ana Ribeiro', color: '#db2777', description: 'Escola dominical das crianças e berçário.' }
         ],
         events: [
-          { id: 'e-1', title: 'Culto da Família e Santa Ceia', ministryId: 'm-diaconia', description: 'Preparação do templo, distribuição dos cálices e acolhimento aos visitantes.', responsible: 'Marta Souza', date: `${m0}-08`, time: '19:00', location: 'Templo Central', status: 'Concluída' },
-          { id: 'e-2', title: 'Ensaio Geral com a Banda', ministryId: 'm-louvor', description: 'Passagem do repertório para o culto de celebração de domingo.', responsible: 'David Silva', date: `${m0}-16`, time: '19:30', location: 'Espaço de Louvor', status: 'Em andamento' },
-          { id: 'e-3', title: 'Vigília de Oração e Intercessão', ministryId: 'm-diaconia', description: 'Reunião de oração pelas famílias e alinhamento dos novos voluntários.', responsible: 'Pastor Administrador', date: `${m0}-24`, time: '22:00', location: 'Capela de Oração', status: 'Pendente' },
-          { id: 'e-4', title: 'Dia das Crianças', ministryId: 'm-infantil', description: 'Gincanas, lanche e apresentação especial no culto.', responsible: 'Ana Ribeiro', date: `${m0}-12`, time: '09:00', location: 'Salão Social', status: 'Em andamento' },
-          { id: 'e-5', title: 'Culto de Celebração', ministryId: 'm-louvor', description: '', responsible: 'David Silva', date: `${m1}-03`, time: '18:00', location: 'Templo Central', status: 'Pendente' }
+          { id: 'e-1', createdBy: 'u-admin', title: 'Culto da Família e Santa Ceia', ministryId: 'm-diaconia', description: 'Preparação do templo, distribuição dos cálices e acolhimento aos visitantes.', responsible: 'Marta Souza', date: `${m0}-08`, time: '19:00', location: 'Templo Central', status: 'Concluída' },
+          { id: 'e-2', createdBy: 'u-lider', title: 'Ensaio Geral com a Banda', ministryId: 'm-louvor', description: 'Passagem do repertório para o culto de celebração de domingo.', responsible: 'David Silva', date: `${m0}-16`, time: '19:30', location: 'Espaço de Louvor', status: 'Em andamento' },
+          { id: 'e-3', createdBy: 'u-admin', title: 'Vigília de Oração e Intercessão', ministryId: 'm-diaconia', description: 'Reunião de oração pelas famílias e alinhamento dos novos voluntários.', responsible: 'Pastor Administrador', date: `${m0}-24`, time: '22:00', location: 'Capela de Oração', status: 'Pendente' },
+          { id: 'e-4', createdBy: 'u-lider', title: 'Dia das Crianças', ministryId: 'm-infantil', description: 'Gincanas, lanche e apresentação especial no culto.', responsible: 'Ana Ribeiro', date: `${m0}-12`, time: '09:00', location: 'Salão Social', status: 'Em andamento' },
+          { id: 'e-5', createdBy: 'u-admin', title: 'Culto de Celebração', ministryId: 'm-louvor', description: '', responsible: 'David Silva', date: `${m1}-03`, time: '18:00', location: 'Templo Central', status: 'Pendente' }
         ]
       };
     }
@@ -1326,7 +1442,8 @@
       appData = {
         users: (data.users || []).map(u => ({ ...u, active: u.active !== false })),
         ministries: data.ministries || [],
-        events: data.events || []
+        events: data.events || [],
+        alerts: data.alerts || []
       };
       if (me) currentUser = appData.users.find(u => u.id === me.id) || me;
       lastSyncAt = new Date();
@@ -1401,6 +1518,12 @@
 
     const uid = (prefix) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const isAdmin = () => currentUser && currentUser.role === 'admin';
+    // participantes só alteram as programações que cadastraram; administradores alteram todas
+    const canEditEvent = (evt) => !!currentUser && (isAdmin() || (!!evt.createdBy && evt.createdBy === currentUser.id));
+    const userById = (id) => appData.users.find(u => u.id === id) || null;
+    const ownerName = (evt) => { const u = userById(evt.createdBy); return u ? u.name : ''; };
+    const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
+    const isPhone = (v) => { const d = (v || '').replace(/\D/g, ''); return d.length >= 10 && d.length <= 15; };
 
     /* ==========================================================================
        SENHAS (hash SHA-256 com migração automática de senhas antigas)
@@ -1585,27 +1708,29 @@
       const initials = currentUser.name.split(/\s+/).filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
       $('user-avatar').textContent = initials || 'US';
       $('nav-users-btn').hidden = !isAdmin();
+      $('nav-audit-btn').hidden = !isAdmin();
       $('admin-tools').hidden = !isAdmin();
       $('btn-reset-demo').hidden = REMOTE;   // nunca apagar a planilha real com dados de exemplo
       if (REMOTE && $('sync-status').hidden) setSyncState('ok', 'Planilha conectada');
 
       const fromHash = location.hash.replace('#', '');
-      switchView(['dashboard', 'events', 'ministries', 'users'].includes(fromHash) ? fromHash : currentView, false);
+      switchView(['dashboard', 'events', 'ministries', 'users', 'audit'].includes(fromHash) ? fromHash : currentView, false);
     }
 
     function switchView(viewName, pushHash = true) {
-      if (viewName === 'users' && !isAdmin()) viewName = 'dashboard';
+      if ((viewName === 'users' || viewName === 'audit') && !isAdmin()) viewName = 'dashboard';
       currentView = viewName;
 
       document.querySelectorAll('.view-panel').forEach(p => p.classList.toggle('active', p.id === `view-${viewName}`));
       document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === viewName));
 
-      const titles = { dashboard: 'Dashboard', events: 'Programações', ministries: 'Ministérios', users: 'Usuários' };
+      const titles = { dashboard: 'Dashboard', events: 'Programações', ministries: 'Ministérios', users: 'Usuários', audit: 'Registro de ações' };
       $('page-title').textContent = titles[viewName];
       document.title = `${titles[viewName]} · Gestão de Programações · IP Filadélfia`;
       if (pushHash && location.hash !== `#${viewName}`) history.replaceState(null, '', `#${viewName}`);
 
       renderAll();
+      if (viewName === 'audit') loadAuditLog();
       closeSidebar();
     }
 
@@ -1686,6 +1811,8 @@
       if (currentView === 'events') renderEvents();
       if (currentView === 'ministries') renderMinistries();
       if (currentView === 'users' && isAdmin()) renderUsers();
+      if (currentView === 'audit' && isAdmin()) { markAlertsSeen(); renderAudit(); }
+      renderAlertBadge();
     }
 
     /* ==========================================================================
@@ -1976,14 +2103,19 @@
               ${evt.description ? `<div class="cell-desc" title="${escapeHtml(evt.description)}">${escapeHtml(evt.description)}</div>` : ''}
             </td>
             <td data-label="Ministério">${ministryTag(ministry)}</td>
-            <td data-label="Responsável">${escapeHtml(evt.responsible || 'Sem responsável')}</td>
+            <td data-label="Responsável">
+              ${escapeHtml(evt.responsible || 'Sem responsável')}
+              ${ownerName(evt) ? `<div class="cell-sub">cadastrada por ${escapeHtml(ownerName(evt))}</div>` : ''}
+            </td>
             <td data-label="Local">${escapeHtml(evt.location || 'Local a definir')}</td>
             <td data-label="Status">${statusPill(status)}</td>
             <td class="text-right">
               <div class="row-actions">
+                ${canEditEvent(evt) ? `
                 <button class="btn ${status === 'Concluída' ? 'btn-secondary' : 'btn-primary'} btn-sm" data-action="advance-event" data-id="${id}" title="${next[1]}">${next[0]}</button>
                 <button class="btn-icon" data-action="edit-event" data-id="${id}" aria-label="Editar" title="Editar">${ICONS.edit}</button>
-                <button class="btn-icon danger" data-action="delete-event" data-id="${id}" aria-label="Excluir" title="Excluir">${ICONS.trash}</button>
+                <button class="btn-icon danger" data-action="delete-event" data-id="${id}" aria-label="Excluir" title="Excluir">${ICONS.trash}</button>` : `
+                <button class="btn btn-secondary btn-sm" data-action="edit-event" data-id="${id}" title="Somente quem cadastrou ou um administrador pode alterar">Ver</button>`}
               </div>
             </td>
           </tr>`;
@@ -1992,7 +2124,7 @@
 
     function advanceEventStatus(id) {
       const evt = appData.events.find(e => e.id === id);
-      if (!evt) return;
+      if (!evt || !canEditEvent(evt)) return;
       const flow = { 'Pendente': 'Em andamento', 'Em andamento': 'Concluída', 'Concluída': 'Em andamento' };
       evt.status = flow[evt.status] || 'Em andamento';
       commit('upsertEvent', { ...evt }, `Status alterado para “${evt.status}”.`, evt.status === 'Concluída' ? 'success' : 'info');
@@ -2029,6 +2161,8 @@
         $('event-location-input').value = source.location || '';
         $('event-responsible-input').value = source.responsible || '';
         $('event-desc-input').value = source.description || '';
+        $('event-resp-email-input').value = source.responsibleEmail || '';
+        $('event-resp-phone-input').value = source.responsiblePhone || '';
       } else {
         // fora do ano atual, a nova programação já começa no ano escolhido
         const defaultDate = (selectedYear === 'all' || selectedYear === currentYearStr()) ? todayISO() : `${selectedYear}-01-01`;
@@ -2037,12 +2171,51 @@
         const minFilter = $('filter-event-ministry').value || $('dash-filter-ministry').value;
         if (minFilter) select.value = minFilter;
       }
-      openModal('modal-event');
+
+      // dono: só o administrador vê e pode transferir
+      const ownerSel = $('event-owner-select');
+      const ownerId = eventId ? (source.createdBy || '') : currentUser.id;
+      ownerSel.innerHTML = (ownerId && userById(ownerId) ? '' : '<option value="">Sem dono (só administradores)</option>')
+        + [...appData.users].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+          .map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name)} (${escapeHtml(u.username)})</option>`).join('');
+      ownerSel.value = ownerId && userById(ownerId) ? ownerId : '';
+      $('event-owner-group').hidden = !isAdmin();
+
+      // programação de outra pessoa: abre só para consulta
+      const readOnly = !!eventId && !canEditEvent(source);
+      $('form-event').querySelectorAll('input:not([type=hidden]), select, textarea').forEach(el => { el.disabled = readOnly; });
+      $('btn-save-event').hidden = readOnly;
+      $('btn-delete-event-modal').hidden = !eventId || readOnly;
+      $('btn-cancel-event').textContent = readOnly ? 'Fechar' : 'Cancelar';
+      const note = $('event-readonly-note');
+      note.hidden = !readOnly;
+      note.textContent = readOnly
+        ? `Somente ${ownerName(source) || 'quem cadastrou'} ou um administrador pode alterar esta programação. Você pode duplicá-la para criar uma sua.`
+        : '';
+      if (readOnly) $('modal-event-title').textContent = 'Programação';
+      openModal('modal-event', readOnly ? $('btn-cancel-event') : null);
+    }
+
+    // preenche os contatos do responsável com os da última programação dele (ou do usuário com o mesmo nome)
+    function fillResponsibleContacts() {
+      const name = normalize($('event-responsible-input').value);
+      if (!name) return;
+      const emailEl = $('event-resp-email-input');
+      const phoneEl = $('event-resp-phone-input');
+      const prev = [...appData.events]
+        .filter(e => normalize(e.responsible) === name && (e.responsibleEmail || e.responsiblePhone))
+        .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0];
+      const user = appData.users.find(u => normalize(u.name) === name);
+      const email = (prev && prev.responsibleEmail) || (user && user.email) || '';
+      const phone = (prev && prev.responsiblePhone) || (user && user.phone) || '';
+      if (!emailEl.value && email) emailEl.value = email;
+      if (!phoneEl.value && phone) phoneEl.value = phone;
     }
 
     async function deleteEvent(id) {
       const evt = appData.events.find(e => e.id === id);
       if (!evt) return false;
+      if (!canEditEvent(evt)) { showToast('Você só pode excluir as programações cadastradas por você.', 'error'); return false; }
       const ok = await confirmDialog(`Excluir “${evt.title}”? Esta ação não pode ser desfeita.`, { title: 'Excluir programação', okLabel: 'Excluir', danger: true });
       if (!ok) return false;
       appData.events = appData.events.filter(e => e.id !== id);
@@ -2060,15 +2233,21 @@
         time: $('event-time-input').value,
         location: $('event-location-input').value.trim(),
         responsible: $('event-responsible-input').value.trim(),
-        description: $('event-desc-input').value.trim()
+        description: $('event-desc-input').value.trim(),
+        responsibleEmail: $('event-resp-email-input').value.trim(),
+        responsiblePhone: $('event-resp-phone-input').value.trim()
       };
       if (!data.title || !data.ministryId || !data.date || !data.time || !data.location || !data.responsible) {
         showToast('Preencha todos os campos obrigatórios.', 'error');
         return;
       }
+      if (data.responsibleEmail && !isEmail(data.responsibleEmail)) { showToast('E-mail do responsável inválido.', 'error'); return; }
+      if (data.responsiblePhone && !isPhone(data.responsiblePhone)) { showToast('WhatsApp do responsável inválido. Use DDD + número.', 'error'); return; }
       let evt = id ? appData.events.find(e => e.id === id) : null;
+      if (evt && !canEditEvent(evt)) { showToast('Você só pode alterar as programações cadastradas por você.', 'error'); return; }
+      if (isAdmin() && $('event-owner-select').value) data.createdBy = $('event-owner-select').value;
       if (evt) Object.assign(evt, data);
-      else { evt = { id: uid('e'), ...data }; appData.events.push(evt); }
+      else { evt = { id: uid('e'), createdBy: currentUser.id, ...data }; appData.events.push(evt); }
       $('modal-event').classList.remove('active');
 
       // leva o calendário até o mês da programação salva
@@ -2113,10 +2292,10 @@
                   <span>${plural(evs.length, 'programação', 'programações')}${selectedYear !== 'all' ? ` em ${selectedYear}` : ''}</span>
                   ${evs.length ? `<span class="mini-bar"><span style="width: ${pct(done, evs.length)}%"></span></span>` : ''}
                 </div>
-                <div class="row-actions">
+                ${isAdmin() ? `<div class="row-actions">
                   <button class="btn-icon" data-action="edit-ministry" data-id="${id}" aria-label="Editar" title="Editar">${ICONS.edit}</button>
                   <button class="btn-icon danger" data-action="delete-ministry" data-id="${id}" aria-label="Excluir" title="Excluir">${ICONS.trash}</button>
-                </div>
+                </div>` : ''}
               </div>
             </div>`;
         }).join('');
@@ -2125,7 +2304,7 @@
     function openMinistryModal(minId = null) {
       $('form-ministry').reset();
       const min = minId ? ministryById(minId) : null;
-      if (minId && !min) return;
+      if (minId && (!min || !isAdmin())) return;
       $('modal-ministry-title').textContent = min ? 'Editar ministério' : 'Cadastrar ministério';
       $('ministry-id').value = min ? min.id : '';
       $('ministry-name-input').value = min ? min.name : '';
@@ -2137,7 +2316,7 @@
 
     async function deleteMinistry(id) {
       const min = ministryById(id);
-      if (!min) return;
+      if (!min || !isAdmin()) return;
       const linked = appData.events.filter(e => e.ministryId === id).length;
       const msg = linked
         ? `“${min.name}” possui ${plural(linked, 'programação vinculada', 'programações vinculadas')}. Elas ficarão sem ministério. Deseja excluir mesmo assim?`
@@ -2215,7 +2394,7 @@
 
     // dados enviados à planilha (nunca inclui o hash da senha)
     function userPayload(u, password) {
-      const p = { id: u.id, name: u.name, username: u.username, role: u.role, active: u.active !== false };
+      const p = { id: u.id, name: u.name, username: u.username, role: u.role, active: u.active !== false, email: u.email || '', phone: u.phone || '' };
       if (password) p.password = password;
       return p;
     }
@@ -2230,6 +2409,8 @@
       $('user-username-input').value = u ? u.username : '';
       $('user-role-select').value = u ? u.role : 'user';
       $('user-active-checkbox').checked = u ? u.active !== false : true;
+      $('user-email-input').value = u ? (u.email || '') : '';
+      $('user-phone-input').value = u ? (u.phone || '') : '';
       $('user-password-group').hidden = !!u;
       $('user-pass-input').required = !u;
       openModal('modal-user');
@@ -2252,6 +2433,10 @@
       const role = $('user-role-select').value;
       const active = $('user-active-checkbox').checked;
       const pass = $('user-pass-input').value;
+      const email = $('user-email-input').value.trim();
+      const phone = $('user-phone-input').value.trim();
+      if (email && !isEmail(email)) { showToast('E-mail inválido.', 'error'); return; }
+      if (phone && !isPhone(phone)) { showToast('WhatsApp inválido. Use DDD + número.', 'error'); return; }
 
       if (!name || !username || (!id && !pass)) { showToast('Preencha todos os campos obrigatórios.', 'error'); return; }
       if (!/^[a-zA-Z0-9._-]{2,}$/.test(username)) { showToast('Usuário deve ter ao menos 2 caracteres, sem espaços ou acentos.', 'error'); return; }
@@ -2272,12 +2457,12 @@
           showToast('É necessário manter ao menos um administrador ativo.', 'error');
           return;
         }
-        Object.assign(u, { name, username, role, active });
+        Object.assign(u, { name, username, role, active, email, phone });
         $('modal-user').classList.remove('active');
         if (u.id === currentUser.id) checkAuthView();
         commit('upsertUser', userPayload(u), 'Usuário atualizado.');
       } else {
-        const user = { id: uid('u'), name, username, role, active };
+        const user = { id: uid('u'), name, username, role, active, email, phone };
         if (!REMOTE) await setPassword(user, pass);   // na planilha o hash é gerado no servidor
         appData.users.push(user);
         $('modal-user').classList.remove('active');
@@ -2292,6 +2477,147 @@
       $('reset-user-name-txt').textContent = `Defina uma nova senha para ${u.name} (${u.username}).`;
       $('new-pass-input').value = '';
       openModal('modal-reset-pass');
+    }
+
+    /* ==========================================================================
+       REGISTRO DE AÇÕES (somente administradores)
+       ========================================================================== */
+    let auditLog = null;       // carregado da planilha ao abrir a tela
+    let auditNotify = null;
+    let auditLoading = false;
+    const ACTION_LABELS = {
+      criou: 'Cadastrou', editou: 'Editou', mudou_status: 'Mudou status', excluiu: 'Excluiu', login: 'Entrou',
+      logout: 'Saiu', login_falhou: 'Senha errada', senha: 'Senha', lembrete: 'Lembrete', importou: 'Importou backup'
+    };
+
+    async function loadAuditLog() {
+      if (!REMOTE || !isAdmin() || auditLoading) return;
+      auditLoading = true;
+      if (!auditLog) renderAudit();
+      try {
+        const r = await api('getLog');
+        auditLog = r.log || [];
+        auditNotify = r.notify || null;
+      } catch (err) {
+        if (err.code === 'AUTH') { dropSession(); checkAuthView(); }
+        showToast(err.message, 'error');
+      } finally {
+        auditLoading = false;
+      }
+      if (currentView === 'audit') renderAudit();
+    }
+
+    function formatDateTimePt(iso) {
+      const d = new Date(iso);
+      if (isNaN(d)) return iso || '';
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function renderAudit() {
+      const body = $('audit-body');
+      const empty = $('audit-empty');
+      const status = $('notify-status');
+      if (!REMOTE) {
+        body.innerHTML = '';
+        $('audit-users').innerHTML = '';
+        status.hidden = true;
+        empty.hidden = false;
+        $('audit-empty-title').textContent = 'Disponível com a planilha conectada';
+        $('audit-empty-text').textContent = 'O registro de ações é gravado na planilha do Google. No modo local ele não é mantido.';
+        $('audit-count').textContent = '0 registros';
+        return;
+      }
+      if (!auditLog) {
+        body.innerHTML = '';
+        empty.hidden = false;
+        $('audit-empty-title').textContent = 'Carregando registro…';
+        $('audit-empty-text').textContent = '';
+        return;
+      }
+
+      if (auditNotify) {
+        status.hidden = false;
+        const adminsTxt = auditNotify.adminsWithEmail
+          ? `<span class="ok">${plural(auditNotify.adminsWithEmail, 'administrador recebe', 'administradores recebem')} alertas por e-mail</span>`
+          : '<span class="off">Nenhum administrador tem e-mail cadastrado para receber alertas</span>';
+        status.innerHTML = `
+          <span>Lembretes 48h antes: ${auditNotify.reminders ? '<span class="ok">ativos</span>' : '<span class="off">desativados (rode “instalarLembretes” no Apps Script)</span>'}</span>
+          <span>WhatsApp: ${auditNotify.whatsapp ? `<span class="ok">${escapeHtml(auditNotify.whatsapp)}</span>` : '<span class="off">não configurado (só e-mail)</span>'}</span>
+          <span>${adminsTxt}</span>`;
+      }
+
+      // resumo por login (clique filtra)
+      const byUser = {};
+      auditLog.forEach(l => { if (l.username) byUser[l.username] = (byUser[l.username] || 0) + 1; });
+      const userSel = $('audit-user');
+      const curUser = userSel.value;
+      const names = Object.keys(byUser).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      fillSelect(userSel, 'Todos', names.map(n => [n, n]));
+      if (names.includes(curUser)) userSel.value = curUser;
+      $('audit-users').innerHTML = names.map(n => {
+        const u = appData.users.find(x => x.username === n);
+        const alerts = auditLog.filter(l => l.username === n && l.alert).length;
+        return `<button type="button" class="audit-user-chip${userSel.value === n ? ' active' : ''}" data-audit-user="${escapeHtml(n)}">
+          ${escapeHtml(u ? u.name : n)} <small>${plural(byUser[n], 'ação', 'ações')}${alerts ? ` · ${plural(alerts, 'alerta', 'alertas')}` : ''}</small>
+        </button>`;
+      }).join('');
+
+      const fUser = userSel.value;
+      const fAction = $('audit-action').value;
+      const onlyAlerts = $('audit-only-alerts').checked;
+      const search = normalize($('audit-search').value);
+      const rows = auditLog.filter(l => {
+        if (fUser && l.username !== fUser) return false;
+        if (fAction && l.action !== fAction) return false;
+        if (onlyAlerts && !l.alert) return false;
+        if (search && !normalize([l.title, l.details, l.owner, l.entity].join(' ')).includes(search)) return false;
+        return true;
+      });
+      $('audit-count').textContent = plural(rows.length, 'registro', 'registros');
+      empty.hidden = rows.length > 0;
+      if (!rows.length) {
+        $('audit-empty-title').textContent = 'Nenhum registro encontrado';
+        $('audit-empty-text').textContent = auditLog.length ? 'Ajuste os filtros.' : 'As ações aparecem aqui assim que alguém usar o sistema.';
+      }
+      body.innerHTML = rows.slice(0, 500).map(l => {
+        const u = appData.users.find(x => x.username === l.username);
+        return `
+          <tr class="${l.alert ? 'is-alert' : ''}">
+            <td data-label="Quando"><span style="white-space: nowrap;">${escapeHtml(formatDateTimePt(l.at))}</span></td>
+            <td data-label="Login"><div class="cell-strong">${escapeHtml(l.username || '—')}</div>${u ? `<div class="cell-sub">${escapeHtml(u.name)}</div>` : ''}</td>
+            <td data-label="Ação">${escapeHtml(ACTION_LABELS[l.action] || l.action)}${l.alert ? ' <span class="badge badge-alert">alerta</span>' : ''}</td>
+            <td data-label="Item">
+              ${l.title ? `<div class="cell-strong">${escapeHtml(l.title)}</div>` : ''}
+              <div class="cell-sub">${escapeHtml(l.entity)}${l.owner ? ` · de ${escapeHtml(l.owner)}` : ''}</div>
+            </td>
+            <td data-label="Detalhes"><div class="audit-details">${escapeHtml((l.details || '').split(' | ').join('\n'))}</div></td>
+          </tr>`;
+      }).join('');
+    }
+
+    // alertas = alguém alterou ou excluiu a programação de outro login
+    function unseenAlerts() {
+      if (!isAdmin() || !appData.alerts) return [];
+      const seen = store.get(ALERTS_SEEN_KEY + currentUser.id) || '';
+      return appData.alerts.filter(a => a.at > seen && a.userId !== currentUser.id);
+    }
+    function markAlertsSeen() {
+      if (!appData.alerts || !appData.alerts.length) return;
+      store.set(ALERTS_SEEN_KEY + currentUser.id, appData.alerts[0].at);
+    }
+    let lastAlertNotified = '';
+    function renderAlertBadge() {
+      const badge = $('nav-count-alerts');
+      const list = unseenAlerts();
+      badge.hidden = !list.length;
+      badge.textContent = list.length;
+      if (list.length && list[0].at > lastAlertNotified) {
+        if (lastAlertNotified) {
+          const a = list[0];
+          showToast(`Alerta: ${a.username} ${a.action === 'excluiu' ? 'excluiu' : 'alterou'} “${a.title}”, de ${a.owner}.`, 'error');
+        }
+        lastAlertNotified = list[0].at;
+      }
     }
 
     /* ==========================================================================
@@ -2576,6 +2902,20 @@
         const src = appData.events.find(e => e.id === $('event-id').value);
         if (src) openEventModal(null, null, src);
       });
+
+      // Registro de ações
+      document.querySelectorAll('[data-audit-filter]').forEach(el => {
+        el.addEventListener(el.type === 'search' ? 'input' : 'change', renderAudit);
+      });
+      $('audit-users').addEventListener('click', (e) => {
+        const chip = e.target.closest('[data-audit-user]');
+        if (!chip) return;
+        const sel = $('audit-user');
+        sel.value = sel.value === chip.dataset.auditUser ? '' : chip.dataset.auditUser;
+        renderAudit();
+      });
+      $('btn-audit-refresh').addEventListener('click', () => { refreshFromServer(true); loadAuditLog(); });
+      $('event-responsible-input').addEventListener('change', fillResponsibleContacts);
 
       // Formulários
       $('form-event').addEventListener('submit', (e) => { e.preventDefault(); saveEventFromForm(); });
