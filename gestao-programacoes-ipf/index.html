@@ -2485,6 +2485,7 @@
     let auditLog = null;       // carregado da planilha ao abrir a tela
     let auditNotify = null;
     let auditLoading = false;
+    let auditError = '';
     const ACTION_LABELS = {
       criou: 'Cadastrou', editou: 'Editou', mudou_status: 'Mudou status', excluiu: 'Excluiu', login: 'Entrou',
       logout: 'Saiu', login_falhou: 'Senha errada', senha: 'Senha', lembrete: 'Lembrete', importou: 'Importou backup'
@@ -2498,9 +2499,11 @@
         const r = await api('getLog');
         auditLog = r.log || [];
         auditNotify = r.notify || null;
+        auditError = '';
       } catch (err) {
         if (err.code === 'AUTH') { dropSession(); checkAuthView(); }
-        showToast(err.message, 'error');
+        auditError = err.message || 'Erro ao carregar o registro.';
+        showToast(auditError, 'error');
       } finally {
         auditLoading = false;
       }
@@ -2530,8 +2533,9 @@
       if (!auditLog) {
         body.innerHTML = '';
         empty.hidden = false;
-        $('audit-empty-title').textContent = 'Carregando registro…';
-        $('audit-empty-text').textContent = '';
+        // o erro fica na tela (o aviso some sozinho); "Atualizar" tenta de novo
+        $('audit-empty-title').textContent = auditError && !auditLoading ? 'Não foi possível carregar o registro' : 'Carregando registro…';
+        $('audit-empty-text').textContent = auditError && !auditLoading ? `${auditError} Clique em “Atualizar” para tentar de novo.` : '';
         return;
       }
 
