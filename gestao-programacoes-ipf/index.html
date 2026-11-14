@@ -553,7 +553,7 @@
       background: var(--prog-soft); border: 1px solid var(--prog-border); color: var(--text-2); font-size: 0.82rem;
     }
 
-    /* Sincronização com a planilha */
+    /* Sincronização com o banco de dados */
     .sync-status {
       display: inline-flex; align-items: center; gap: 0.4rem;
       font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
@@ -785,7 +785,7 @@
           </div>
           <div class="topbar-right">
             <span class="sync-status" id="sync-status" role="status" title="Clique para atualizar" hidden>
-              <span class="dot"></span><span class="sync-label" id="sync-label">Planilha conectada</span>
+              <span class="dot"></span><span class="sync-label" id="sync-label">Banco conectado</span>
             </span>
             <label class="year-picker" title="Ano das programações">
               <span class="sr-only">Ano</span>
@@ -1296,7 +1296,7 @@
     </div>
   </div>
 
-  <!-- Configuração da conexão com a planilha (URL do Google Apps Script) -->
+  <!-- Configuração da conexão com o banco de dados (Supabase) -->
   <script src="config.js"></script>
   <script>
   (function () {
@@ -1317,10 +1317,13 @@
     const WEEKDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
     const FALLBACK_COLOR = '#64748b';
 
-    // Com uma URL configurada em config.js, os dados ficam na planilha do Google.
-    // Sem ela, o sistema funciona em modo local (dados apenas neste navegador).
-    const API_URL = ((window.IPF_CONFIG && window.IPF_CONFIG.apiUrl) || '').trim();
-    const REMOTE = /^https:\/\/script\.google(usercontent)?\.com\//.test(API_URL);
+    // Com o Supabase configurado em config.js, os dados ficam no banco de dados, compartilhados por todos.
+    // Sem ele, o sistema funciona em modo local (dados apenas neste navegador).
+    const CFG = window.IPF_CONFIG || {};
+    const SUPABASE_URL = String(CFG.supabaseUrl || '').trim().replace(/\/+$/, '');
+    const SUPABASE_KEY = String(CFG.supabaseKey || '').trim();
+    const API_URL = /^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SUPABASE_URL) && SUPABASE_KEY ? SUPABASE_URL + '/rest/v1/rpc/ipf_api' : '';
+    const REMOTE = !!API_URL;
     const REFRESH_MS = 60000;
 
     const $ = (id) => document.getElementById(id);
@@ -1382,7 +1385,7 @@
     }
 
     function loadState() {
-      if (REMOTE) return;   // no modo planilha os dados vêm do servidor
+      if (REMOTE) return;   // no modo conectado os dados vêm do servidor
       const raw = store.get(STORAGE_KEY);
       let parsed = null;
       try { parsed = raw ? JSON.parse(raw) : null; } catch (e) { parsed = null; }
@@ -1407,7 +1410,7 @@
     }
 
     /* ==========================================================================
-       PLANILHA (Google Apps Script)
+       BANCO DE DADOS (Supabase · função ipf_api)
        ========================================================================== */
     let sessionToken = null;
     let pendingRequests = 0;
@@ -1416,15 +1419,21 @@
     async function api(action, payload) {
       let res;
       try {
-        // corpo em texto simples evita a requisição de "preflight" que o Apps Script não aceita
-        res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action, token: sessionToken, payload }) });
+        const headers = { 'Content-Type': 'application/json', apikey: SUPABASE_KEY };
+        if (/^eyJ/.test(SUPABASE_KEY)) headers.Authorization = 'Bearer ' + SUPABASE_KEY;   // chave "anon" antiga (JWT)
+        res = await fetch(API_URL, {
+          method: 'POST', headers,
+          body: JSON.stringify({ req: { action, token: sessionToken, payload } })
+        });
       } catch (e) {
-        throw Object.assign(new Error('Sem conexão com a planilha. Verifique a internet.'), { code: 'NETWORK' });
+        throw Object.assign(new Error('Sem conexão com o banco de dados. Verifique a internet.'), { code: 'NETWORK' });
       }
       let json;
       try { json = await res.json(); } catch (e) { json = null; }
-      if (!json) throw Object.assign(new Error('Resposta inválida da planilha. Verifique a implantação do Apps Script.'), { code: 'BAD_RESPONSE' });
-      if (!json.ok) throw Object.assign(new Error(json.error || 'Erro na planilha.'), { code: json.code });
+      if (!res.ok || !json || typeof json.ok !== 'boolean') {
+        throw Object.assign(new Error('Resposta inválida do banco de dados' + (res.status ? ` (${res.status})` : '') + '. Tente novamente em instantes.'), { code: 'BAD_RESPONSE' });
+      }
+      if (!json.ok) throw Object.assign(new Error(json.error || 'Erro no banco de dados.'), { code: json.code });
       return json;
     }
 
@@ -1467,7 +1476,7 @@
         const r = await api(action, payload);
         if (r.data) applyRemoteData(r.data, r.me);
         if (successMsg) showToast(successMsg, toastType);
-        setSyncState('ok', 'Planilha conectada');
+        setSyncState('ok', 'Banco conectado');
         return true;
       } catch (err) {
         handleApiError(err);
@@ -1485,7 +1494,7 @@
         return;
       }
       setSyncState('error', 'Erro de sincronização');
-      showToast(err.message || 'Erro ao comunicar com a planilha.', 'error');
+      showToast(err.message || 'Erro ao comunicar com o banco de dados.', 'error');
       refreshFromServer(true);   // desfaz a alteração otimista recarregando os dados reais
     }
 
@@ -1496,7 +1505,7 @@
         const r = await api('getAll');
         if (pendingRequests > 0) return;   // uma gravação começou nesse meio-tempo
         applyRemoteData(r.data, r.me);
-        setSyncState('ok', 'Planilha conectada');
+        setSyncState('ok', 'Banco conectado');
         if (currentUser) renderAll(); else checkAuthView();
       } catch (err) {
         if (err.code === 'AUTH') { dropSession(); checkAuthView(); showToast(err.message, "error"); }
@@ -1504,7 +1513,7 @@
       }
     }
 
-    // Grava uma alteração já aplicada em appData: localmente ou na planilha
+    // Grava uma alteração já aplicada em appData: localmente ou no banco de dados
     async function commit(action, payload, successMsg, toastType = 'success') {
       if (!REMOTE) {
         saveState();
@@ -1710,8 +1719,8 @@
       $('nav-users-btn').hidden = !isAdmin();
       $('nav-audit-btn').hidden = !isAdmin();
       $('admin-tools').hidden = !isAdmin();
-      $('btn-reset-demo').hidden = REMOTE;   // nunca apagar a planilha real com dados de exemplo
-      if (REMOTE && $('sync-status').hidden) setSyncState('ok', 'Planilha conectada');
+      $('btn-reset-demo').hidden = REMOTE;   // nunca apagar o banco real com dados de exemplo
+      if (REMOTE && $('sync-status').hidden) setSyncState('ok', 'Banco conectado');
 
       const fromHash = location.hash.replace('#', '');
       switchView(['dashboard', 'events', 'ministries', 'users', 'audit'].includes(fromHash) ? fromHash : currentView, false);
@@ -2392,7 +2401,7 @@
       commit('upsertUser', userPayload(u), `${u.name} agora está ${u.active ? 'ativo' : 'inativo'}.`);
     }
 
-    // dados enviados à planilha (nunca inclui o hash da senha)
+    // dados enviados ao banco (nunca inclui o hash da senha)
     function userPayload(u, password) {
       const p = { id: u.id, name: u.name, username: u.username, role: u.role, active: u.active !== false, email: u.email || '', phone: u.phone || '' };
       if (password) p.password = password;
@@ -2463,7 +2472,7 @@
         commit('upsertUser', userPayload(u), 'Usuário atualizado.');
       } else {
         const user = { id: uid('u'), name, username, role, active, email, phone };
-        if (!REMOTE) await setPassword(user, pass);   // na planilha o hash é gerado no servidor
+        if (!REMOTE) await setPassword(user, pass);   // no banco o hash é gerado no servidor
         appData.users.push(user);
         $('modal-user').classList.remove('active');
         commit('upsertUser', userPayload(user, pass), 'Usuário cadastrado.');
@@ -2482,7 +2491,7 @@
     /* ==========================================================================
        REGISTRO DE AÇÕES (somente administradores)
        ========================================================================== */
-    let auditLog = null;       // carregado da planilha ao abrir a tela
+    let auditLog = null;       // carregado do banco ao abrir a tela
     let auditNotify = null;
     let auditLoading = false;
     const ACTION_LABELS = {
@@ -2522,8 +2531,8 @@
         $('audit-users').innerHTML = '';
         status.hidden = true;
         empty.hidden = false;
-        $('audit-empty-title').textContent = 'Disponível com a planilha conectada';
-        $('audit-empty-text').textContent = 'O registro de ações é gravado na planilha do Google. No modo local ele não é mantido.';
+        $('audit-empty-title').textContent = 'Disponível com o banco de dados conectado';
+        $('audit-empty-text').textContent = 'O registro de ações é gravado no banco de dados. No modo local ele não é mantido.';
         $('audit-count').textContent = '0 registros';
         return;
       }
@@ -2541,7 +2550,7 @@
           ? `<span class="ok">${plural(auditNotify.adminsWithEmail, 'administrador recebe', 'administradores recebem')} alertas por e-mail</span>`
           : '<span class="off">Nenhum administrador tem e-mail cadastrado para receber alertas</span>';
         status.innerHTML = `
-          <span>Lembretes 48h antes: ${auditNotify.reminders ? '<span class="ok">ativos</span>' : '<span class="off">desativados (rode “instalarLembretes” no Apps Script)</span>'}</span>
+          <span>Lembretes 48h antes: ${auditNotify.reminders ? '<span class="ok">ativos</span>' : '<span class="off">desativados (rode “instalarLembretes” no Apps Script, que envia os e-mails)</span>'}</span>
           <span>WhatsApp: ${auditNotify.whatsapp ? `<span class="ok">${escapeHtml(auditNotify.whatsapp)}</span>` : '<span class="off">não configurado (só e-mail)</span>'}</span>
           <span>${adminsTxt}</span>`;
       }
@@ -2643,11 +2652,11 @@
         const data = parsed && parsed.data ? parsed.data : parsed;
         if (!isValidData(data)) { showToast('O arquivo não contém um backup válido.', 'error'); return; }
         if (!data.users.some(u => u.role === 'admin' && u.active)) { showToast('O backup não possui nenhum administrador ativo.', 'error'); return; }
-        const where = REMOTE ? 'na planilha' : 'neste navegador';
+        const where = REMOTE ? 'no banco de dados' : 'neste navegador';
         const ok = await confirmDialog(`Importar ${plural(data.events.length, 'programação', 'programações')}, ${plural(data.ministries.length, 'ministério', 'ministérios')} e ${plural(data.users.length, 'usuário', 'usuários')}? Os dados atuais ${where} serão substituídos.`, { title: 'Importar backup', okLabel: 'Importar', danger: true });
         if (!ok) return;
         if (REMOTE) {
-          await remoteCall('importAll', data, 'Backup importado para a planilha.');
+          await remoteCall('importAll', data, 'Backup importado para o banco de dados.');
           return;
         }
         appData = data;
@@ -2674,7 +2683,7 @@
         try { sess = JSON.parse(store.get(SESSION_KEY) || 'null'); } catch (e) { sess = null; }
         if (sess && sess.token) {
           sessionToken = sess.token;
-          $('loading-text').textContent = 'Carregando dados da planilha…';
+          $('loading-text').textContent = 'Carregando dados…';
           api('getAll')
             .then(r => { applyRemoteData(r.data, r.me); })
             .catch(err => {
