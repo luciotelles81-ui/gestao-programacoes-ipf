@@ -73,7 +73,7 @@ Sistema separado para o Presbitério receber, registrar e analisar os relatório
 
 - **Login por igreja**: cada usuário entra escolhendo a igreja, com usuário e senha. Usuários sem igreja são do Presbitério (comissões e administração) e veem todas as igrejas.
 - **Formulários oficiais** (CSM-IPB 2021 v8.0) reproduzidos campo a campo: *Informações Cadastrais e Estatísticas* e *Relatório do Conselho ou Mesa Administrativa*, com totais calculados sozinhos. Há modelos de apoio (pastor, tesouraria, sociedade interna, escola dominical). Todo modelo é editável em **Administração → Modelos**.
-- **Histórico importado**: 12 igrejas e congregações do PLRN e 42 relatórios de 2023 a 2025, lidos dos PDFs enviados ao Presbitério (`relatorios/dados-historicos.js`). Os de 2025 entram como *Enviado* (aguardando a comissão); os anteriores como *Aprovado*, com a nota de que o exame foi feito fora do sistema.
+- **Histórico importado**: 12 igrejas e congregações do PLRN e 42 relatórios de 2023 a 2025, lidos dos PDFs enviados ao Presbitério. Esses dados **não ficam no repositório** (que é público): estão nos arquivos do projeto (`relatorios-historico.sql` para o Supabase e um backup JSON para o modo demonstração). Os de 2025 entram como *Enviado* (aguardando a comissão); os anteriores como *Aprovado*, com a nota de que o exame foi feito fora do sistema.
 - **Painel** com membros, finanças, dízimo ao Supremo Concílio, profissões de fé, situação das igrejas no Relatório do Conselho e tabela por igreja (com download em CSV).
 - **Verificações automáticas**: campos obrigatórios, regras de cada modelo e comparação com o relatório do ano anterior (por exemplo, comungantes do ano anterior e saldo que não conferem).
 - **Análise da comissão**: proposta inicial escrita pela IA, análises dos membros, **parecer final escrito pelo relator** (só ele ou o administrador edita), decisão e assinaturas.
@@ -81,11 +81,11 @@ Sistema separado para o Presbitério receber, registrar e analisar os relatório
 - **Exame de atas**: a igreja ou a comissão envia as imagens das páginas; a IA confere 41 regras do *Regulamento para Confecção de Atas* e da Constituição (`relatorios/regras-atas.js`) e marca cada uma como conforme, não conforme ou não verificável, com a evidência; o relator ajusta e escreve o parecer.
 - **Perfis de acesso**: administrador, editor (preenche relatórios da sua igreja), analista (comissão) e somente leitura.
 
-**Modo demonstração**: com `relatorios/config.js` vazio, tudo roda no navegador (dados só naquele navegador), com usuários de exemplo. A IA não funciona nesse modo: a proposta de análise é montada pelas verificações automáticas e a conferência de atas é manual.
+**Modo demonstração**: com `relatorios/config.js` vazio, tudo roda no navegador (dados só naquele navegador), com usuários de exemplo (`admin`/`admin123`). Para ver o histórico nesse modo, entre como admin e use **Registro de ações → Importar backup** com o arquivo `backup-com-historico-2023-2025.json`. A IA não funciona nesse modo: a proposta de análise é montada pelas verificações automáticas e a conferência de atas é manual.
 
 ### Ligar ao Supabase
 
-1. No SQL Editor do Supabase, execute `supabase/relatorios.sql` e depois `supabase/relatorios-dados.sql` (igrejas, modelos e relatórios históricos). As tabelas têm prefixo `ipb_` e não mexem em outras tabelas do projeto.
+1. No SQL Editor do Supabase, execute `supabase/relatorios.sql`, depois `supabase/relatorios-dados.sql` (modelos) e por fim `relatorios-historico.sql` (igrejas e relatórios históricos, entregue fora do repositório). As tabelas têm prefixo `ipb_` e não mexem em outras tabelas do projeto.
 2. Publique a função `supabase/functions/ipb-analise` com **verify_jwt desligado** (ela confere a sessão do próprio sistema) e cadastre o segredo `ANTHROPIC_API_KEY` em *Edge Functions → Secrets*.
 3. Preencha `relatorios/config.js` com a URL do projeto e a chave *anon* (pública).
 4. No primeiro acesso, o sistema pede para criar o administrador. Ele cadastra os usuários das igrejas e as comissões.
