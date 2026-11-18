@@ -9,7 +9,10 @@
   const DECISOES = ['Aprovar', 'Aprovar com ressalvas', 'Devolver para correção'];
   const STATUS = ['Rascunho', 'Enviado', 'Em análise', 'Aprovado', 'Aprovado com ressalvas', 'Devolvido'];
 
-  const S = { token: null, user: null, d: null, publico: null, edit: null, tab: 'form', ataEdit: null, filtroIgreja: '', filtros: {} };
+  const LAYOUT_KEY = 'ipb-relatorios-layout';
+  const S = { token: null, user: null, d: null, publico: null, edit: null, tab: 'form', ataEdit: null, filtroIgreja: '', filtros: {}, layout: 'folha', ind: { modo: 'igreja' } };
+  const CELULAR = () => matchMedia('(max-width: 700px)').matches;
+  try { S.layout = localStorage.getItem(LAYOUT_KEY) || (CELULAR() ? 'lista' : 'folha'); } catch (e) { S.layout = CELULAR() ? 'lista' : 'folha'; }
   const $ = (s, el) => (el || document).querySelector(s);
   const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
   const root = () => document.getElementById('root');
@@ -266,7 +269,9 @@
               <button class="btn primary" type="submit">Entrar</button>
             </form>
             <p class="small" style="margin-top:14px"><a href="#/verificar">Verificar uma assinatura</a></p>
-            ${SERVER ? '' : `<div class="demo"><b>Modo demonstração</b> (dados só neste navegador). Presbitério: <code>admin</code>/<code>admin123</code>, <code>relator</code>/<code>relator123</code>, <code>membro</code>/<code>membro123</code>. Igreja Filadélfia: <code>secretario</code>/<code>secretario123</code>.</div>`}
+            ${SERVER ? '' : S.publico && S.publico.pacoteFechado ? `<div class="alert info" style="margin-top:14px"><div><b>Dados do Presbitério</b><br>Para carregar os relatórios de 2023 a 2025 com os PDFs originais, deixe "Presbitério" na igreja, use o usuário <code>admin</code> e a <b>senha dos dados</b> que você recebeu. Isso só é preciso uma vez neste navegador.</div></div>
+              <div class="demo"><b>Modo demonstração</b> (dados só neste navegador). Para só testar, sem os dados reais: <code>admin</code>/<code>admin123</code>.</div>`
+              : `<div class="demo"><b>Modo demonstração</b> (dados só neste navegador). Presbitério: ${S.publico && S.publico.pacoteAberto ? '<code>admin</code> com a senha dos dados' : '<code>admin</code>/<code>admin123</code>'}, <code>relator</code>/<code>relator123</code>, <code>membro</code>/<code>membro123</code>. Igreja Filadélfia: <code>secretario</code>/<code>secretario123</code>.</div>`}
           </div>
         </div>
       </div>`;
@@ -276,6 +281,8 @@
       const r = await acao(() => api({ action: 'login', igrejaId: $('#lIg').value || null, username: $('#lUs').value.trim(), senha: $('#lPw').value }));
       btn.disabled = false;
       if (!r) return;
+      if (r.pacoteAberto) toast('Dados do Presbitério carregados: ' + r.pacoteAberto + ' relatórios com os originais anexados.');
+      S.publico = null;
       S.token = r.token;
       try { localStorage.setItem(TOKEN_KEY, r.token); } catch (err) { /* sem armazenamento */ }
       await acao(recarregar);
@@ -284,6 +291,20 @@
   }
   function logo(sz) {
     return `<svg width="${sz}" height="${sz}" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="12" fill="#fff"/><path d="M24 9c-6 7-11 11-11 18a11 11 0 0 0 22 0c0-7-5-11-11-18z" fill="#006b3f"/><path d="M24 21v15M18 28h12" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>`;
+  }
+
+  /* ======================= app no celular ======================= */
+  let pedidoInstalar = null;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); pedidoInstalar = e; });
+  const jaInstalado = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  async function instalarApp() {
+    if (pedidoInstalar) { pedidoInstalar.prompt(); const r = await pedidoInstalar.userChoice.catch(() => null); pedidoInstalar = null; if (r && r.outcome === 'accepted') toast('Aplicativo instalado na tela inicial.'); return; }
+    const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const m = modal('Instalar no celular', ios
+      ? '<ol style="margin:0;padding-left:20px;line-height:1.7"><li>Abra este endereço no <b>Safari</b>.</li><li>Toque no botão <b>Compartilhar</b> (quadrado com seta para cima).</li><li>Escolha <b>Adicionar à Tela de Início</b> e confirme.</li></ol>'
+      : '<ol style="margin:0;padding-left:20px;line-height:1.7"><li>Abra este endereço no <b>Chrome</b> do celular.</li><li>Toque no menu <b>⋮</b> no canto superior.</li><li>Escolha <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</li></ol>',
+      '<button class="btn primary" data-x>Entendi</button>');
+    $('[data-x]', m.el).onclick = m.fechar;
   }
 
   /* ======================= layout ======================= */
@@ -305,6 +326,7 @@
           <div class="brand">${logo(34)}<div><b>Relatórios IPB</b><span>${esc(u.igrejaId ? (igreja(u.igrejaId) || {}).sigla || '' : 'Presbitério')}</span></div></div>
           <nav class="nav">
             ${nav('painel', 'Painel', '▦')}
+            ${nav('indicadores', 'Indicadores', '↗')}
             ${nav('relatorios', 'Relatórios', '▤', u.role === 'analista' || isAdmin() ? c.analisar : c.devolvidos)}
             ${nav('atas', 'Exame de atas', '✎', u.role === 'analista' || isAdmin() ? c.atas : 0)}
             ${nav('verificar', 'Verificar assinatura', '✓')}
@@ -319,12 +341,20 @@
               <button class="side-btn" id="bTema">Tema</button>
               <button class="side-btn" id="bSair">Sair</button>
             </div>
+            ${jaInstalado() ? '' : '<button class="side-btn" id="bInstalar" style="margin-top:8px;width:100%">Instalar no celular</button>'}
             <div style="margin-top:10px"><span class="mode-pill ${SERVER ? 'on' : ''}">${SERVER ? 'Conectado ao servidor' : 'Modo demonstração'}</span></div>
           </div>
         </aside>
         <main class="main" id="main">${html}</main>
-      </div>`;
+      </div>
+      <nav class="bottom-nav no-print" aria-label="Navegação principal">
+        ${[['painel', 'Painel', '▦', 0], ['indicadores', 'Indicadores', '↗', 0], ['relatorios', 'Relatórios', '▤', u.role === 'analista' || isAdmin() ? c.analisar : c.devolvidos], ['atas', 'Atas', '✎', u.role === 'analista' || isAdmin() ? c.atas : 0]]
+          .map(([h, l, ic, n]) => `<a href="#/${h}" class="${pagina === h ? 'on' : ''}" ${pagina === h ? 'aria-current="page"' : ''}><span class="i">${ic}</span>${l}${n ? `<span class="count">${n}</span>` : ''}</a>`).join('')}
+        <button type="button" id="bMais"><span class="i">☰</span>Mais</button>
+      </nav>`;
     $('#mnu').onclick = () => $('#side').classList.toggle('open');
+    $('#bMais').onclick = () => $('#side').classList.toggle('open');
+    if ($('#bInstalar')) $('#bInstalar').onclick = instalarApp;
     $('#bSair').onclick = () => sair();
     $('#bTema').onclick = trocarTema;
     $('#bConta').onclick = modalSenha;
@@ -508,6 +538,174 @@
       baixar('igrejas-' + anoRef + '.csv', '﻿' + linhas.map(l => l.map(v => v == null ? '' : typeof v === 'number' ? String(v).replace('.', ',') : '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'), 'text/csv');
     };
   }
+  /* ======================= indicadores ======================= */
+  const SIMNAO = ['dizimo_sc', 'rois_atualizados', 'exame_balancetes', 'imoveis_doc', 'previdencia', 'plan_estrategico', 'seguro', 'alvara', 'avcb'];
+  const IND = [
+    // [id, nome, grupo, formato, fonte, cálculo, maior é melhor?]
+    ['com', 'Membros comungantes', 'Membros', 'num', 'est', C => C.V('com_atual')],
+    ['nc', 'Não comungantes', 'Membros', 'num', 'est', C => C.V('nc_atual')],
+    ['rol', 'Rol total', 'Membros', 'num', 'est', C => C.V('rol_atual')],
+    ['cresc', 'Crescimento de comungantes', 'Membros', 'pct', 'est', C => { const a = C.V('com_ant_m') + C.V('com_ant_f'); return a ? (C.V('com_atual') - a) / a : null; }],
+    ['prof', 'Profissões de fé', 'Membros', 'num', 'est', C => C.V('com_profissoes')],
+    ['adm', 'Admissões de comungantes', 'Membros', 'num', 'est', C => C.eval('sum(com_adm.t)')],
+    ['dem', 'Demissões de comungantes', 'Membros', 'num', 'est', C => C.eval('sum(com_dem.t)')],
+    ['bat', 'Batismos de não comungantes', 'Membros', 'num', 'est', C => C.eval('sum(nc_adm.t, 0, 0)')],
+    ['pastores', 'Pastores', 'Liderança e ensino', 'num', 'est', C => C.V('lid_pastores')],
+    ['presb', 'Presbíteros', 'Liderança e ensino', 'num', 'est', C => C.V('lid_presbiteros')],
+    ['diac', 'Diáconos', 'Liderança e ensino', 'num', 'est', C => C.V('lid_diaconos')],
+    ['alunos', 'Alunos da Escola Dominical', 'Liderança e ensino', 'num', 'est', C => C.V('est_alunos')],
+    ['alunosPct', 'Alunos da ED por membro do rol', 'Liderança e ensino', 'pct', 'est', C => C.V('rol_atual') ? C.V('est_alunos') / C.V('rol_atual') : null],
+    ['congs', 'Congregações e pontos de pregação', 'Liderança e ensino', 'num', 'est', C => C.V('est_congregacoes') + C.V('est_pontos')],
+    ['rec', 'Receita do ano', 'Finanças', 'money', 'est', C => C.V('fin_rec_total')],
+    ['desp', 'Despesa do ano', 'Finanças', 'money', 'est', C => C.V('fin_desp_total')],
+    ['res', 'Resultado do ano (receita − despesa)', 'Finanças', 'money', 'est', C => C.V('fin_rec_total') - C.V('fin_desp_total')],
+    ['saldo', 'Saldo para o ano seguinte', 'Finanças', 'money', 'est', C => C.V('fin_saldo_seguinte')],
+    ['diz', 'Dízimos recebidos', 'Finanças', 'money', 'est', C => C.V('fin_dizimos')],
+    ['percap', 'Dízimo por comungante', 'Finanças', 'money', 'est', C => C.V('com_atual') ? C.V('fin_dizimos') / C.V('com_atual') : null],
+    ['dizsc', 'Dízimo ao Supremo Concílio', 'Finanças', 'money', 'est', C => C.V('fin_dizimo_sc')],
+    ['dizscPct', 'Dízimo ao SC sobre os dízimos (esperado 10%)', 'Finanças', 'pct', 'est', C => C.V('fin_dizimos') ? C.V('fin_dizimo_sc') / C.V('fin_dizimos') : null],
+    ['miss', 'Missões e evangelismo', 'Finanças', 'money', 'est', C => C.V('fin_missoes') + C.V('fin_evangelismo')],
+    ['missPct', 'Missões e evangelismo sobre a despesa', 'Finanças', 'pct', 'est', C => C.V('fin_desp_total') ? (C.V('fin_missoes') + C.V('fin_evangelismo')) / C.V('fin_desp_total') : null],
+    ['social', 'Ação social', 'Finanças', 'money', 'est', C => C.V('fin_acao_social')],
+    ['reun', 'Reuniões do Conselho ou da Mesa', 'Atividades (Relatório do Conselho)', 'num', 'con', C => C.V('reun_conselho') + C.V('reun_mesa')],
+    ['ceias', 'Celebrações da Santa Ceia', 'Atividades (Relatório do Conselho)', 'num', 'con', C => C.V('ceia_grupos') + C.V('ceia_individuos')],
+    ['evang', 'Atividades evangelísticas', 'Atividades (Relatório do Conselho)', 'num', 'con', C => C.V('ativ_evang')],
+    ['textos', 'Textos distribuídos', 'Atividades (Relatório do Conselho)', 'num', 'con', C => C.V('biblias') + C.V('nt') + C.V('folhetos') + C.V('outras_lit')],
+    ['visitas', 'Visitas de oficiais e departamentos', 'Atividades (Relatório do Conselho)', 'num', 'con', C => C.V('visitas_oficiais') + C.V('visitas_outros')],
+    ['atos', 'Atos beneficentes', 'Atividades (Relatório do Conselho)', 'num', 'con', C => C.V('atos_jd') + C.V('atos_outros')],
+    ['discip', 'Discipulados realizados', 'Atividades (Relatório do Conselho)', 'num', 'con', C => C.V('discipulados')],
+    ['conf', 'Itens de organização em dia', 'Atividades (Relatório do Conselho)', 'pct', 'con', (C, d) => SIMNAO.filter(k => d[k] === 'sim').length / SIMNAO.length]
+  ].map(([id, nome, grupo, fmt, fonte, fn]) => ({ id, nome, grupo, fmt, fonte, fn }));
+  const fmtInd = (v, f, curto) => v == null || !isFinite(v) ? '–' : f === 'money' ? (curto ? moneyK(v) : money(v)) : f === 'pct' ? pct(v) : num(v);
+  function matrizInd() {
+    // M[igrejaId][ano][indicador] = valor (null quando não há o formulário)
+    const M = {};
+    const anos = new Set();
+    S.d.relatorios.forEach(r => {
+      if (r.status === 'Rascunho' || !['estatistico', 'conselho'].includes(r.modeloId)) return;
+      const fonte = r.modeloId === 'estatistico' ? 'est' : 'con';
+      const C = ctx(r.modelo || modelo(r.modeloId), r.dados || {});
+      const o = ((M[r.igrejaId] = M[r.igrejaId] || {})[r.ano] = M[r.igrejaId][r.ano] || {});
+      anos.add(r.ano);
+      IND.forEach(i => { if (i.fonte === fonte) { let v; try { v = i.fn(C, r.dados || {}); } catch (e) { v = null; } o[i.id] = v == null || !isFinite(v) ? null : Math.round(v * 10000) / 10000; o['_' + fonte] = r.id; } });
+    });
+    return { M, anos: [...anos].sort() };
+  }
+  function miniBarras(anos, vals, f) {
+    const W = 260, H = 112, T = 18, B = 20, L = 6, R = 6;
+    const nums = vals.map(v => v == null ? null : Number(v));
+    const max = Math.max(0, ...nums.filter(v => v != null)), min = Math.min(0, ...nums.filter(v => v != null));
+    const span = (max - min) || 1;
+    const gw = (W - L - R) / anos.length, bw = Math.min(40, gw - 14);
+    const y0 = T + (H - T - B) * max / span;
+    let g = `<line x1="${L}" x2="${W - R}" y1="${y0}" y2="${y0}" stroke="var(--border-strong)"/>`;
+    anos.forEach((a, i) => {
+      const cx = L + gw * i + gw / 2, v = nums[i];
+      g += `<text x="${cx}" y="${H - 5}" text-anchor="middle">${a}</text>`;
+      if (v == null) { g += `<text x="${cx}" y="${y0 - 4}" text-anchor="middle" fill="var(--text-3)">sem dado</text>`; return; }
+      const h = Math.max(1, (H - T - B) * Math.abs(v) / span), y = v >= 0 ? y0 - h : y0;
+      const ult = i === anos.length - 1 || nums.slice(i + 1).every(x => x == null);
+      g += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${h}" rx="3" fill="var(--c1)" opacity="${ult ? 1 : 0.55}" data-tip="${esc('<b>' + a + '</b><br>' + esc(fmtInd(v, f)))}"/>`;
+      g += `<text x="${cx}" y="${v >= 0 ? y - 4 : y + h + 12}" text-anchor="middle" style="font-weight:600;fill:var(--text)">${esc(fmtInd(v, f, true))}</text>`;
+    });
+    return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img">${g}</svg></div>`;
+  }
+  function variacao(a, b, f) {
+    if (a == null || b == null) return '–';
+    const d = a - b;
+    if (f === 'pct') return `<span class="${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' : ''}${(d * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} p.p.</span>`;
+    const p = b ? d / Math.abs(b) : null;
+    return `<span class="${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' : ''}${esc(fmtInd(d, f, true))}${p != null ? ' (' + (p >= 0 ? '+' : '') + pct(p) + ')' : ''}</span>`;
+  }
+  function csvInd(nome, linhas) {
+    baixar(nome, '﻿' + linhas.map(l => l.map(v => v == null ? '' : typeof v === 'number' ? String(v).replace('.', ',') : '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'), 'text/csv');
+  }
+  function telaIndicadores() {
+    const { M, anos } = matrizInd();
+    const igs = S.d.igrejas.filter(i => M[i.id]);
+    const presb = isPresb();
+    const modo = presb ? S.ind.modo : 'igreja';
+    const grupos = [...new Set(IND.map(i => i.grupo))];
+    const seg = presb ? `<div class="seg" role="group" aria-label="Tipo de comparação"><button data-modo="igreja" class="${modo === 'igreja' ? 'on' : ''}">Evolução de uma igreja</button><button data-modo="comparar" class="${modo === 'comparar' ? 'on' : ''}">Comparar igrejas</button></div>` : '';
+    let html = '';
+    if (!igs.length) {
+      shell('indicadores', head('Indicadores', 'Evolução e comparação dos relatórios.') + '<div class="card list-empty">Ainda não há relatórios de estatística ou do Conselho enviados.</div>');
+      return;
+    }
+    if (modo === 'igreja') {
+      const igId = S.user.igrejaId || (M[S.ind.igreja] ? S.ind.igreja : igs[0].id);
+      const D = M[igId] || {};
+      const anosIg = anos.filter(a => D[a]);
+      const ult = anosIg[anosIg.length - 1], pen = anosIg[anosIg.length - 2];
+      // média do Presbitério no último ano (igrejas com dado)
+      const media = id => { const v = igs.map(i => M[i.id][ult] && M[i.id][ult][id]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+      const cards = grupos.map(g => {
+        const its = IND.filter(i => i.grupo === g && anosIg.some(a => D[a][i.id] != null));
+        if (!its.length) return '';
+        return `<div class="card"><div class="card-head"><h2>${esc(g)}</h2><span class="small muted">${its[0].fonte === 'est' ? 'formulário de estatística' : 'Relatório do Conselho'}</span></div><div class="ind-grid">${its.map(i => {
+          const vals = anosIg.map(a => D[a][i.id] == null ? null : D[a][i.id]);
+          const ua = [...anosIg].reverse().find(a => D[a][i.id] != null);
+          const pa = anosIg.filter(a => a < ua).reverse().find(a => D[a][i.id] != null);
+          return `<div class="ind-card"><h4>${esc(i.nome)}</h4><div class="small muted">${ua}: <b style="color:var(--text);font-size:15px">${esc(fmtInd(D[ua][i.id], i.fmt))}</b>${pa ? ' · ' + variacao(D[ua][i.id], D[pa][i.id], i.fmt) + ' desde ' + pa : ''}</div>${miniBarras(anosIg, vals, i.fmt)}</div>`;
+        }).join('')}</div></div>`;
+      }).join('');
+      const linhas = IND.filter(i => anosIg.some(a => D[a][i.id] != null));
+      html = head('Indicadores', 'Evolução dos relatórios de uma igreja ao longo dos anos.', seg) + `
+        <div class="card"><div class="filters" style="margin:0">${S.user.igrejaId ? `<div><b>${esc(igNome(igId))}</b></div>` : `<div class="field" style="min-width:300px"><label for="iIg">Igreja</label><select id="iIg">${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select></div>`}
+          <p class="small muted" style="margin:0;align-self:end">Relatórios: ${anosIg.map(a => a + ' (' + [D[a]._est ? 'estatística' : '', D[a]._con ? 'Conselho' : ''].filter(Boolean).join(' e ') + ')').join(' · ')}</p></div></div>
+        ${cards}
+        <div class="card"><div class="card-head"><h2>Tabela de indicadores</h2><button class="btn sm ghost no-print" id="bCsvI">Baixar planilha (CSV)</button></div>
+          <div class="tbl-wrap"><table><thead><tr><th>Indicador</th>${anosIg.map(a => `<th class="num">${a}</th>`).join('')}<th class="num">Variação${pen ? ' ' + pen + '→' + ult : ''}</th>${presb ? `<th class="num">Média do Presbitério ${ult}</th>` : ''}</tr></thead><tbody>
+          ${grupos.map(g => { const ls = linhas.filter(i => i.grupo === g); return ls.length ? `<tr class="tot"><td colspan="${anosIg.length + (presb ? 3 : 2)}"><b>${esc(g)}</b></td></tr>` + ls.map(i => `<tr><td>${esc(i.nome)}</td>${anosIg.map(a => `<td class="num">${esc(fmtInd(D[a][i.id], i.fmt))}</td>`).join('')}<td class="num">${pen ? variacao(D[ult][i.id], D[pen][i.id], i.fmt) : '–'}</td>${presb ? `<td class="num muted">${esc(fmtInd(media(i.id), i.fmt))}</td>` : ''}</tr>`).join('') : ''; }).join('')}
+          </tbody></table></div></div>`;
+      shell('indicadores', html);
+      const sel = $('#iIg'); if (sel) sel.onchange = () => { S.ind.igreja = sel.value; telaIndicadores(); };
+      $('#bCsvI').onclick = () => csvInd('indicadores-' + (igreja(igId) || {}).sigla + '.csv', [['Indicador'].concat(anosIg)].concat(linhas.map(i => [i.nome].concat(anosIg.map(a => D[a][i.id])))));
+    } else {
+      const ind = IND.find(i => i.id === S.ind.indicador) || IND[0];
+      const anosInd = anos.filter(a => igs.filter(i => M[i.id][a] && M[i.id][a][ind.id] != null).length);
+      const contagem = a => igs.filter(i => M[i.id][a] && M[i.id][a][ind.id] != null).length;
+      const melhorAno = anosInd.slice().reverse().find(a => contagem(a) >= Math.max(...anosInd.map(contagem)) / 2);
+      const ano = anosInd.includes(Number(S.ind.ano)) ? Number(S.ind.ano) : melhorAno;
+      const val = (ig, a) => M[ig.id][a] ? M[ig.id][a][ind.id] : null;
+      const rank = igs.filter(i => val(i, ano) != null).map(i => ({ i, v: val(i, ano), p: val(i, ano - 1) })).sort((a, b) => b.v - a.v);
+      const vs = rank.map(x => x.v);
+      const tot = ind.fmt === 'pct' ? null : vs.reduce((a, b) => a + b, 0);
+      const med = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+      const maxAbs = Math.max(1e-9, ...igs.flatMap(i => anosInd.map(a => Math.abs(val(i, a) || 0))));
+      html = head('Indicadores', 'Compare um indicador entre as igrejas do Presbitério.', seg) + `
+        <div class="card"><div class="filters" style="margin:0">
+          <div class="field" style="min-width:320px"><label for="iInd">Indicador</label><select id="iInd">${grupos.map(g => `<optgroup label="${esc(g)}">${IND.filter(i => i.grupo === g).map(i => `<option value="${i.id}" ${i.id === ind.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</optgroup>`).join('')}</select></div>
+          <div class="field"><label for="iAno">Ano</label><select id="iAno">${anosInd.map(a => `<option ${a === ano ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
+        </div></div>
+        <div class="kpis">
+          <div class="kpi"><div class="l">Igrejas com dado em ${ano}</div><div class="v">${rank.length}</div></div>
+          ${tot != null ? `<div class="kpi"><div class="l">Total do Presbitério</div><div class="v">${esc(fmtInd(tot, ind.fmt, true))}</div></div>` : ''}
+          <div class="kpi"><div class="l">Média por igreja</div><div class="v">${esc(fmtInd(med, ind.fmt, true))}</div></div>
+          ${rank.length ? `<div class="kpi"><div class="l">Maior valor</div><div class="v" style="font-size:18px">${esc(rank[0].i.sigla || rank[0].i.nome)}</div><div class="d muted">${esc(fmtInd(rank[0].v, ind.fmt))}</div></div>` : ''}
+        </div>
+        <div class="grid g2">
+          <div class="card"><div class="card-head"><h2>${esc(ind.nome)}</h2><span class="muted small">${ano} · da maior para a menor</span></div>
+            ${rank.length ? hbarras(rank.map(x => ({ nome: x.i.sigla || x.i.nome, v: x.v, extra: x.i.nome + (x.p != null ? ' · ' + (ano - 1) + ': ' + fmtInd(x.p, ind.fmt) : '') })), (v, c) => fmtInd(v, ind.fmt, c), 'var(--c1)') : '<div class="list-empty">Sem dados neste ano.</div>'}
+            ${ind.id === 'dizscPct' ? '<p class="small muted">Referência: o dízimo ao Supremo Concílio é 10% dos dízimos.</p>' : ''}</div>
+          <div class="card"><div class="card-head"><h2>Total ou média do Presbitério por ano</h2><span class="muted small">${ind.fmt === 'pct' ? 'média das igrejas' : 'soma das igrejas com dado'}</span></div>
+            ${barras(anosInd.map(String), [{ nome: ind.nome, cor: 'var(--c1)', vals: anosInd.map(a => { const v = igs.map(i => val(i, a)).filter(x => x != null); return ind.fmt === 'pct' ? (v.length ? v.reduce((x, y) => x + y, 0) / v.length : 0) : v.reduce((x, y) => x + y, 0); }) }], (v, ax) => fmtInd(v, ind.fmt, ax), { label: ind.nome, h: 220 })}
+            <p class="small muted">Igrejas com dado: ${anosInd.map(a => a + ': ' + contagem(a)).join(' · ')}. Anos com poucas igrejas não são comparáveis com os demais.</p></div>
+        </div>
+        <div class="card"><div class="card-head"><h2>Igrejas × anos</h2><button class="btn sm ghost no-print" id="bCsvI">Baixar planilha (CSV)</button></div>
+          <div class="tbl-wrap"><table class="heat"><thead><tr><th>Igreja</th>${anosInd.map(a => `<th class="num">${a}</th>`).join('')}<th class="num">Variação ${ano - 1}→${ano}</th></tr></thead><tbody>
+          ${igs.map(i => `<tr class="click" data-ig="${esc(i.id)}"><td>${esc(i.nome)}</td>${anosInd.map(a => { const v = val(i, a); return `<td class="num" style="${v != null && v > 0 ? `background:color-mix(in srgb, var(--c1) ${Math.round(Math.abs(v) / maxAbs * 32)}%, transparent)` : ''}">${esc(fmtInd(v, ind.fmt))}</td>`; }).join('')}<td class="num">${variacao(val(i, ano), val(i, ano - 1), ind.fmt)}</td></tr>`).join('')}
+          </tbody></table></div><p class="small muted">Clique numa igreja para ver a evolução de todos os indicadores dela.</p></div>`;
+      shell('indicadores', html);
+      $('#iInd').onchange = e => { S.ind.indicador = e.target.value; telaIndicadores(); };
+      $('#iAno').onchange = e => { S.ind.ano = e.target.value; telaIndicadores(); };
+      $$('[data-ig]').forEach(tr => tr.onclick = () => { S.ind.igreja = tr.getAttribute('data-ig'); S.ind.modo = 'igreja'; telaIndicadores(); scrollTo(0, 0); });
+      $('#bCsvI').onclick = () => csvInd('comparacao-' + ind.id + '.csv', [['Igreja'].concat(anosInd)].concat(igs.map(i => [i.nome].concat(anosInd.map(a => val(i, a))))));
+    }
+    $$('[data-modo]').forEach(b => b.onclick = () => { S.ind.modo = b.getAttribute('data-modo'); telaIndicadores(); });
+    ligarTips($('#main'));
+  }
+
   function baixar(nome, conteudo, tipo) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
@@ -553,6 +751,7 @@
       <div class="field"><label>Modelo</label><select id="nMod">${S.d.modelos.filter(x => x.ativo !== false).map(x => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join('')}</select></div>
       <div class="grid g2"><div class="field"><label>Ano de referência</label><input type="number" id="nAno" value="${new Date().getFullYear()}"></div>
       <div class="field"><label>Nº do documento (opcional)</label><input type="text" id="nDoc" placeholder="Ex.: Doc.30/2026"></div></div>
+      <div class="field"><label for="nArq">Relatório feito à mão ou impresso (opcional)</label><input type="file" id="nArq" accept="application/pdf,image/*"><span class="help">PDF ou foto do relatório original. Fica anexado para conferir com o que for digitado.</span></div>
       <p class="small muted" style="margin:0">Os dados de identificação vêm do cadastro da igreja. Quando houver relatório do ano anterior, os totais do fim do ano passado entram como ponto de partida.</p>`,
       '<button class="btn" data-x>Cancelar</button><button class="btn primary" id="nOk">Criar</button>');
     $('[data-x]', m.el).onclick = m.fechar;
@@ -569,6 +768,8 @@
       }
       const r = await acao(() => api({ action: 'salvar', entidade: 'relatorio', item: { igrejaId, modeloId, ano, documento: $('#nDoc', m.el).value.trim(), titulo: mod.nome + ' ' + ano + ($('#nDoc', m.el).value.trim() ? ' · ' + $('#nDoc', m.el).value.trim() : ''), dados } }), 'Relatório criado.');
       if (!r) return;
+      const arq = $('#nArq', m.el).files[0];
+      if (arq) await acao(() => anexarArquivo(r.item.id, arq, true), 'Relatório original anexado.');
       m.fechar(); await recarregar(); S.tab = 'form'; ir('relatorio/' + r.item.id);
     };
   }
@@ -615,9 +816,11 @@
     return `<div class="tbl-wrap inner-tbl"><table><thead><tr>${fixas ? '<th></th>' : ''}${cols.map(cd => `<th class="${['number', 'money', 'calc'].includes(cd.tipo) ? 'num' : ''}">${esc(cd.label)}</th>`).join('')}${!fixas && !ro ? '<th></th>' : ''}</tr></thead><tbody>${body}${totais}</tbody></table></div>${!fixas && !ro ? `<div><button type="button" class="btn sm" data-add="${esc(c.id)}" style="margin-top:6px">+ Adicionar linha</button></div>` : ''}`;
   }
   function somaCol(c, rows, cd) { const n = c.linhas ? c.linhas.length : rows.length; let s = 0; for (let i = 0; i < n; i++) s += Number(cel(c, rows[i] || {}, cd)) || 0; return s; }
+  const usaFolha = r => S.layout === 'folha' && window.IPB_FOLHA && window.IPB_FOLHA.disponivel(r);
   function formHTML(r, ro) {
     const mod = r.modelo;
     const C = ctx(mod, r.dados);
+    if (usaFolha(r)) return `<div class="folha-wrap">${window.IPB_FOLHA.render(r, ro, C, igreja(r.igrejaId) || {})}</div>`;
     return (mod.secoes || []).map(s => `<h3 class="section-title">${esc(s.titulo)}</h3><div class="grid g3">${(s.campos || []).map(c => campoHTML(c, r.dados, ro, C)).join('')}</div>`).join('');
   }
   function atualizarCalcs(r) {
@@ -625,6 +828,7 @@
     $$('[data-calc]').forEach(el => { const c = C.defs[el.getAttribute('data-calc')]; if (c) el.textContent = fmtCampo(c, C.V(c.id)); });
     $$('[data-tc]').forEach(el => { const [t, i, col] = el.getAttribute('data-tc').split('|'); const c = C.defs[t]; el.textContent = num(cel(c, (r.dados[t] || [])[i] || {}, c.colunas.find(x => x.id === col))); });
     $$('[data-tt]').forEach(el => { const [t, col] = el.getAttribute('data-tt').split('|'); const c = C.defs[t]; const cd = c.colunas.find(x => x.id === col); const v = somaCol(c, r.dados[t] || [], cd); el.textContent = cd.tipo === 'money' ? money(v) : num(v); });
+    $$('[data-expr]').forEach(el => { el.textContent = window.IPB_FOLHA_FMT(C.eval(el.getAttribute('data-expr')), el.getAttribute('data-fmt')); });
     const box = $('#verifs'); if (box) box.innerHTML = alertasHTML(verificar(r));
   }
   function ligarForm(r) {
@@ -633,13 +837,14 @@
     let tmr = null;
     const recalc = () => { clearTimeout(tmr); tmr = setTimeout(() => atualizarCalcs(r), 120); };
     $$('[data-f]').forEach(el => el.addEventListener('input', () => {
-      const c = ctx(r.modelo, d).defs[el.getAttribute('data-f')];
-      d[c.id] = ['number', 'money'].includes(c.tipo) ? (el.value === '' ? '' : Number(el.value)) : el.value;
+      const fid = el.getAttribute('data-f');
+      const c = ctx(r.modelo, d).defs[fid] || { tipo: el.type === 'number' ? 'number' : 'text' };
+      d[fid] = ['number', 'money'].includes(c.tipo) ? (el.value === '' ? '' : Number(el.value)) : el.value;
       mark(); recalc();
     }));
     $$('[data-yn]').forEach(b => b.onclick = () => {
       const id = b.getAttribute('data-yn'); d[id] = d[id] === b.getAttribute('data-v') ? '' : b.getAttribute('data-v');
-      $$(`[data-yn="${id}"]`).forEach(x => { x.classList.toggle('on', d[id] === x.getAttribute('data-v')); x.classList.toggle('no', d[id] === 'nao' && x.getAttribute('data-v') === 'nao'); });
+      $$('[data-yn]').filter(x => x.getAttribute('data-yn') === id).forEach(x => { x.classList.toggle('on', d[id] === x.getAttribute('data-v')); x.classList.toggle('no', d[id] === 'nao' && x.getAttribute('data-v') === 'nao'); });
       mark(); recalc();
     });
     $$('[data-ck]').forEach(el => el.onchange = () => { const id = el.getAttribute('data-ck'); d[id] = $$(`[data-ck="${id}"]`).filter(x => x.checked).map(x => x.value); mark(); recalc(); });
@@ -665,10 +870,13 @@
     const ro = !podeEditar(r);
     const v = verificar(r);
     const a = r.analise || {};
-    const tabs = [['form', 'Formulário'], ['analise', 'Análise da comissão' + (a.final ? ' ✓' : '')], ['hist', 'Histórico']];
+    const nAnx = (r.anexos || []).length;
+    const tabs = [['form', 'Formulário'], ['anexos', 'Original e anexos' + (nAnx ? ' (' + nAnx + ')' : '')], ['analise', 'Análise da comissão' + (a.final ? ' ✓' : '')], ['hist', 'Histórico']];
+    const temFolha = window.IPB_FOLHA && window.IPB_FOLHA.disponivel(r);
     const acoes = [];
     if (!ro) acoes.push(`<button class="btn primary" id="bSalvar">${S.edit.sujo ? 'Salvar alterações' : 'Salvar'}</button><button class="btn" id="bEnviar">Enviar para análise</button>`);
-    acoes.push('<button class="btn" id="bPrint">Imprimir / PDF</button>');
+    if (temFolha) acoes.push('<button class="btn" id="bPrintF" title="Imprime só o formulário, no layout do relatório físico (A4)">Imprimir formulário</button>');
+    acoes.push(`<button class="btn" id="bPrint">${temFolha ? 'Imprimir com parecer' : 'Imprimir / PDF'}</button>`);
     if (isAdmin() || (S.user.role === 'editor' && r.status === 'Rascunho')) acoes.push('<button class="btn danger" id="bExcluir">Excluir</button>');
     if (isAdmin() && !['Rascunho'].includes(r.status)) acoes.push('<button class="btn ghost" id="bReabrir">Reabrir</button>');
     const ig = igreja(r.igrejaId) || {};
@@ -678,14 +886,25 @@
       <div class="tabs no-print" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div class="tab-pane ${S.tab === 'form' ? '' : 'hidden'}" id="tForm">
         <div class="card no-print" style="margin-bottom:16px"><div class="card-head" style="margin-bottom:8px"><h3>Verificações automáticas</h3><span class="small muted">regras do modelo e comparação com ${anterior(r) ? 'o relatório de ' + (r.ano - 1) : 'o ano anterior (não encontrado)'}</span></div><div id="verifs">${alertasHTML(v)}</div></div>
-        <div class="card">${r.status === 'Devolvido' && a.final ? `<div class="alert err" style="margin-bottom:12px"><div><b>Devolvido pela comissão para correção.</b><div style="white-space:pre-wrap">${esc(a.final.texto)}</div></div></div>` : ''}${formHTML(r, ro)}</div>
+        <div class="card">${temFolha ? `<div class="card-head no-print" style="margin-bottom:10px"><span class="small muted">${usaFolha(r) ? 'Layout do formulário impresso (CSM-IPB). As células amarelas são para preencher; os totais são calculados.' : 'Formulário em lista, campo a campo.'}</span><div class="layout-sw" role="group" aria-label="Layout do formulário"><button data-lay="folha" class="${usaFolha(r) ? 'on' : ''}">Como no papel</button><button data-lay="lista" class="${usaFolha(r) ? '' : 'on'}">Em lista</button></div></div>` : ''}${r.status === 'Devolvido' && a.final ? `<div class="alert err" style="margin-bottom:12px"><div><b>Devolvido pela comissão para correção.</b><div style="white-space:pre-wrap">${esc(a.final.texto)}</div></div></div>` : ''}${formHTML(r, ro)}</div>
       </div>
+      <div class="tab-pane no-print ${S.tab === 'anexos' ? '' : 'hidden'}" id="tAnexos">${anexosHTML(r)}</div>
       <div class="tab-pane ${S.tab === 'analise' ? '' : 'hidden'}" id="tAnalise">${analiseHTML(r, v)}</div>
       <div class="tab-pane ${S.tab === 'hist' ? '' : 'hidden'}" id="tHist"><div class="card"><div class="timeline">${(r.historico || []).slice().reverse().map(h => `<div><span>${dt(h.em, true)}</span><span><b>${esc(h.por)}</b> · ${esc(h.acao)}</span></div>`).join('') || '<p class="muted">Sem histórico.</p>'}</div></div></div>`);
     $$('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.getAttribute('data-tab'); telaRelatorio(id, true); });
     if (!ro) ligarForm(r);
     ligarAnalise(r);
-    $('#bPrint').onclick = () => { $$('.tab-pane').forEach(p => p.classList.remove('hidden')); setTimeout(() => { print(); telaRelatorio(id, true); }, 50); };
+    ligarAnexos(r);
+    $$('[data-lay]').forEach(b => b.onclick = () => { S.layout = b.getAttribute('data-lay'); try { localStorage.setItem(LAYOUT_KEY, S.layout); } catch (e) { /* sem armazenamento */ } telaRelatorio(id, true); });
+    if ($('#bPrintF')) $('#bPrintF').onclick = () => {
+      const antes = S.layout;
+      S.layout = 'folha'; telaRelatorio(id, true);
+      document.body.classList.add('print-folha');
+      const fim = () => { document.body.classList.remove('print-folha'); window.removeEventListener('afterprint', fim); if (antes !== 'folha') { S.layout = antes; telaRelatorio(id, true); } };
+      window.addEventListener('afterprint', fim);
+      setTimeout(() => print(), 60);
+    };
+    $('#bPrint').onclick = () => { $$('.tab-pane:not(#tAnexos)').forEach(p => p.classList.remove('hidden')); setTimeout(() => { print(); telaRelatorio(id, true); }, 50); };
     if ($('#bSalvar')) $('#bSalvar').onclick = async () => {
       const x = await acao(() => api({ action: 'salvar', entidade: 'relatorio', item: { id: r.id, dados: r.dados } }), 'Relatório salvo.');
       if (x) { await recarregar(); S.edit = null; telaRelatorio(id); }
@@ -703,6 +922,80 @@
     if ($('#bReabrir')) $('#bReabrir').onclick = async () => {
       if (!(await confirmar('Reabrir o relatório como rascunho? O parecer final e as assinaturas serão anulados.', 'Reabrir'))) return;
       if (await acao(() => api({ action: 'relatorio', id: r.id, op: 'reabrir' }), 'Relatório reaberto.')) { await recarregar(); S.edit = null; telaRelatorio(id); }
+    };
+  }
+
+  /* ======================= original e anexos ======================= */
+  const tamanho = b => b >= 1e6 ? (b / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB';
+  const podeAnexar = () => isAdmin() || S.user.role === 'editor';
+  const blobCache = {};
+  async function abrirAnexo(r, an) {
+    const k = r.id + '|' + an.id;
+    if (blobCache[k]) return blobCache[k];
+    const x = await api({ action: 'anexo', op: 'abrir', relatorioId: r.id, anexoId: an.id });
+    const blob = x.blob || await (await fetch(x.dados)).blob();
+    blobCache[k] = URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: an.tipo }));
+    return blobCache[k];
+  }
+  function lerArquivo(file) {
+    return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('Não foi possível ler o arquivo.')); fr.readAsDataURL(file); });
+  }
+  async function anexarArquivo(relId, file, original) {
+    if (!file) return null;
+    if (!/^(application\/pdf|image\/)/.test(file.type)) throw new Error('Anexe um PDF ou uma imagem (JPG, PNG).');
+    if (file.size > 15e6) throw new Error('O arquivo passa de 15 MB.');
+    return api({ action: 'anexo', op: 'salvar', relatorioId: relId, nome: file.name, tipo: file.type, original: !!original, dados: await lerArquivo(file) });
+  }
+  function anexosHTML(r) {
+    const lista = (r.anexos || []).slice().sort((a, b) => (b.original ? 1 : 0) - (a.original ? 1 : 0));
+    return `<div class="card"><div class="card-head"><h2>Relatório original e anexos</h2><span class="small muted">PDF ou imagem do relatório feito à mão ou impresso, para conferir com o que foi digitado</span></div>
+      ${lista.map(an => {
+        const pdf = an.tipo === 'application/pdf';
+        const podeExcluir = isAdmin() || (an.porId && an.porId === S.user.id);
+        return `<div class="anx"><span class="ic">${pdf ? 'PDF' : 'IMG'}</span><div class="grow"><b>${esc(an.nome)}</b>${an.original ? ' <span class="tag">relatório original</span>' : ''}<div class="small muted">${tamanho(an.tamanho || 0)} · ${an.origem === 'pacote' ? 'importado do arquivo enviado pelo Presbitério' : 'anexado por ' + esc(an.porNome || '') + ' em ' + dt(an.em, true)}</div></div>
+          <div class="actions"><button class="btn sm primary" data-cmp="${esc(an.id)}">Comparar com o formulário</button><button class="btn sm" data-abr="${esc(an.id)}">Abrir</button>${podeExcluir ? `<button class="btn sm ghost" data-axc="${esc(an.id)}">Excluir</button>` : ''}</div></div>`;
+      }).join('') || '<p class="muted" style="margin:0">Nenhum arquivo anexado a este relatório.</p>'}
+      ${podeAnexar() ? `<div class="filters" style="margin:14px 0 0"><div class="field" style="min-width:280px"><label for="axF">Anexar PDF ou imagem (até 15 MB)</label><input type="file" id="axF" accept="application/pdf,image/*"></div><button class="btn" id="bAnexar">Anexar</button></div>` : ''}
+    </div>
+    <div id="cmpBox"></div>`;
+  }
+  function ligarAnexos(r) {
+    const achar = id => (r.anexos || []).find(x => x.id === id);
+    $$('[data-abr]').forEach(b => b.onclick = async () => {
+      const an = achar(b.getAttribute('data-abr'));
+      const w = window.open('', '_blank');
+      const url = await acao(() => abrirAnexo(r, an));
+      if (!url) { if (w) w.close(); return; }
+      if (w) w.location.href = url; else location.href = url;
+    });
+    $$('[data-cmp]').forEach(b => b.onclick = async () => {
+      const an = achar(b.getAttribute('data-cmp'));
+      const box = $('#cmpBox');
+      box.innerHTML = '<div class="card"><p class="muted" style="margin:0">Abrindo o arquivo…</p></div>';
+      const url = await acao(() => abrirAnexo(r, an));
+      if (!url) { box.innerHTML = ''; return; }
+      const C = ctx(r.modelo, r.dados);
+      const dir = window.IPB_FOLHA && window.IPB_FOLHA.disponivel(r) ? `<div class="folha-wrap">${window.IPB_FOLHA.render(r, true, C, igreja(r.igrejaId) || {})}</div>` : formHTML(r, true);
+      box.innerHTML = `<div class="card"><div class="card-head"><h2>Original × digitado</h2><span class="small muted">à esquerda o arquivo, à direita o que está no sistema</span></div>
+        <div class="comparar"><div>${an.tipo === 'application/pdf' ? `<iframe src="${esc(url)}#view=FitH" title="${esc(an.nome)}"></iframe>` : `<img class="pdf-img" src="${esc(url)}" alt="${esc(an.nome)}">`}<p class="small" style="margin:6px 0 0"><a href="${esc(url)}" target="_blank" rel="noopener">Abrir o arquivo em outra aba</a></p></div><div class="lado">${dir}</div></div></div>`;
+      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    $$('[data-axc]').forEach(b => b.onclick = async () => {
+      const an = achar(b.getAttribute('data-axc'));
+      if (!(await confirmar('Excluir o anexo "' + esc(an.nome) + '"?', 'Excluir'))) return;
+      if (await acao(() => api({ action: 'anexo', op: 'excluir', relatorioId: r.id, anexoId: an.id }), 'Anexo excluído.')) { await recarregar(); S.edit = null; S.tab = 'anexos'; telaRelatorio(r.id); }
+    });
+    if ($('#bAnexar')) $('#bAnexar').onclick = async () => {
+      const f = $('#axF').files[0];
+      if (!f) return toast('Escolha um arquivo.', true);
+      const btn = $('#bAnexar'); btn.disabled = true; btn.textContent = 'Enviando…';
+      const ok = await acao(() => anexarArquivo(r.id, f), 'Arquivo anexado.');
+      btn.disabled = false; btn.textContent = 'Anexar';
+      if (ok) {
+        const sujo = S.edit && S.edit.sujo ? S.edit.r.dados : null;
+        await recarregar(); S.tab = 'anexos';
+        if (sujo) { S.edit.r.anexos = (S.d.relatorios.find(x => x.id === r.id) || {}).anexos; telaRelatorio(r.id, true); } else { S.edit = null; telaRelatorio(r.id); }
+      }
     };
   }
 
@@ -1209,6 +1502,7 @@
     if (p !== 'relatorio') S.tab = S.tab || 'form';
     switch (p) {
       case 'painel': return telaPainel();
+      case 'indicadores': return telaIndicadores();
       case 'relatorios': return telaRelatorios(a[0]);
       case 'relatorio': return telaRelatorio(a[0], S.edit && S.edit.id === a[0]);
       case 'atas': S.ataEdit = null; return telaAtas();

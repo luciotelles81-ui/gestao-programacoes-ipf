@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Inclusão, registro e análise dos relatórios das igrejas, no padrão da Igreja Presbiteriana do Brasil.">
   <title>Relatórios IPB</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#006b3f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Relatórios IPB">
+  <link rel="apple-touch-icon" href="icones/icone-180.png">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 110'%3E%3Cpath d='M20 98h32c24 0 36-18 36-48 0-22-10-32-36-36-20-4-32 2-36 6v72c0 4 2 6 4 6z' fill='%23006B3F'/%3E%3Cpath d='M50 26v18M50 56v28M32 50h12M56 50h14' stroke='%23fff' stroke-width='8.5' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -287,6 +294,138 @@
     .sit-nao_verificavel { background: var(--warn-soft) !important; color: var(--warn) !important; }
     @media (max-width: 1000px) { .ata-grid { grid-template-columns: 1fr; } .ata-view { position: static; } }
     @media (max-width: 560px) { .regra { grid-template-columns: 1fr; } }
+
+    /* folha no layout do formulário físico (CSM-IPB) */
+    .folha-wrap { overflow-x: auto; background: var(--surface-2); border-radius: var(--radius-sm); padding: 14px; }
+    .folha { --fl: #222; --fbar: #d9d9d9; --fhl: #eef6f1; background: #fff; color: #111; width: 100%; min-width: 760px; max-width: 980px; margin: 0 auto; padding: 22px 26px; box-shadow: 0 1px 4px rgba(0,0,0,.18); font: 12.5px/1.35 Arial, Helvetica, sans-serif; color-scheme: light; }
+    .folha table { border-collapse: collapse; width: 100%; }
+    .folha td, .folha th { border: 1px solid var(--fl); padding: 2px 5px; vertical-align: middle; background: #fff; color: #111; font-size: 12px; }
+    .folha th { background: var(--fbar); font-weight: 700; text-align: center; font-size: 11.5px; }
+    .f-cab { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: center; border: 1.5px solid var(--fl); padding: 8px 10px; margin-bottom: 8px; }
+    .f-logo { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 10px; line-height: 1.1; }
+    .f-logo b { margin-top: 3px; } .f-logo span { font-size: 9px; letter-spacing: .5px; }
+    .f-tit .t1 { text-align: center; font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+    .f-tit .t1 small { font-size: 12px; font-weight: 600; }
+    .f-ano td { font-size: 11.5px; } .f-ano .l { width: 110px; font-weight: 700; } .f-ano .s { width: 70px; text-align: center; font-weight: 700; }
+    .f-doc { text-align: right; font-size: 11px; margin-top: 4px; font-weight: 700; }
+    .f-bar { background: var(--fbar); border: 1px solid var(--fl); font-weight: 700; padding: 3px 8px; margin: 10px 0 4px; font-size: 12.5px; }
+    .f-pg2 { background: #fff; border: 0; border-bottom: 1.5px solid var(--fl); text-align: center; font-size: 11px; }
+    .f-cols { display: grid; gap: 8px; align-items: start; } .f-cols.c2 { grid-template-columns: 1fr 1fr; } .f-cols.c3 { grid-template-columns: 1fr 1fr 1.25fr; }
+    .folha td.l { font-weight: 600; white-space: normal; }
+    .folha td.n { width: 64px; } .folha td.rs { width: 26px; text-align: center; } .folha td.pc { width: 58px; text-align: right; }
+    .folha td.vert { width: 18px; text-align: center; font-weight: 700; font-size: 10px; line-height: 1.05; background: var(--fbar); }
+    .folha td.tt, .folha .tt { background: #f3f3f3; font-weight: 700; text-align: right; }
+    .folha tr.b td { font-weight: 700; } .folha tr.hl td { background: var(--fhl); }
+    .folha td.vazio { border-left: 1px solid var(--fl); height: 20px; }
+    .folha .cab2 { font-size: 12px; }
+    .folha .f-sub { background: var(--fbar); font-weight: 700; }
+    .folha .f-sub2 { font-weight: 700; font-style: italic; background: #f3f3f3; }
+    .folha td.op { white-space: nowrap; }
+    .folha .fi { width: 100%; min-width: 0; border: 0; border-bottom: 1px dotted #888; background: #fffde8; color: #111; font: inherit; padding: 1px 3px; border-radius: 0; box-shadow: none; }
+    .folha .fi:focus { outline: 2px solid #1a8a55; outline-offset: 0; background: #fff; }
+    .folha textarea.fi { min-height: 48px; resize: vertical; display: block; }
+    .folha .fi.num, .folha .fv.num, .folha .fc.num { text-align: right; display: block; }
+    .folha input.fi[type=number] { -moz-appearance: textfield; } .folha input.fi::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .folha .fn { display: inline-block; width: 64px; vertical-align: middle; }
+    .folha .fv { display: inline-block; min-height: 15px; } .folha .fv.pre { white-space: pre-wrap; display: block; }
+    .fyn { display: inline-flex; gap: 6px; white-space: nowrap; }
+    .fb, .fck { display: inline-flex; align-items: center; gap: 3px; background: none; border: 0; padding: 0 2px; font: inherit; color: #111; cursor: pointer; }
+    .fb:disabled, .fck input:disabled + i { cursor: default; }
+    .fb i, .fck i { width: 12px; height: 12px; border: 1.3px solid #111; display: inline-block; position: relative; background: #fff; }
+    .fb.on i::after, .fck input:checked + i::after { content: "X"; position: absolute; inset: -3px 0 0 1px; font: 700 11px/14px Arial; color: #111; }
+    .fb.on.no i::after { color: #b3261e; }
+    .fck input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .fck { margin-right: 8px; } .fck input:focus-visible + i, .fb:focus-visible i { outline: 2px solid #1a8a55; }
+    .f-fim { margin-top: 6px; }
+    .f-ass { margin: 18px auto 6px; width: 60%; text-align: center; } .f-ass > div { border-bottom: 1px solid #111; min-height: 22px; } .f-ass span { font-size: 11px; }
+    .f-obs { border: 1px solid var(--fl); padding: 4px 6px; margin-top: 8px; } .f-obs .l { font-weight: 700; display: block; }
+    .f-rod { text-align: right; font-size: 10px; margin-top: 8px; color: #333; }
+    .f-quebra { height: 14px; }
+    .layout-sw { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+    .layout-sw button { border: 0; background: var(--surface); color: var(--text); padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+    .layout-sw button.on { background: var(--brand); color: #fff; }
+    /* anexos */
+    .anx { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .anx:last-child { border-bottom: 0; }
+    .anx .ic { width: 34px; height: 40px; border-radius: 4px; background: var(--danger-soft); color: var(--danger); font-size: 10px; font-weight: 700; display: grid; place-items: center; flex: none; }
+    .anx .grow { flex: 1; min-width: 180px; }
+    .comparar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+    .comparar iframe, .comparar .pdf-img { width: 100%; height: 80vh; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; }
+    .comparar .pdf-img { object-fit: contain; }
+    .comparar .lado { overflow: auto; height: 80vh; }
+    .comparar .lado .folha { min-width: 700px; }
+    @media (max-width: 1000px) { .comparar { grid-template-columns: 1fr; } }
+    /* indicadores */
+    .ind-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .ind-card { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; background: var(--surface); }
+    .ind-card h4 { margin: 0 0 2px; font-size: 14px; } .ind-card .v { font-size: 22px; font-weight: 700; } .ind-card .chart svg { height: 110px; }
+    .heat td.num { position: relative; }
+    .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+    .seg button { border: 0; background: var(--surface); color: var(--text); padding: 7px 14px; font: inherit; cursor: pointer; }
+    .seg button.on { background: var(--brand); color: #fff; }
+    .rank-n { color: var(--text-2); width: 22px; display: inline-block; }
+
+    /* aparência do papel: rótulos normais, totais sombreados, linhas como no formulário */
+    .folha td.l { font-weight: 400; }
+    .folha tr.b td, .folha td.l.b { font-weight: 700; }
+    .folha .fc, .folha td.tt { background: #e6e6e6; }
+    .folha .f-tit { background: #e6e6e6; padding: 6px 8px; }
+    .folha .f-tit .f-ano td { background: #fff; }
+    .folha .f-id td, .folha .f-cons td { border-left: 0; border-right: 0; }
+    .folha .f-id { border-left: 1px solid var(--fl); border-right: 1px solid var(--fl); }
+    .folha .f-cons { border-left: 1px solid var(--fl); border-right: 1px solid var(--fl); }
+    .folha .f-cons td.op { border-left: 0; }
+    .folha .f-cons .f-sub { border-left: 0; border-right: 0; }
+    /* impressão só do formulário, como o relatório físico */
+    @page { size: A4 portrait; margin: 8mm; }
+    @media print {
+      body.print-folha .main > *:not(.tab-pane), body.print-folha .tab-pane:not(#tForm), body.print-folha #tForm > .card:first-child, body.print-folha #tForm .card-head, body.print-folha #tForm .alert, body.print-folha .print-only { display: none !important; }
+      body.print-folha #tForm, body.print-folha #tForm > .card { display: block !important; margin: 0 !important; padding: 0 !important; }
+      body.print-folha, body.print-folha .app, body.print-folha .main, body.print-folha .folha-wrap { margin: 0 !important; padding: 0 !important; width: auto !important; max-width: none !important; overflow: visible !important; }
+      body.print-folha .folha { width: 100% !important; min-width: 0 !important; box-sizing: border-box; font-size: 9.2px; line-height: 1.2; }
+      body.print-folha .folha .fv { min-height: 0; vertical-align: middle; }
+      body.print-folha .folha .f-cons td { padding: 0 3px; line-height: 1.12; }
+      body.print-folha .f-cab { padding: 4px 8px; margin-bottom: 4px; }
+      body.print-folha .f-logo svg { width: 34px; height: 34px; }
+      body.print-folha .folha .f-tit { padding: 3px 6px; }
+      body.print-folha .f-ass { margin: 8px auto 2px; }
+      body.print-folha .f-obs { margin-top: 4px; padding: 2px 5px; }
+      body.print-folha .f-rod { margin-top: 3px; }
+      body.print-folha .f-cons .f-sub2, body.print-folha .f-cons .f-sub { padding: 0 4px; }
+      body.print-folha .folha .f-cons .fc { display: inline; padding: 0 3px; }
+      body.print-folha .folha td, body.print-folha .folha th { font-size: 9px; padding: 1px 4px; }
+      body.print-folha .f-tit .t1 { font-size: 12.5px; }
+      body.print-folha .f-bar { font-size: 10px; margin: 6px 0 3px; padding: 2px 6px; }
+      body.print-folha .f-pg2 { display: none; }
+      body.print-folha .folha .fc, body.print-folha .folha td.tt, body.print-folha .folha th, body.print-folha .f-bar, body.print-folha .folha .f-sub, body.print-folha .f-tit, body.print-folha .folha td.vert { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body.print-folha .folha textarea.fi { min-height: 0; height: auto; overflow: hidden; resize: none; }
+      body.print-folha .fb i, body.print-folha .fck i { width: 9px; height: 9px; }
+      body.print-folha .fb.on i::after, body.print-folha .fck input:checked + i::after { font-size: 9px; line-height: 10px; inset: -1px 0 0 1px; }
+      body.print-folha .folha tr { break-inside: avoid; }
+      body.print-folha .folha .fi::placeholder { color: transparent; }
+    }
+    /* celular */
+    .bottom-nav { display: none; }
+    @media (max-width: 820px) {
+      .bottom-nav { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--surface); border-top: 1px solid var(--border); padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); box-shadow: 0 -2px 10px rgba(0,0,0,.06); }
+      .bottom-nav a, .bottom-nav button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 2px; font: inherit; font-size: 11px; color: var(--text-2); text-decoration: none; background: none; border: 0; border-radius: 8px; position: relative; min-height: 48px; justify-content: center; cursor: pointer; }
+      .bottom-nav .i { font-size: 19px; line-height: 1; }
+      .bottom-nav .on { color: var(--brand); font-weight: 600; background: var(--brand-soft); }
+      .bottom-nav .count { position: absolute; top: 2px; right: 18%; background: var(--danger); color: #fff; border-radius: 99px; font-size: 10px; padding: 0 5px; line-height: 15px; }
+      .main { padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
+      .toasts { bottom: calc(76px + env(safe-area-inset-bottom)); }
+      .page-head { flex-direction: column; align-items: stretch; gap: 10px; }
+      .page-head .actions { flex-wrap: wrap; }
+      .page-head .actions .btn { flex: 1 1 auto; }
+      .tabs { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .tabs button { flex: none; }
+      input, select, textarea { font-size: 16px; }
+      .card-head { flex-wrap: wrap; gap: 6px; }
+      .comparar iframe, .comparar .pdf-img { height: 60vh; }
+      .comparar .lado { height: auto; max-height: 70vh; }
+      .folha-wrap { margin: 0 -8px; padding: 8px; }
+    }
+    @media print { .bottom-nav { display: none !important; } }
     /* impressão */
     .print-only { display: none; }
     @media print {
@@ -300,6 +439,12 @@
       .section-title { color: #004d2d; }
       input, select, textarea { border: 0 !important; background: transparent !important; padding: 2px 0 !important; }
       textarea { min-height: 0; }
+      .folha-wrap { padding: 0; background: #fff; overflow: visible; }
+      .folha { box-shadow: none; padding: 0; min-width: 0; max-width: none; font-size: 10.5px; }
+      .folha td, .folha th { font-size: 10px; }
+      .folha .fi { background: transparent !important; border: 0 !important; }
+      .f-quebra { break-after: page; height: 0; }
+      .f-cols.c3 { grid-template-columns: 1fr 1fr 1.25fr; } .f-cols.c2 { grid-template-columns: 1fr 1fr; }
     }
 
     @media (max-width: 1000px) {
@@ -333,6 +478,8 @@
   <script src="modelos.js"></script>
   <script src="regras-atas.js"></script>
   <script src="servidor-local.js"></script>
+  <script src="folha.js"></script>
   <script src="app.js"></script>
+  <script>if ('serviceWorker' in navigator && location.protocol !== 'file:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 </body>
 </html>

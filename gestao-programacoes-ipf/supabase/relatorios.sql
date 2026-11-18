@@ -49,6 +49,14 @@ create table if not exists ipb_atas (
   doc jsonb not null,
   paginas jsonb not null default '[]'::jsonb
 );
+-- arquivos anexados aos relatórios (PDF ou imagem do relatório feito à mão); os metadados ficam em doc->'anexos'
+create table if not exists ipb_anexos (
+  id text primary key,
+  relatorio_id text not null references ipb_relatorios(id) on delete cascade,
+  tipo text not null,
+  dados text not null
+);
+create index if not exists ipb_anexos_rel on ipb_anexos (relatorio_id);
 create table if not exists ipb_sessoes (
   token text primary key,
   usuario_id text not null references ipb_usuarios(id) on delete cascade,
@@ -72,8 +80,9 @@ alter table ipb_comissoes enable row level security;
 alter table ipb_relatorios enable row level security;
 alter table ipb_atas enable row level security;
 alter table ipb_sessoes enable row level security;
+alter table ipb_anexos enable row level security;
 alter table ipb_log enable row level security;
-revoke all on ipb_igrejas, ipb_usuarios, ipb_modelos, ipb_comissoes, ipb_relatorios, ipb_atas, ipb_sessoes, ipb_log from anon, authenticated;
+revoke all on ipb_igrejas, ipb_usuarios, ipb_modelos, ipb_comissoes, ipb_relatorios, ipb_atas, ipb_sessoes, ipb_log, ipb_anexos from anon, authenticated;
 
 -- ---------------------------------------------------------------------
 -- utilidades
@@ -476,6 +485,43 @@ begin
     r := ipb_hist(r || jsonb_build_object('analise', a, 'updatedAt', t), u.nome, v_acao);
     update ipb_relatorios set doc = r where id = r->>'id';
     perform ipb_registrar(u, v_op, (r->>'titulo') || ' · ' || v_acao, 'relatorio', r->>'id');
+    return jsonb_build_object('item', r);
+  end if;
+
+  -- ===== anexos do relatório =====
+  if act = 'anexo' then
+    select doc into r from ipb_relatorios where id = req->>'relatorioId' for update;
+    if r is null or not ipb_ve(u, r->>'igrejaId') then perform ipb_fail('Relatório não encontrado.', 'NOTFOUND'); end if;
+    v_op := req->>'op';
+    select x2 into a from jsonb_array_elements(coalesce(r->'anexos', '[]')) x2 where x2->>'id' = req->>'anexoId';
+    if v_op = 'abrir' then
+      if a is null then perform ipb_fail('Anexo não encontrado.', 'NOTFOUND'); end if;
+      select dados into v_txt from ipb_anexos where id = a->>'id' and relatorio_id = r->>'id';
+      if v_txt is null then perform ipb_fail('O arquivo deste anexo não está no servidor. Anexe-o de novo.', 'NOTFOUND'); end if;
+      return jsonb_build_object('nome', a->>'nome', 'tipo', a->>'tipo', 'dados', v_txt);
+    elsif v_op = 'salvar' then
+      if u.role not in ('admin', 'editor') then perform ipb_fail('Seu perfil não pode anexar arquivos.', 'FORBIDDEN'); end if;
+      v_txt := req->>'dados';
+      v_tipo := substring(v_txt from '^data:([A-Za-z0-9/.+-]+);base64,');
+      if v_tipo is null then perform ipb_fail('Arquivo inválido.'); end if;
+      if not (v_tipo = 'application/pdf' or v_tipo like 'image/%') then perform ipb_fail('Anexe um PDF ou uma imagem.'); end if;
+      v_n := (length(v_txt) - length('data:' || v_tipo || ';base64,')) * 3 / 4;
+      if v_n > 15000000 then perform ipb_fail('O arquivo passa de 15 MB.'); end if;
+      v_id := ipb_uid('an_');
+      insert into ipb_anexos (id, relatorio_id, tipo, dados) values (v_id, r->>'id', v_tipo, v_txt);
+      r := jsonb_set(r, '{anexos}', coalesce(r->'anexos', '[]') || jsonb_build_array(jsonb_build_object('id', v_id, 'nome', coalesce(nullif(req->>'nome', ''), 'arquivo'), 'tipo', v_tipo, 'tamanho', v_n,
+        'em', t, 'porId', u.id, 'porNome', u.nome, 'origem', 'servidor', 'original', coalesce((req->>'original')::boolean, false))));
+      v_acao := 'Arquivo anexado: ' || coalesce(req->>'nome', 'arquivo');
+    elsif v_op = 'excluir' then
+      if a is null then perform ipb_fail('Anexo não encontrado.', 'NOTFOUND'); end if;
+      if not (u.role = 'admin' or a->>'porId' = u.id) then perform ipb_fail('Só quem anexou ou o administrador pode excluir.', 'FORBIDDEN'); end if;
+      delete from ipb_anexos where id = a->>'id';
+      r := jsonb_set(r, '{anexos}', coalesce((select jsonb_agg(x2) from jsonb_array_elements(r->'anexos') x2 where x2->>'id' <> a->>'id'), '[]'));
+      v_acao := 'Anexo excluído: ' || (a->>'nome');
+    else perform ipb_fail('Operação desconhecida.'); end if;
+    r := ipb_hist(r || jsonb_build_object('updatedAt', t), u.nome, v_acao);
+    update ipb_relatorios set doc = r where id = r->>'id';
+    perform ipb_registrar(u, 'anexo', (r->>'titulo') || ' · ' || v_acao, 'relatorio', r->>'id');
     return jsonb_build_object('item', r);
   end if;
 

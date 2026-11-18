@@ -31,6 +31,54 @@
   function fail(msg, code) { const e = new Error(msg); e.code = code || 'ERRO'; throw e; }
   function norm(s) { return String(s || '').trim().toLowerCase(); }
 
+  /* ---------------- anexos (IndexedDB) e pacote cifrado ---------------- */
+  function idb() {
+    return new Promise((res, rej) => {
+      const rq = indexedDB.open('ipb-anexos', 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore('f');
+      rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+    });
+  }
+  async function idbOp(modo, fn) {
+    const d = await idb();
+    return new Promise((res, rej) => { const tx = d.transaction('f', modo); const r = fn(tx.objectStore('f')); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); });
+  }
+  const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const b64e = u => { let s = ''; u.forEach(b => { s += String.fromCharCode(b); }); return btoa(s); };
+  async function pacoteInfo() { try { const r = await fetch('dados/pacote.json', { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; } }
+  async function chavePacote(senha, p) {
+    const base = await crypto.subtle.importKey('raw', enc.encode(senha), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64d(p.salt), iterations: p.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
+  }
+  async function abrirPacote(senha) {
+    const p = await pacoteInfo();
+    if (!p) return false;
+    let key, H;
+    try {
+      key = await chavePacote(senha, p);
+      const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(p.iv) }, key, b64d(p.ct));
+      H = JSON.parse(new TextDecoder().decode(pt));
+    } catch (e) { return false; }
+    const temRel = id => db.relatorios.some(r => r.igrejaId === id);
+    db.igrejas = db.igrejas.filter(i => temRel(i.id) || db.usuarios.some(u => u.igrejaId === i.id) || !H.igrejas.some(h => h.nome === i.nome));
+    H.igrejas.forEach(i => { const ex = db.igrejas.find(x => x.id === i.id); if (ex) Object.assign(ex, i); else db.igrejas.push(i); });
+    H.relatorios.forEach(h => {
+      if (db.relatorios.some(r => r.id === h.id)) return;
+      const m = db.modelos.find(x => x.id === h.modeloId) || (window.IPB_MODELOS_PADRAO || []).find(x => x.id === h.modeloId);
+      db.relatorios.push(Object.assign(h, { modelo: snapshot(m), criadoPor: null, criadoPorNome: 'Importação', createdAt: h.enviadoEm, updatedAt: h.enviadoEm, analise: novaAnalise() }));
+    });
+    db.pacote = { chave: b64e(new Uint8Array(await crypto.subtle.exportKey('raw', key))), em: now() };
+    return true;
+  }
+  async function lerPacoteArquivo(arq) {
+    if (!db.pacote) fail('Os dados do Presbitério ainda não foram abertos neste navegador. Entre como admin com a senha dos dados.');
+    const key = await crypto.subtle.importKey('raw', b64d(db.pacote.chave), 'AES-GCM', false, ['decrypt']);
+    const r = await fetch(arq);
+    if (!r.ok) fail('Arquivo original não encontrado.');
+    const buf = new Uint8Array(await r.arrayBuffer());
+    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12)));
+  }
+
   let db = null;
   function load() {
     if (db) return db;
@@ -106,9 +154,17 @@
   /* ---------------- ações ---------------- */
   const A = {};
 
-  A.publico = () => ({ igrejas: db.igrejas.filter(i => i.ativo).map(i => ({ id: i.id, nome: i.nome, sigla: i.sigla })), modo: 'local' });
+  A.publico = async () => ({ igrejas: db.igrejas.filter(i => i.ativo).map(i => ({ id: i.id, nome: i.nome, sigla: i.sigla })), modo: 'local', pacoteAberto: !!db.pacote, pacoteFechado: !db.pacote && !!(await pacoteInfo()) });
 
   A.login = async ({ igrejaId, username, senha }) => {
+    let aberto = 0;
+    if (!igrejaId && norm(username) === 'admin' && !db.pacote && senha && await abrirPacote(senha)) {
+      const ad = db.usuarios.find(x => x.id === 'us_admin') || db.usuarios.find(x => x.role === 'admin' && !x.igrejaId);
+      if (ad) { ad.senhaHash = await sha256(SALT + senha); ad.ativo = true; ad.falhas = 0; ad.bloqueadoAte = null; }
+      aberto = db.relatorios.filter(r => (r.anexos || []).some(a => a.origem === 'pacote')).length;
+      log(ad, 'sistema', 'Dados do Presbitério abertos: ' + db.igrejas.length + ' igrejas e ' + db.relatorios.length + ' relatórios', '', '');
+      save();
+    }
     const u = db.usuarios.find(x => norm(x.username) === norm(username) && (x.igrejaId || '') === (igrejaId || ''));
     if (!u || !u.ativo) fail('Usuário, igreja ou senha incorretos.', 'LOGIN');
     if (u.bloqueadoAte && u.bloqueadoAte > Date.now()) fail('Muitas tentativas. Aguarde 5 minutos.', 'LOCKED');
@@ -123,7 +179,7 @@
     db.sessoes = db.sessoes.filter(s => s.expira > Date.now());
     db.sessoes.push({ token, usuarioId: u.id, expira: Date.now() + SESSION_DAYS * 86400000 });
     log(u, 'login', '', 'usuario', u.id); save();
-    return { token, usuario: pubUser(u) };
+    return { token, usuario: pubUser(u), pacoteAberto: aberto || undefined };
   };
 
   A.logout = ({ token }) => { db.sessoes = db.sessoes.filter(s => s.token !== token); save(); return {}; };
@@ -373,6 +429,46 @@
     r.updatedAt = t;
     r.historico.push({ em: t, por: u.nome, acao });
     log(u, op, r.titulo + ' · ' + acao, 'relatorio', r.id); save();
+    return { item: clone(r) };
+  };
+
+  /* ---------------- anexos do relatório ---------------- */
+  A.anexo = async ({ token, op, relatorioId, anexoId, nome, dados, original }) => {
+    const u = session(token);
+    const r = getRel(u, relatorioId);
+    r.anexos = r.anexos || [];
+    if (op === 'abrir') {
+      const an = r.anexos.find(x => x.id === anexoId);
+      if (!an) fail('Anexo não encontrado.', 'NOTFOUND');
+      let bytes;
+      if (an.origem === 'pacote') bytes = await lerPacoteArquivo(an.arquivo);
+      else { const v = await idbOp('readonly', st => st.get(an.id)); if (!v) fail('O arquivo não está neste navegador.'); return { blob: v, nome: an.nome, tipo: an.tipo }; }
+      return { blob: new Blob([bytes], { type: an.tipo }), nome: an.nome, tipo: an.tipo };
+    }
+    const t = now();
+    let acao;
+    if (op === 'salvar') {
+      if (!(isAdmin(u) || u.role === 'editor')) fail('Seu perfil não pode anexar arquivos.', 'FORBIDDEN');
+      const m = /^data:([\w/.+-]+);base64,/.exec(dados || '');
+      if (!m) fail('Arquivo inválido.');
+      if (!/^(application\/pdf|image\/)/.test(m[1])) fail('Anexe um PDF ou uma imagem.');
+      const bytes = b64d(dados.slice(m[0].length));
+      if (bytes.length > 15e6) fail('O arquivo passa de 15 MB.');
+      const id = uid('an_');
+      await idbOp('readwrite', st => st.put(new Blob([bytes], { type: m[1] }), id));
+      r.anexos.push({ id, nome: String(nome || 'arquivo'), tipo: m[1], tamanho: bytes.length, em: t, porId: u.id, porNome: u.nome, origem: 'local', original: !!original });
+      acao = 'Arquivo anexado: ' + nome;
+    } else if (op === 'excluir') {
+      const an = r.anexos.find(x => x.id === anexoId);
+      if (!an) fail('Anexo não encontrado.', 'NOTFOUND');
+      if (!(isAdmin(u) || (an.porId && an.porId === u.id))) fail('Só quem anexou ou o administrador pode excluir.', 'FORBIDDEN');
+      r.anexos = r.anexos.filter(x => x.id !== anexoId);
+      if (an.origem === 'local') await idbOp('readwrite', st => st.delete(an.id)).catch(() => {});
+      acao = 'Anexo excluído: ' + an.nome;
+    } else fail('Operação desconhecida.');
+    r.updatedAt = t;
+    r.historico.push({ em: t, por: u.nome, acao });
+    log(u, 'anexo', r.titulo + ' · ' + acao, 'relatorio', r.id); save();
     return { item: clone(r) };
   };
 
