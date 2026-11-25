@@ -245,7 +245,7 @@
     root().innerHTML = `
       <div class="login">
         <div class="login-hero">
-          <div class="brand" style="padding:0">${logo(40)}<div><b>Relatórios IPB</b><span>Presbitério Litorâneo do RN</span></div></div>
+          <div class="brand" style="padding:0">${logo(48)}<div><b>Relatórios IPB</b><span>Presbitério Litorâneo do RN</span></div></div>
           <div>
             <h1>Relatórios das igrejas, do preenchimento ao parecer da comissão.</h1>
             <p>Formulários oficiais, histórico dos anos anteriores, exame de atas pelo Manual Presbiteriano e assinatura eletrônica dos membros da comissão.</p>
@@ -289,8 +289,10 @@
       render();
     };
   }
-  function logo(sz) {
-    return `<svg width="${sz}" height="${sz}" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="12" fill="#fff"/><path d="M24 9c-6 7-11 11-11 18a11 11 0 0 0 22 0c0-7-5-11-11-18z" fill="#006b3f"/><path d="M24 21v15M18 28h12" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>`;
+  function logo(sz, cor) {
+    // logotipo oficial da IPB (img/); se a imagem não carregar, fica o símbolo desenhado
+    if (cor !== false) return `<img class="logo-ipb" src="img/${cor ? 'logo-ipb.png' : 'logo-ipb-branco.png'}" alt="Igreja Presbiteriana do Brasil" style="height:${sz}px;width:auto" onerror="this.style.display='none'">`;
+    return `<svg width="${sz}" height="${sz}" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="12" fill="#fff"/><path d="M24 9c-6 7-11 11-11 18a11 11 0 0 0 22 0c0-7-5-11-11-18z" fill="#2c5234"/><path d="M24 21v15M18 28h12" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>`;
   }
 
   /* ======================= app no celular ======================= */
@@ -318,7 +320,7 @@
   function shell(pagina, html) {
     const c = contagens();
     const u = S.user;
-    const nav = (h, label, ic, n) => `<a href="#/${h}" class="${pagina === h.split('/')[0] ? 'active' : ''}">${ic} ${label}${n ? `<span class="count">${n}</span>` : ''}</a>`;
+    const nav = (h, label, ic, n) => `<a href="#/${h}" class="${pagina === h.split('/')[0] || (h === 'admin/comissoes' && pagina === 'admin-comissoes') ? 'active' : ''}">${ic} ${label}${n ? `<span class="count">${n}</span>` : ''}</a>`;
     root().innerHTML = `
       <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><b>Relatórios IPB</b></div>
       <div class="app">
@@ -330,6 +332,9 @@
             ${nav('relatorios', 'Relatórios', '▤', u.role === 'analista' || isAdmin() ? c.analisar : c.devolvidos)}
             ${nav('atas', 'Exame de atas', '✎', u.role === 'analista' || isAdmin() ? c.atas : 0)}
             ${nav('verificar', 'Verificar assinatura', '✓')}
+            <div class="nav-label">Reunião do concílio</div>
+            ${nav('reuniao', 'Reunião', '⚖')}${nav('reunioes', 'Reuniões e convocações', '◷')}${nav('ata-geral', 'Ata da reunião', '✎')}${nav('comissoes', 'Comissões', '⚑', window.IPB_REUNIAO ? window.IPB_REUNIAO.pendentes() : 0)}
+            ${nav('documentos', 'Documentos', '▣')}${nav('delegados', 'Delegados', '☺')}${nav('historico', 'Histórico do presbitério', '↗')}
             ${isAdmin() ? `<div class="nav-label">Administração</div>
               ${nav('admin/igrejas', 'Igrejas', '⌂')}${nav('admin/usuarios', 'Usuários e acessos', '☺')}
               ${nav('admin/modelos', 'Modelos de relatório', '☰')}${nav('admin/comissoes', 'Comissões', '⚑')}${nav('admin/registro', 'Registro de ações', '≡')}` : ''}
@@ -1377,13 +1382,14 @@
   function admComissoes() {
     const cs = S.d.comissoes;
     const analistas = S.d.usuarios.filter(u => u.ativo !== false && ['analista', 'admin'].includes(u.role));
-    shell('admin', head('Comissões', 'Comissões que examinam os relatórios. Cada membro assina o parecer; o relator escreve o texto final.', '<button class="btn primary" id="bNC">+ Nova comissão</button>') + `
+    shell('admin', head('Comissões', 'Comissões que examinam os relatórios. Cada membro assina o parecer; o relator escreve o texto final.', (window.IPB_REUNIAO ? '<button class="btn" id="bPadrao">Criar comissões do concílio</button>' : '') + '<button class="btn primary" id="bNC">+ Nova comissão</button>') + `
       <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Comissão</th><th>Tipo</th><th>Ano</th><th>Membros</th><th>Situação</th></tr></thead><tbody>
-      ${cs.map(c => `<tr class="click" data-ed="${esc(c.id)}"><td>${esc(c.nome)}</td><td>${esc(c.tipo || '')}</td><td>${esc(c.ano || '')}</td><td class="small">${(c.membros || []).map(m => esc(m.nome) + ' <span class="muted">(' + esc(m.funcao) + ')</span>').join('<br>')}</td><td>${c.ativa === false ? '<span class="tag gray">inativa</span>' : '<span class="tag">ativa</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="list-empty">Nenhuma comissão.</td></tr>'}
+      ${cs.map(c => `<tr class="click" data-ed="${esc(c.id)}"><td>${esc(c.nome)}</td><td>${esc(c.tipo || c.grupo || '')}</td><td>${esc(c.ano || '')}</td><td class="small">${(c.membros || []).map(m => esc(m.nome) + ' <span class="muted">(' + esc(m.funcao) + ')</span>').join('<br>')}</td><td>${c.ativa === false ? '<span class="tag gray">inativa</span>' : '<span class="tag">ativa</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="list-empty">Nenhuma comissão.</td></tr>'}
       </tbody></table></div></div>`);
     const abrir = c => {
       c = c ? JSON.parse(JSON.stringify(c)) : { ativa: true, ano: new Date().getFullYear(), tipo: 'Exame de relatórios', membros: [] };
       const m = modal(c.id ? 'Editar comissão' : 'Nova comissão', `<div class="grid g3"><div class="field span2"><label>Nome</label><input type="text" id="cN" value="${esc(c.nome || '')}"></div><div class="field"><label>Ano</label><input type="number" id="cA" value="${esc(c.ano || '')}"></div><div class="field span2"><label>Tipo</label><input type="text" id="cT" value="${esc(c.tipo || '')}"></div><label style="align-self:end"><input type="checkbox" id="cAt" ${c.ativa !== false ? 'checked' : ''}> Ativa</label></div>
+        ${window.IPB_REUNIAO ? window.IPB_REUNIAO.camposComissao(c) : ''}
         <div class="lbl">Membros</div><div id="cM"></div><div><button class="btn sm" id="cAdd" type="button">+ Adicionar membro</button></div>
         <p class="small muted" style="margin:0">Vincule cada membro a um usuário para que ele possa assinar com a própria senha. Membros sem usuário assinam de forma presencial (desenho), colhida por outro membro. Marque um membro como Relator.</p>`,
         `${c.id ? '<button class="btn danger" id="cDel" style="margin-right:auto">Excluir</button>' : ''}<button class="btn" data-x>Cancelar</button><button class="btn primary" id="cOk">Salvar</button>`, true);
@@ -1399,12 +1405,14 @@
       $('[data-x]', m.el).onclick = m.fechar;
       $('#cOk', m.el).onclick = async () => {
         if (c.membros.filter(x => x.funcao === 'Relator').length > 1) return toast('Escolha apenas um relator.', true);
-        const item = { id: c.id, nome: $('#cN', m.el).value.trim(), ano: Number($('#cA', m.el).value) || null, tipo: $('#cT', m.el).value.trim(), ativa: $('#cAt', m.el).checked, membros: c.membros };
+        const item = Object.assign({ id: c.id, nome: $('#cN', m.el).value.trim(), ano: Number($('#cA', m.el).value) || null, tipo: $('#cT', m.el).value.trim(), ativa: $('#cAt', m.el).checked, membros: c.membros },
+          window.IPB_REUNIAO ? window.IPB_REUNIAO.lerCamposComissao(m.el) : {});
         if (await acao(() => api({ action: 'salvar', entidade: 'comissao', item }), 'Comissão salva.')) { m.fechar(); await recarregar(); render(); }
       };
       if ($('#cDel', m.el)) $('#cDel', m.el).onclick = async () => { if (await confirmar('Excluir esta comissão? Relatórios já encaminhados mantêm os membros.', 'Excluir') && await acao(() => api({ action: 'excluir', entidade: 'comissao', id: c.id }), 'Comissão excluída.')) { m.fechar(); await recarregar(); render(); } };
     };
     $('#bNC').onclick = () => abrir(null);
+    if ($('#bPadrao')) $('#bPadrao').onclick = () => window.IPB_REUNIAO.criarPadrao();
     $$('[data-ed]').forEach(tr => tr.onclick = () => abrir(cs.find(x => x.id === tr.getAttribute('data-ed'))));
   }
   function admRegistro() {
@@ -1509,6 +1517,9 @@
       case 'ata': return telaAta(a[0]);
       case 'verificar': return telaVerificar(a[0]);
       case 'admin': return telaAdmin(a[0]);
+      case 'reuniao': case 'reunioes': case 'ata-geral': case 'comissoes': case 'comissao': case 'documentos': case 'delegados': case 'historico': case 'parecer':
+        if (window.IPB_REUNIAO) return window.IPB_REUNIAO.render(p, a);
+        return telaPainel();
       default: return telaPainel();
     }
   }
@@ -1518,6 +1529,8 @@
     if (S.token) { try { await recarregar(); } catch (e) { S.token = null; S.user = null; } }
     render();
   }
+  // funções do app usadas pelo módulo da reunião do concílio (reunioes.js)
+  window.IPB_APP = { S, api, esc, $, $$, shell, head, modal, confirmar, toast, acao, recarregar, render, ir, barras, hbarras, ligarTips, baixar, isAdmin, num, money, moneyK, dt, lerArquivo, tamanho, logo };
   window.addEventListener('beforeunload', e => { if (S.edit && S.edit.sujo) { e.preventDefault(); e.returnValue = ''; } });
   iniciar();
 })();

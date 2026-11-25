@@ -87,6 +87,26 @@ Sistema separado para o Presbitério receber, registrar e analisar os relatório
 
 **Modo demonstração**: com `relatorios/config.js` vazio, tudo roda no navegador (dados só naquele navegador), com usuários de exemplo (`admin`/`admin123`). Para carregar o histórico e os PDFs originais, entre como `admin` (igreja: Presbitério) com a **senha dos dados**; a partir daí essa é a senha do admin naquele navegador. A IA não funciona nesse modo: a proposta de análise é montada pelas verificações automáticas e a conferência de atas é manual.
 
+### Reunião do concílio (comissões, delegados, pareceres e ata)
+
+Módulo `relatorios/reunioes.js`, no menu **Reunião do concílio**. Segue a Constituição da IPB: reuniões ordinária e extraordinária (arts. 73 e 74), quórum de três ministros e dois presbíteros (art. 86), comissões (art. 99) e relatório dos secretários de causa (art. 106, § 1º).
+
+- **Reunião**: painel da reunião escolhida no topo, com as comissões, os delegados, os documentos e os pareceres. A Mesa (perfil administrador: Presidente e Secretário Executivo) cadastra os dados do presbitério e as reuniões.
+- **Reuniões e convocações**: todas as reuniões de cada ano, ordinárias e extraordinárias, com a convocação (data, quem convocou, assunto e pauta, PDF anexado), a mesa diretora e a ata.
+- **Mesa diretora**: em cada reunião, nome, título e cargo de quem foi eleito (Presidente, Vice, Secretário Executivo, secretários, tesoureiro).
+- **Ata da reunião**: formulário com número, livro, folhas, horários, ministros e presbíteros presentes (o sistema confere o quórum), devocional, expediente e deliberações. A ata já traz a mesa, a pauta e os pareceres com a decisão do plenário. Imprime ou baixa para o Word.
+- **Comissões**: cada comissão tem o seu ambiente, com a atribuição, os delegados, os documentos encaminhados a ela (com o PDF) e os pareceres desta e das reuniões anteriores. Em **Administração → Comissões** ficam o grupo, o modelo de parecer, a ordem e a base legal; o botão *Criar comissões do concílio* cria as de costume.
+- **Delegados**: a Mesa define, por reunião, quem está em cada comissão e a função (**Relator** ou **Participante**), e pode vincular o delegado a um usuário. Só um relator por comissão; "Copiar da reunião anterior" adianta o cadastro.
+- **Pareceres**: três modelos, iguais aos papéis usados no presbitério: exame de livro de atas, relatório final (apontamentos, recomendações, determinações) e relatório de secretaria. O cabeçalho sai pronto (Secretaria Executiva, código da reunião, período, local, Doc nº, destino, data) e termina com *Sala de Sessões* e as assinaturas. Delegados escrevem; o relator conclui e envia ao plenário; a Mesa registra a decisão (aprovado, com emendas ou rejeitado).
+- **Documentos**: lista numerada da reunião, com busca, comissão responsável e PDF original.
+- **Histórico do presbitério**: gráficos e tabela de membros, oficiais, EBD, sociedades, crescimento por igreja e tesouraria, a partir dos relatórios das comissões de Estatísticas e de Finanças.
+- **Identidade visual**: verde Pantone 350C e cinza K70, logotipo oficial em `relatorios/img/`, letra Zapf Humanist (ou Optima, o mesmo desenho) nas telas e títulos e Times New Roman no texto dos documentos, como pede o Programa de Identidade Visual da IPB.
+- **Outros presbitérios**: *Exportar estrutura* gera um arquivo com os dados da Mesa e as comissões, para importar em outro presbitério.
+
+**Dados das reuniões anteriores**: como o repositório é público, os números, os resumos e os PDFs das reuniões do PLRN não ficam aqui. Entre como administrador, vá em **Reunião → Configuração da Mesa**, use *Importar pacote (.json)* e depois *Enviar PDFs dos documentos* (selecione todos os PDFs de uma vez; cada um encontra o seu documento pelo nome do arquivo).
+
+No Supabase, rode de novo `supabase/relatorios.sql`: ele cria as tabelas `ipb_reuniao_itens` e `ipb_reuniao_arquivos` e a ação `reuniao` da API, sem mexer no que já existe.
+
 ### Ligar ao Supabase
 
 1. No SQL Editor do Supabase, execute `supabase/relatorios.sql`, depois `supabase/relatorios-dados.sql` (modelos) e por fim `relatorios-historico.sql` (igrejas e relatórios históricos, entregue fora do repositório). As tabelas têm prefixo `ipb_` e não mexem em outras tabelas do projeto.

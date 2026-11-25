@@ -73,6 +73,23 @@ create table if not exists ipb_log (
   detalhes text
 );
 
+-- reunião do concílio: dados do presbitério, reuniões, delegados por comissão, documentos, pareceres e históricos
+create table if not exists ipb_reuniao_itens (
+  id text primary key,
+  tipo text not null check (tipo in ('cfg', 'reuniao', 'delegado', 'documento', 'parecer', 'estatistica', 'financa', 'ata')),
+  doc jsonb not null
+);
+create index if not exists ipb_reuniao_itens_tipo on ipb_reuniao_itens (tipo);
+-- PDF de cada documento da reunião (o metadado fica em doc->'arquivo')
+create table if not exists ipb_reuniao_arquivos (
+  id text primary key references ipb_reuniao_itens(id) on delete cascade,
+  tipo text not null,
+  dados text not null
+);
+alter table ipb_reuniao_itens enable row level security;
+alter table ipb_reuniao_arquivos enable row level security;
+revoke all on ipb_reuniao_itens, ipb_reuniao_arquivos from anon, authenticated;
+
 alter table ipb_igrejas enable row level security;
 alter table ipb_usuarios enable row level security;
 alter table ipb_modelos enable row level security;
@@ -144,6 +161,61 @@ create or replace function ipb_hist(r jsonb, por text, acao text) returns jsonb
 language sql volatile as $$
   select jsonb_set(r, '{historico}', coalesce(r->'historico', '[]'::jsonb) || jsonb_build_array(jsonb_build_object('em', ipb_iso(), 'por', por, 'acao', acao)))
 $$;
+
+-- ---------------------------------------------------------------------
+-- reunião do concílio: utilidades
+-- ---------------------------------------------------------------------
+create or replace function ipb_pick(j jsonb, ks text[]) returns jsonb
+language sql immutable as $$
+  select coalesce(jsonb_object_agg(k, j->k) filter (where j ? k), '{}'::jsonb) from unnest(ks) k
+$$;
+
+create or replace function ipb_r_campos(tipo text) returns text[]
+language sql immutable as $$
+  select case tipo
+    when 'cfg' then array['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'igrejas', 'reuniaoAtual']
+    when 'reuniao' then array['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta']
+    when 'delegado' then array['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId']
+    when 'documento' then array['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome']
+    when 'parecer' then array['reuniaoId', 'comissaoId', 'modelo', 'data', 'destino', 'cidade', 'docNumero', 'titulo', 'assunto', 'docsAnalisados', 'origens', 'documentoIds', 'campos', 'assinaturas']
+    when 'estatistica' then array['ano', 'igreja', 'valores', 'fonte']
+    when 'financa' then array['ano', 'valores', 'fonte']
+    when 'ata' then array['reuniaoId', 'numero', 'livro', 'folhas', 'data', 'horaInicio', 'horaFim', 'presentesMinistros', 'presentesPresbiteros', 'ausencias', 'devocional', 'expediente', 'registros', 'encerramento', 'incluirPareceres', 'situacao']
+    else array[]::text[] end
+$$;
+
+-- quem escreve o parecer de uma comissão naquela reunião: a Mesa (admin), os delegados vinculados a um usuário
+-- e, se a comissão ainda não tem delegado vinculado, qualquer analista
+create or replace function ipb_r_pode_parecer(u ipb_usuarios, com text, reu text) returns boolean
+language sql stable as $$
+  select u.role = 'admin' or (u.role <> 'leitor' and (
+    exists (select 1 from ipb_reuniao_itens where tipo = 'delegado' and doc->>'comissaoId' = com and doc->>'reuniaoId' = reu and doc->>'userId' = u.id)
+    or (u.role = 'analista' and not exists (select 1 from ipb_reuniao_itens where tipo = 'delegado' and doc->>'comissaoId' = com and doc->>'reuniaoId' = reu and coalesce(doc->>'userId', '') <> ''))))
+$$;
+
+-- quem conclui o parecer: a Mesa ou o relator (se o relator não tem usuário, quem pode escrever)
+create or replace function ipb_r_relator(u ipb_usuarios, com text, reu text) returns boolean
+language sql stable as $$
+  select u.role = 'admin' or coalesce(
+    (select doc->>'userId' = u.id from ipb_reuniao_itens where tipo = 'delegado' and doc->>'comissaoId' = com and doc->>'reuniaoId' = reu
+       and doc->>'funcao' = 'Relator' and coalesce(doc->>'userId', '') <> '' limit 1),
+    ipb_r_pode_parecer(u, com, reu))
+$$;
+
+create or replace function ipb_r_validar(p_tipo text, m jsonb) returns void
+language plpgsql stable as $$
+begin
+  if p_tipo = 'reuniao' and not (coalesce((m->>'ano')::int, 0) > 1900 and coalesce((m->>'numero')::int, 0) > 0) then perform ipb_fail('Informe o número e o ano da reunião.'); end if;
+  if p_tipo in ('delegado', 'documento', 'parecer', 'ata') and not exists (select 1 from ipb_reuniao_itens where id = m->>'reuniaoId' and tipo = 'reuniao') then perform ipb_fail('Escolha a reunião.'); end if;
+  if p_tipo in ('delegado', 'parecer') and not exists (select 1 from ipb_comissoes where id = m->>'comissaoId') then perform ipb_fail('Escolha a comissão.'); end if;
+  if p_tipo = 'delegado' then
+    if coalesce(trim(m->>'nome'), '') = '' and coalesce(m->>'userId', '') = '' then perform ipb_fail('Informe o nome do delegado.'); end if;
+    if coalesce(m->>'funcao', '') not in ('Relator', 'Participante') then perform ipb_fail('A função deve ser Relator ou Participante.'); end if;
+  end if;
+  if p_tipo = 'documento' and coalesce(trim(m->>'titulo'), '') = '' then perform ipb_fail('Informe o título do documento.'); end if;
+  if p_tipo = 'parecer' and coalesce(trim(m->>'assunto'), '') = '' then perform ipb_fail('Informe o assunto do parecer.'); end if;
+  if p_tipo in ('estatistica', 'financa') and not (coalesce((m->>'ano')::int, 0) > 1900) then perform ipb_fail('Informe o ano.'); end if;
+end $$;
 
 -- ---------------------------------------------------------------------
 -- API
@@ -245,6 +317,7 @@ begin
       'comissoes', coalesce((select jsonb_agg(doc order by doc->>'nome') from ipb_comissoes), '[]'),
       'relatorios', coalesce((select jsonb_agg(doc) from ipb_relatorios where ipb_ve(u, igreja_id)), '[]'),
       'atas', coalesce((select jsonb_agg(doc || jsonb_build_object('nPaginas', jsonb_array_length(paginas))) from ipb_atas where ipb_ve(u, igreja_id)), '[]'),
+      'reuniao', coalesce((select jsonb_agg(doc) from ipb_reuniao_itens), '[]'),
       'log', case when u.role = 'admin' then coalesce((select jsonb_agg(jsonb_build_object('id', id, 'em', ipb_iso(em), 'usuarioId', usuario_id, 'usuario', usuario,
                    'acao', acao, 'entidade', entidade, 'entidadeId', entidade_id, 'detalhes', detalhes) order by id desc)
                    from (select * from ipb_log order by id desc limit 500) l), '[]') else '[]'::jsonb end);
@@ -353,7 +426,8 @@ begin
       a := coalesce((select jsonb_agg(jsonb_build_object('userId', z.id, 'nome', coalesce(z.nome, mb->>'nome'), 'funcao', coalesce(nullif(mb->>'funcao', ''), 'Membro')))
                      from jsonb_array_elements(coalesce(it->'membros', '[]')) mb left join ipb_usuarios z on z.id = mb->>'userId'
                      where coalesce(mb->>'nome', '') <> '' or z.id is not null), '[]');
-      r := coalesce(ex, jsonb_build_object('id', v_id)) || jsonb_build_object('nome', it->'nome', 'tipo', coalesce(it->'tipo', '""'), 'ano', it->'ano', 'membros', a, 'ativa', coalesce((it->>'ativa')::boolean, true));
+      r := coalesce(ex, jsonb_build_object('id', v_id)) || ipb_pick(it, array['grupo', 'modelo', 'ordem', 'base', 'titulo'])
+           || jsonb_build_object('nome', it->'nome', 'tipo', coalesce(it->'tipo', '""'), 'ano', it->'ano', 'membros', a, 'ativa', coalesce((it->>'ativa')::boolean, true));
       insert into ipb_comissoes (id, doc) values (v_id, r) on conflict (id) do update set doc = excluded.doc;
       perform ipb_registrar(u, case when ex is null then 'criar' else 'editar' end, r->>'nome', 'comissao', v_id);
       return jsonb_build_object('item', r);
@@ -589,6 +663,131 @@ begin
     return jsonb_build_object('item', r || jsonb_build_object('paginas', pags));
   end if;
 
+  -- ===== reunião do concílio =====
+  if act = 'reuniao' then
+    v_op := req->>'op';
+    if v_op = 'arquivo' then
+      select doc into r from ipb_reuniao_itens where id = req->>'id' and tipo = 'documento';
+      if r is null or jsonb_typeof(r->'arquivo') is distinct from 'object' then perform ipb_fail('Este documento não tem arquivo.', 'NOTFOUND'); end if;
+      select dados into v_txt from ipb_reuniao_arquivos where id = r->>'id';
+      if v_txt is null then perform ipb_fail('O arquivo deste documento não está no servidor. Envie-o de novo.', 'NOTFOUND'); end if;
+      return jsonb_build_object('nome', r->'arquivo'->>'nome', 'tipo', r->'arquivo'->>'tipo', 'dados', v_txt);
+    end if;
+
+    if v_op = 'enviar_arquivo' then
+      if u.role <> 'admin' then perform ipb_fail('Apenas a Mesa (administrador) envia documentos.', 'FORBIDDEN'); end if;
+      select doc into r from ipb_reuniao_itens where id = req->>'id' and tipo = 'documento' for update;
+      if r is null then perform ipb_fail('Documento não encontrado.', 'NOTFOUND'); end if;
+      v_txt := req->>'dados';
+      v_tipo := substring(v_txt from '^data:([A-Za-z0-9/.+-]+);base64,');
+      if v_tipo is null or not (v_tipo = 'application/pdf' or v_tipo like 'image/%') then perform ipb_fail('Envie um PDF ou uma imagem.'); end if;
+      v_n := (length(v_txt) - length('data:' || v_tipo || ';base64,')) * 3 / 4;
+      if v_n > 15000000 then perform ipb_fail('O arquivo passa de 15 MB.'); end if;
+      insert into ipb_reuniao_arquivos (id, tipo, dados) values (r->>'id', v_tipo, v_txt)
+        on conflict (id) do update set tipo = excluded.tipo, dados = excluded.dados;
+      r := r || jsonb_build_object('arquivo', jsonb_build_object('nome', coalesce(nullif(req->>'nome', ''), 'documento.pdf'), 'tipo', v_tipo, 'tamanho', v_n, 'em', t), 'updatedAt', t);
+      update ipb_reuniao_itens set doc = r where id = r->>'id';
+      perform ipb_registrar(u, 'documento', 'Arquivo do documento ' || coalesce(r->>'numero', '') || ' enviado', 'documento', r->>'id');
+      return jsonb_build_object('item', r);
+    end if;
+
+    if v_op = 'importar' then
+      if u.role <> 'admin' then perform ipb_fail('Apenas o administrador importa dados.', 'FORBIDDEN'); end if;
+      if jsonb_typeof(req->'itens') is distinct from 'array' then perform ipb_fail('Arquivo inválido.'); end if;
+      v_n := 0;
+      for it in select e from jsonb_array_elements(req->'itens') e loop
+        v_tipo := it->>'tipo';
+        if coalesce(it->>'id', '') = '' then continue; end if;
+        if v_tipo = 'comissao' then
+          if coalesce(it->>'nome', '') = '' then continue; end if;
+          select doc into ex from ipb_comissoes where id = it->>'id';
+          r := coalesce(ex, jsonb_build_object('id', it->>'id', 'membros', '[]'::jsonb, 'ativa', true))
+               || ipb_pick(it, array['nome', 'tipo', 'ano', 'grupo', 'modelo', 'ordem', 'base', 'titulo']);
+          insert into ipb_comissoes (id, doc) values (r->>'id', r) on conflict (id) do update set doc = excluded.doc;
+          v_n := v_n + 1;
+        elsif v_tipo in ('cfg', 'reuniao', 'delegado', 'documento', 'parecer', 'estatistica', 'financa', 'ata') then
+          select doc into ex from ipb_reuniao_itens where id = it->>'id';
+          r := coalesce(ex, jsonb_build_object('id', it->>'id', 'tipo', v_tipo)) || ipb_pick(it, ipb_r_campos(v_tipo)) || jsonb_build_object('tipo', v_tipo, 'updatedAt', t);
+          if v_tipo = 'parecer' then
+            r := r || jsonb_build_object('status', case when it->>'status' in ('rascunho', 'concluido', 'aprovado', 'emendas', 'rejeitado') then it->>'status' else 'rascunho' end,
+              'emendas', coalesce(it->>'emendas', ''), 'historico', coalesce(ex->'historico', jsonb_build_array(jsonb_build_object('em', t, 'por', u.nome, 'acao', 'Importado'))));
+          end if;
+          if v_tipo = 'documento' then r := r || jsonb_build_object('arquivo', coalesce(ex->'arquivo', 'null'::jsonb)); end if;
+          insert into ipb_reuniao_itens (id, tipo, doc) values (r->>'id', v_tipo, r) on conflict (id) do update set tipo = excluded.tipo, doc = excluded.doc;
+          v_n := v_n + 1;
+        end if;
+      end loop;
+      perform ipb_registrar(u, 'importar', v_n || ' itens da reunião importados', 'reuniao', '');
+      return jsonb_build_object('importados', v_n);
+    end if;
+
+    if v_op = 'decidir' then
+      if u.role <> 'admin' then perform ipb_fail('Só a Mesa registra a decisão do plenário.', 'FORBIDDEN'); end if;
+      select doc into r from ipb_reuniao_itens where id = req->>'id' and tipo = 'parecer' for update;
+      if r is null then perform ipb_fail('Parecer não encontrado.', 'NOTFOUND'); end if;
+      if coalesce(req->>'status', '') not in ('rascunho', 'concluido', 'aprovado', 'emendas', 'rejeitado') then perform ipb_fail('Situação inválida.'); end if;
+      r := ipb_hist(r || jsonb_build_object('status', req->>'status', 'emendas', coalesce(req->>'emendas', ''), 'updatedAt', t), u.nome, 'Plenário: ' || (req->>'status'));
+      update ipb_reuniao_itens set doc = r where id = r->>'id';
+      perform ipb_registrar(u, 'parecer', 'Decisão do plenário: ' || (req->>'status'), 'parecer', r->>'id');
+      return jsonb_build_object('item', r);
+    end if;
+
+    if v_op = 'excluir' then
+      select doc into r from ipb_reuniao_itens where id = req->>'id';
+      if r is null then perform ipb_fail('Registro não encontrado.', 'NOTFOUND'); end if;
+      if not (u.role = 'admin' or (r->>'tipo' = 'parecer' and r->>'status' = 'rascunho' and r->>'criadoPor' = u.id)) then
+        perform ipb_fail('Você não pode excluir este registro.', 'FORBIDDEN');
+      end if;
+      if r->>'tipo' = 'reuniao' then delete from ipb_reuniao_itens where doc->>'reuniaoId' = r->>'id'; end if;
+      delete from ipb_reuniao_itens where id = r->>'id';
+      perform ipb_registrar(u, 'excluir', (r->>'tipo') || ' ' || coalesce(r->>'nome', r->>'titulo', r->>'assunto', r->>'id'), r->>'tipo', r->>'id');
+      return '{}';
+    end if;
+
+    if v_op <> 'salvar' then perform ipb_fail('Operação desconhecida.'); end if;
+    v_tipo := req->>'tipo';
+    if coalesce(v_tipo, '') not in ('cfg', 'reuniao', 'delegado', 'documento', 'parecer', 'estatistica', 'financa', 'ata') then perform ipb_fail('Tipo desconhecido.'); end if;
+    it := coalesce(req->'item', '{}');
+    if v_tipo = 'cfg' then it := it || '{"id":"cfg"}'; end if;
+    select doc into ex from ipb_reuniao_itens where id = it->>'id' for update;
+    if ex is not null and ex->>'tipo' <> v_tipo then perform ipb_fail('Registro de outro tipo.'); end if;
+    if v_tipo <> 'parecer' and u.role <> 'admin' then perform ipb_fail('Apenas a Mesa (administrador) pode fazer isso.', 'FORBIDDEN'); end if;
+    m := coalesce(ex, '{}'::jsonb) || ipb_pick(it, ipb_r_campos(v_tipo));
+    perform ipb_r_validar(v_tipo, m);
+    if v_tipo = 'parecer' then
+      if not ipb_r_pode_parecer(u, m->>'comissaoId', m->>'reuniaoId') then perform ipb_fail('Você não é delegado desta comissão.', 'FORBIDDEN'); end if;
+      if ex is not null and u.role <> 'admin' then
+        if ex->>'status' in ('aprovado', 'emendas', 'rejeitado') then perform ipb_fail('O plenário já decidiu sobre este parecer.', 'FORBIDDEN'); end if;
+        if ex->>'comissaoId' <> m->>'comissaoId' or ex->>'reuniaoId' <> m->>'reuniaoId' then perform ipb_fail('Não é possível mudar a comissão do parecer.', 'FORBIDDEN'); end if;
+      end if;
+      v_txt := case when it->>'status' = 'concluido' then 'concluido' else 'rascunho' end;
+      if v_txt = 'concluido' and not ipb_r_relator(u, m->>'comissaoId', m->>'reuniaoId') then perform ipb_fail('Só o relator da comissão conclui o parecer.', 'FORBIDDEN'); end if;
+      v_id := coalesce(ex->>'id', ipb_uid('pa_'));
+      r := coalesce(ex, jsonb_build_object('id', v_id, 'tipo', 'parecer', 'criadoPor', u.id, 'criadoPorNome', u.nome, 'createdAt', t, 'historico', '[]'::jsonb, 'emendas', ''))
+           || ipb_pick(it, ipb_r_campos('parecer')) || jsonb_build_object('status', v_txt, 'updatedAt', t, 'atualizadoPorNome', u.nome);
+      r := ipb_hist(r, u.nome, case when ex is null then 'Criado' when v_txt = 'concluido' then 'Concluído e enviado ao plenário' else 'Editado' end);
+    else
+      v_id := coalesce(ex->>'id', case when v_tipo = 'cfg' then 'cfg' else ipb_uid('{"reuniao":"ru_","delegado":"de_","documento":"do_","estatistica":"es_","financa":"fi_","ata":"ag_"}'::jsonb->>v_tipo) end);
+      r := coalesce(ex, jsonb_build_object('id', v_id, 'tipo', v_tipo, 'createdAt', t)) || ipb_pick(it, ipb_r_campos(v_tipo)) || jsonb_build_object('updatedAt', t);
+      if v_tipo = 'delegado' then
+        if coalesce(r->>'userId', '') <> '' then
+          select * into x from ipb_usuarios where id = r->>'userId';
+          if x.id is null then r := r || '{"userId":null}';
+          elsif coalesce(r->>'nome', '') = '' then r := r || jsonb_build_object('nome', x.nome); end if;
+        end if;
+        if r->>'funcao' = 'Relator' then
+          update ipb_reuniao_itens set doc = doc || '{"funcao":"Participante"}'
+           where tipo = 'delegado' and id <> v_id and doc->>'comissaoId' = r->>'comissaoId' and doc->>'reuniaoId' = r->>'reuniaoId' and doc->>'funcao' = 'Relator';
+        end if;
+      end if;
+      if v_tipo = 'documento' then r := r || jsonb_build_object('arquivo', coalesce(ex->'arquivo', 'null'::jsonb)); end if;
+    end if;
+    insert into ipb_reuniao_itens (id, tipo, doc) values (v_id, v_tipo, r) on conflict (id) do update set doc = excluded.doc;
+    perform ipb_registrar(u, case when ex is null then 'criar' else 'editar' end,
+      v_tipo || ' ' || coalesce(r->>'nome', r->>'titulo', r->>'assunto', r->>'ano', v_id), v_tipo, v_id);
+    return jsonb_build_object('item', r);
+  end if;
+
   perform ipb_fail('Ação desconhecida.');
   return null;
 exception when others then
@@ -601,3 +800,4 @@ revoke all on function ipb_api(jsonb) from public;
 grant execute on function ipb_api(jsonb) to anon, authenticated;
 -- as funções auxiliares não ficam expostas
 revoke all on function ipb_fail(text, text), ipb_sessao(text), ipb_registrar(ipb_usuarios, text, text, text, text) from public, anon, authenticated;
+revoke all on function ipb_pick(jsonb, text[]), ipb_r_campos(text), ipb_r_pode_parecer(ipb_usuarios, text, text), ipb_r_relator(ipb_usuarios, text, text), ipb_r_validar(text, jsonb) from public, anon, authenticated;

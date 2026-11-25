@@ -12,6 +12,8 @@
   const MAX_FAILS = 5;
   const ROLES = ['admin', 'editor', 'analista', 'leitor'];
   const IGREJA_CAMPOS = ['nome', 'sigla', 'tipo', 'igrejaMae', 'endereco', 'bairro', 'cidade', 'uf', 'cep', 'telefone', 'email', 'site', 'cnpj', 'dataOrg', 'secretario', 'pastor', 'presbiterio', 'sinodo', 'ativo'];
+  // campos da comissão: os de sempre e os da reunião do concílio (grupo, modelo de parecer, ordem, base legal, título do relatório)
+  const COMISSAO_CAMPOS = ['nome', 'tipo', 'ano', 'grupo', 'modelo', 'ordem', 'base', 'titulo'];
   const ATA_STATUS = ['Enviada', 'Em análise', 'Analisada'];
   const DECISOES = { 'Aprovar': 'Aprovado', 'Aprovar com ressalvas': 'Aprovado com ressalvas', 'Devolver para correção': 'Devolvido' };
 
@@ -89,7 +91,7 @@
 
   async function seed() {
     const t = now();
-    db = { igrejas: [], usuarios: [], modelos: [], comissoes: [], relatorios: [], atas: [], sessoes: [], log: [] };
+    db = { igrejas: [], usuarios: [], modelos: [], comissoes: [], relatorios: [], atas: [], reuniao: [], sessoes: [], log: [] };
     const H = window.IPB_HISTORICO || { igrejas: [], relatorios: [] };
     db.igrejas = clone(H.igrejas);
     if (!db.igrejas.length) db.igrejas = [{ id: 'ig_filadelfia', nome: 'Igreja Presbiteriana Filadélfia', sigla: 'IPF', tipo: 'Igreja', cidade: 'Parnamirim', uf: 'RN', presbiterio: 'Presbitério Litorâneo do Rio Grande do Norte (PLRN)', sinodo: 'Sínodo do Rio Grande do Norte (SRN)', ativo: true }];
@@ -195,6 +197,7 @@
       comissoes: clone(db.comissoes),
       relatorios: clone(rels),
       atas: (db.atas || []).filter(x => veIgreja(u, x.igrejaId)).map(resumoAta),
+      reuniao: clone(db.reuniao || []),
       log: isAdmin(u) ? clone(db.log.slice(0, 500)) : []
     };
   };
@@ -254,7 +257,7 @@
         return { userId: us ? us.id : null, nome: us ? us.nome : String(m.nome), funcao: m.funcao || 'Membro' };
       });
       const ex = db.comissoes.find(x => x.id === item.id);
-      const rec = Object.assign(ex || { id: uid('co_') }, pick(item, ['nome', 'tipo', 'ano']), { membros, ativa: item.ativa !== false });
+      const rec = Object.assign(ex || { id: uid('co_') }, pick(item, COMISSAO_CAMPOS), { membros, ativa: item.ativa !== false });
       if (!ex) db.comissoes.push(rec);
       log(u, ex ? 'editar' : 'criar', rec.nome, 'comissao', rec.id); save();
       return { item: clone(rec) };
@@ -539,6 +542,155 @@
     x.historico.push({ em: t, por: u.nome, acao });
     log(u, 'ata_' + op, 'Ata ' + (x.numeros || '') + ' · ' + acao, 'ata', x.id); save();
     return { item: clone(x) };
+  };
+
+  /* ---------------- reunião do concílio: comissões, delegados, documentos, pareceres ---------------- */
+  // Itens guardados em db.reuniao (no Supabase: tabela ipb_reuniao_itens). Tipos:
+  // cfg (dados do presbitério), reuniao, delegado, documento, parecer, estatistica, financa.
+  const R_TIPOS = ['cfg', 'reuniao', 'delegado', 'documento', 'parecer', 'estatistica', 'financa', 'ata'];
+  const P_STATUS = ['rascunho', 'concluido', 'aprovado', 'emendas', 'rejeitado'];
+  const P_PLENARIO = ['aprovado', 'emendas', 'rejeitado'];
+  const rItens = () => (db.reuniao = db.reuniao || []);
+  const rGet = id => rItens().find(x => x.id === id);
+  const rSemArquivo = x => clone(x);
+  function delegadosDe(comissaoId, reuniaoId) { return rItens().filter(x => x.tipo === 'delegado' && x.comissaoId === comissaoId && x.reuniaoId === reuniaoId); }
+  // quem pode escrever o parecer de uma comissão naquela reunião
+  function podeParecer(u, comissaoId, reuniaoId) {
+    if (isAdmin(u)) return true;
+    if (u.role === 'leitor') return false;
+    const ds = delegadosDe(comissaoId, reuniaoId);
+    if (ds.some(d => d.userId === u.id)) return true;
+    return u.role === 'analista' && !ds.some(d => d.userId);
+  }
+  function souRelator(u, comissaoId, reuniaoId) {
+    if (isAdmin(u)) return true;
+    const ds = delegadosDe(comissaoId, reuniaoId);
+    const rel = ds.find(d => d.funcao === 'Relator' && d.userId);
+    return rel ? rel.userId === u.id : podeParecer(u, comissaoId, reuniaoId);
+  }
+  const R_CAMPOS = {
+    cfg: ['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'igrejas', 'reuniaoAtual'],
+    reuniao: ['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta'],
+    delegado: ['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId'],
+    documento: ['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome'],
+    parecer: ['reuniaoId', 'comissaoId', 'modelo', 'data', 'destino', 'cidade', 'docNumero', 'titulo', 'assunto', 'docsAnalisados', 'origens', 'documentoIds', 'campos', 'assinaturas'],
+    estatistica: ['ano', 'igreja', 'valores', 'fonte'],
+    financa: ['ano', 'valores', 'fonte'],
+    ata: ['reuniaoId', 'numero', 'livro', 'folhas', 'data', 'horaInicio', 'horaFim', 'presentesMinistros', 'presentesPresbiteros', 'ausencias', 'devocional', 'expediente', 'registros', 'encerramento', 'incluirPareceres', 'situacao']
+  };
+  function rValidar(tipo, it) {
+    if (tipo === 'reuniao' && !(it.ano > 1900 && it.numero > 0)) fail('Informe o número e o ano da reunião.');
+    if (tipo === 'delegado') {
+      if (!String(it.nome || '').trim() && !it.userId) fail('Informe o nome do delegado.');
+      if (!['Relator', 'Participante'].includes(it.funcao)) fail('A função deve ser Relator ou Participante.');
+      if (!rGet(it.reuniaoId)) fail('Escolha a reunião.');
+      if (!db.comissoes.find(c => c.id === it.comissaoId)) fail('Escolha a comissão.');
+    }
+    if (tipo === 'documento') { if (!String(it.titulo || '').trim()) fail('Informe o título do documento.'); if (!rGet(it.reuniaoId)) fail('Escolha a reunião.'); }
+    if (tipo === 'ata' && !rGet(it.reuniaoId)) fail('Escolha a reunião.');
+    if (tipo === 'parecer') {
+      if (!rGet(it.reuniaoId)) fail('Escolha a reunião.');
+      if (!db.comissoes.find(c => c.id === it.comissaoId)) fail('Escolha a comissão.');
+      if (!String(it.assunto || '').trim()) fail('Informe o assunto do parecer.');
+    }
+    if ((tipo === 'estatistica' || tipo === 'financa') && !(Number(it.ano) > 1900)) fail('Informe o ano.');
+  }
+
+  A.reuniao = async ({ token, op, tipo, item, id, nome, dados, itens, status, emendas }) => {
+    const u = session(token);
+    const t = now();
+    if (op === 'arquivo') {
+      const d = rGet(id);
+      if (!d || d.tipo !== 'documento' || !d.arquivo) fail('Este documento não tem arquivo.', 'NOTFOUND');
+      const v = await idbOp('readonly', st => st.get('rd_' + d.id));
+      if (!v) fail('O PDF deste documento não está neste navegador. Envie o arquivo de novo.', 'NOTFOUND');
+      return { blob: v, nome: d.arquivo.nome, tipo: d.arquivo.tipo };
+    }
+    if (op === 'enviar_arquivo') {
+      if (!isAdmin(u)) fail('Apenas a Mesa (administrador) envia documentos.', 'FORBIDDEN');
+      const d = rGet(id);
+      if (!d || d.tipo !== 'documento') fail('Documento não encontrado.', 'NOTFOUND');
+      const m = /^data:([\w/.+-]+);base64,/.exec(dados || '');
+      if (!m || !/^(application\/pdf|image\/)/.test(m[1])) fail('Envie um PDF ou uma imagem.');
+      const bytes = b64d(dados.slice(m[0].length));
+      if (bytes.length > 15e6) fail('O arquivo passa de 15 MB.');
+      await idbOp('readwrite', st => st.put(new Blob([bytes], { type: m[1] }), 'rd_' + d.id));
+      d.arquivo = { nome: String(nome || 'documento.pdf'), tipo: m[1], tamanho: bytes.length, em: t };
+      d.updatedAt = t;
+      log(u, 'documento', 'Arquivo do documento ' + (d.numero || '') + ' enviado', 'documento', d.id); save();
+      return { item: rSemArquivo(d) };
+    }
+    if (op === 'importar') {
+      if (!isAdmin(u)) fail('Apenas o administrador importa dados.', 'FORBIDDEN');
+      if (!Array.isArray(itens)) fail('Arquivo inválido.');
+      let n = 0;
+      for (const x of itens) {
+        if (!x || !R_TIPOS.includes(x.tipo) || !x.id) continue;
+        const ex = rGet(x.id);
+        const base = { id: String(x.id), tipo: x.tipo };
+        const rec = Object.assign(ex || base, pick(x, R_CAMPOS[x.tipo]), { updatedAt: t });
+        if (x.tipo === 'parecer') { rec.status = P_STATUS.includes(x.status) ? x.status : 'rascunho'; rec.emendas = x.emendas || ''; rec.historico = rec.historico || [{ em: t, por: u.nome, acao: 'Importado' }]; }
+        if (x.tipo === 'documento') rec.arquivo = ex ? ex.arquivo || null : null; // o PDF é enviado depois, arquivo por arquivo
+        if (!ex) rItens().push(rec);
+        n++;
+      }
+      for (const c of (itens || []).filter(x => x && x.tipo === 'comissao' && x.id && x.nome)) {
+        const ex = db.comissoes.find(y => y.id === c.id);
+        const rec = Object.assign(ex || { id: c.id, membros: [], ativa: true }, pick(c, COMISSAO_CAMPOS));
+        if (!ex) db.comissoes.push(rec);
+        n++;
+      }
+      log(u, 'importar', n + ' itens da reunião importados', 'reuniao', ''); save();
+      return { importados: n };
+    }
+    if (op === 'decidir') {
+      if (!isAdmin(u)) fail('Só a Mesa registra a decisão do plenário.', 'FORBIDDEN');
+      const p = rGet(id);
+      if (!p || p.tipo !== 'parecer') fail('Parecer não encontrado.', 'NOTFOUND');
+      if (!P_STATUS.includes(status)) fail('Situação inválida.');
+      p.status = status; p.emendas = String(emendas || ''); p.updatedAt = t;
+      p.historico = (p.historico || []).concat({ em: t, por: u.nome, acao: 'Plenário: ' + status });
+      log(u, 'parecer', 'Decisão do plenário: ' + status, 'parecer', p.id); save();
+      return { item: clone(p) };
+    }
+    if (op === 'excluir') {
+      const x = rGet(id);
+      if (!x) fail('Registro não encontrado.', 'NOTFOUND');
+      const pode = isAdmin(u) || (x.tipo === 'parecer' && x.status === 'rascunho' && x.criadoPor === u.id);
+      if (!pode) fail('Você não pode excluir este registro.', 'FORBIDDEN');
+      db.reuniao = rItens().filter(y => y.id !== id);
+      if (x.tipo === 'reuniao') db.reuniao = db.reuniao.filter(y => y.reuniaoId !== id);
+      if (x.tipo === 'documento') await idbOp('readwrite', st => st.delete('rd_' + id)).catch(() => {});
+      log(u, 'excluir', x.tipo + ' ' + (x.nome || x.titulo || x.assunto || id), x.tipo, id); save();
+      return {};
+    }
+    if (op !== 'salvar') fail('Operação desconhecida.');
+    if (!R_TIPOS.includes(tipo)) fail('Tipo desconhecido.');
+    const it = clone(item || {});
+    if (tipo === 'cfg') it.id = 'cfg';
+    const ex = it.id ? rGet(it.id) : null;
+    if (ex && ex.tipo !== tipo) fail('Registro de outro tipo.');
+    if (tipo !== 'parecer' && !isAdmin(u)) fail('Apenas a Mesa (administrador) pode fazer isso.', 'FORBIDDEN');
+    rValidar(tipo, Object.assign({}, ex || {}, it));
+    let rec;
+    if (tipo === 'parecer') {
+      const alvo = Object.assign({}, ex || {}, it);
+      if (!podeParecer(u, alvo.comissaoId, alvo.reuniaoId)) fail('Você não é delegado desta comissão.', 'FORBIDDEN');
+      if (ex && P_PLENARIO.includes(ex.status) && !isAdmin(u)) fail('O plenário já decidiu sobre este parecer.', 'FORBIDDEN');
+      if (ex && (ex.comissaoId !== alvo.comissaoId || ex.reuniaoId !== alvo.reuniaoId) && !isAdmin(u)) fail('Não é possível mudar a comissão do parecer.', 'FORBIDDEN');
+      let st = it.status === 'concluido' ? 'concluido' : 'rascunho';
+      if (st === 'concluido' && !souRelator(u, alvo.comissaoId, alvo.reuniaoId)) fail('Só o relator da comissão conclui o parecer.', 'FORBIDDEN');
+      rec = Object.assign(ex || { id: uid('pa_'), tipo, criadoPor: u.id, criadoPorNome: u.nome, createdAt: t, historico: [], emendas: '' }, pick(it, R_CAMPOS.parecer), { status: st, updatedAt: t, atualizadoPorNome: u.nome });
+      rec.historico.push({ em: t, por: u.nome, acao: ex ? (st === 'concluido' ? 'Concluído e enviado ao plenário' : 'Editado') : 'Criado' });
+    } else {
+      rec = Object.assign(ex || { id: it.id && tipo === 'cfg' ? 'cfg' : uid({ reuniao: 'ru_', delegado: 'de_', documento: 'do_', estatistica: 'es_', financa: 'fi_', ata: 'ag_' }[tipo] || 'x_'), tipo, createdAt: t }, pick(it, R_CAMPOS[tipo]), { updatedAt: t });
+      if (tipo === 'delegado' && rec.userId) { const us = db.usuarios.find(x => x.id === rec.userId); if (!us) rec.userId = null; else if (!rec.nome) rec.nome = us.nome; }
+      if (tipo === 'delegado' && rec.funcao === 'Relator') delegadosDe(rec.comissaoId, rec.reuniaoId).forEach(d => { if (d.id !== rec.id && d.funcao === 'Relator') d.funcao = 'Participante'; });
+      if (tipo === 'documento') rec.arquivo = ex ? ex.arquivo || null : null;
+    }
+    if (!ex) rItens().push(rec);
+    log(u, ex ? 'editar' : 'criar', tipo + ' ' + (rec.nome || rec.titulo || rec.assunto || rec.ano || rec.id), tipo, rec.id); save();
+    return { item: clone(rec) };
   };
 
   A.verificar = async ({ codigo }) => {
