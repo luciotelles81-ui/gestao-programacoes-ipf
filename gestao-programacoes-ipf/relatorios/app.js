@@ -278,7 +278,7 @@
     $('#fLogin').onsubmit = async e => {
       e.preventDefault();
       const btn = $('#fLogin button'); btn.disabled = true;
-      const r = await acao(() => api({ action: 'login', igrejaId: $('#lIg').value || null, username: $('#lUs').value.trim(), senha: $('#lPw').value }));
+      const r = await acao(() => api({ action: 'login', igrejaId: $('#lIg').value || null, username: $('#lUs').value.trim(), senha: $('#lPw').value.trim() }));
       btn.disabled = false;
       if (!r) return;
       if (r.pacoteAberto) toast('Dados do Presbitério carregados: ' + r.pacoteAberto + ' relatórios com os originais anexados.');
