@@ -103,9 +103,25 @@ Módulo `relatorios/reunioes.js`, no menu **Reunião do concílio**. Segue a Con
 - **Identidade visual**: verde Pantone 350C e cinza K70, logotipo oficial em `relatorios/img/`, letra Zapf Humanist (ou Optima, o mesmo desenho) nas telas e títulos e Times New Roman no texto dos documentos, como pede o Programa de Identidade Visual da IPB.
 - **Outros presbitérios**: *Exportar estrutura* gera um arquivo com os dados da Mesa e as comissões, para importar em outro presbitério.
 
+- **Acervo de documentos** (`relatorios/acervo.js`): tudo organizado por ano e por seção. Os anos 2025, 2026 e 2027 já vêm prontos e a Mesa cria qualquer outro, passado ou futuro, com *+ Ano*. Em cada ano:
+  - **Reuniões do concílio**, em ordem histórica: a ordinária e depois cada extraordinária. Cada reunião é uma pasta com *Convocação e pauta*, *Atas*, *Relatórios e documentos*, *Anexos* e os pareceres das comissões, com setas para a reunião anterior e a seguinte.
+  - **Comissão Executiva**, **Tesouraria**, **Sínodo e Supremo Concílio**, **Correspondência** e **Outros**.
+  - **Permanentes**: estatuto, regimento e normas, que valem para todos os anos.
+  - Ver em **Ícones** ou **Lista** (a escolha fica no navegador), ordenar por data, nome ou Doc nº e buscar em todo o acervo.
+  - Clicar num arquivo abre a prévia ao lado dos dados (local, tipo, data, origem, quem enviou e quando, SHA-256), sem baixar. Word e Excel são baixados.
+  - A Mesa envia vários arquivos de uma vez, ou arrasta para a pasta. Aceita PDF, imagem, Word e Excel até 15 MB. *Editar ou mover* troca a pasta, a seção ou a reunião.
+  - **Segurança**: só usuários cadastrados veem o acervo; só a Mesa envia, edita ou exclui; exclusão pede confirmação; cada envio grava quem enviou, quando e a impressão digital SHA-256, e entra no registro de ações. Um documento pode ser marcado como **restrito à Mesa** (dados pessoais sensíveis, LGPD), e o servidor recusa o arquivo para os demais.
+- **Tesouraria** (`relatorios/tesouraria.js`): o controle de caixa administrativo, no formato dos relatórios do tesoureiro.
+  - Três grupos: **dízimo dos pastores**, **contribuição das igrejas (3%)** e **despesas e compromissos**.
+  - Cada conta tem o previsto anual e mensal, o que restou do ano anterior e os lançamentos de cada mês (dia e valor). O lançamento marcado *ref. ano anterior* entra no caixa do mês, mas não conta no realizado do ano.
+  - A tabela mostra o realizado, o previsto até o mês escolhido, a diferença e o percentual (verde, amarelo ou vermelho).
+  - O resumo traz o saldo anterior, as entradas, as saídas e o saldo mês a mês, com gráficos por igreja e por pastor.
+  - *Copiar as contas do ano anterior* abre o novo ano já com as contas e o que restou de cada uma.
+  - Imprime em A4 deitado. Só a Mesa altera.
+
 **Dados das reuniões anteriores**: como o repositório é público, os números, os resumos e os PDFs das reuniões do PLRN não ficam aqui. Entre como administrador, vá em **Reunião → Configuração da Mesa**, use *Importar pacote (.json)* e depois *Enviar PDFs dos documentos* (selecione todos os PDFs de uma vez; cada um encontra o seu documento pelo nome do arquivo).
 
-No Supabase, rode de novo `supabase/relatorios.sql`: ele cria as tabelas `ipb_reuniao_itens` e `ipb_reuniao_arquivos` e a ação `reuniao` da API, sem mexer no que já existe.
+No Supabase, rode de novo `supabase/relatorios.sql`: ele cria as tabelas `ipb_reuniao_itens` e `ipb_reuniao_arquivos` e a ação `reuniao` da API (inclusive o tipo `tesouraria` e os campos do acervo), sem mexer no que já existe.
 
 ### Ligar ao Supabase
 

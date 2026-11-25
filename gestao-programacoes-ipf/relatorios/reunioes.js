@@ -839,38 +839,62 @@
       $$('tr[data-ed]').forEach(tr => tr.onclick = () => editarDocumento(itens('documento').find(d => d.id === tr.getAttribute('data-ed'))));
     }
   }
-  function editarDocumento(d) {
+  const SECOES_DOC = [['', 'Pasta da reunião'], ['executiva', 'Comissão Executiva'], ['tesouraria', 'Tesouraria'], ['concilios', 'Sínodo e Supremo Concílio'], ['correspondencia', 'Correspondência'], ['institucional', 'Estatuto, regimento e normas (permanente)'], ['outros', 'Outros documentos']];
+  const PASTAS_DOC = [['convocacao', 'Convocação e pauta'], ['ata', 'Atas'], ['relatorio', 'Relatórios e documentos'], ['anexo', 'Anexos e outros']];
+  const ACEITOS = 'application/pdf,image/png,image/jpeg,image/webp,.doc,.docx,.xls,.xlsx';
+  function pastaAuto(d) {
+    if (d.pasta) return d.pasta;
+    const t = (d.tipoDoc || '') + ' ' + (d.titulo || '');
+    if (/convoca|retifica|edital/i.test(t)) return 'convocacao';
+    if (/^\s*ata\b|\bata da\b|\bata do\b/i.test(t) || /^ata$/i.test(d.tipoDoc || '')) return 'ata';
+    if (d.numero || d.comissaoId) return 'relatorio';
+    return 'anexo';
+  }
+  async function enviarArquivoDoc(id, f) {
+    if (f.size > 15e6) { A().toast('O arquivo ' + f.name + ' passa de 15 MB.', true); return false; }
+    const r = await A().acao(async () => A().api({ action: 'reuniao', op: 'enviar_arquivo', id, nome: f.name, dados: await A().lerArquivo(f) }));
+    delete pdfCache[id];
+    return !!r;
+  }
+  function editarDocumento(d, opts) {
     const { esc, modal, $ } = A();
+    opts = opts || {};
     const novo = !d || !d.id;
-    const r = reuniao(d ? d.reuniaoId : null);
-    d = d ? Object.assign({}, d) : { reuniaoId: r.id, titulo: '', comissaoId: '', tipoDoc: '', origem: '', resumo: '' };
-    if (novo && !d.numero) d.numero = String(proximoNumeroDoc(d.reuniaoId));
+    if (!d) { const r0 = reuniao(); d = { reuniaoId: r0 ? r0.id : '', titulo: '', comissaoId: '', tipoDoc: '', origem: '', resumo: '' }; }
+    d = Object.assign({}, d);
+    if (novo && !d.numero && d.reuniaoId && !opts.semNumero && pastaAuto(d) === 'relatorio') d.numero = String(proximoNumeroDoc(d.reuniaoId));
+    const anoAtual = new Date().getFullYear();
     const m = modal(novo ? 'Novo documento' : 'Documento ' + esc(d.numero || ''), `<div class="grid g3">
-      <div class="field"><label for="dNum">Doc nº</label><input type="text" id="dNum" value="${esc(d.numero || '')}"></div>
       <div class="field span2"><label for="dTit">Título</label><input type="text" id="dTit" value="${esc(d.titulo || '')}" placeholder="ex.: Relatório Atas - IP Marinas"></div>
-      <div class="field"><label for="dCom">Comissão que examina</label><select id="dCom"><option value="">(nenhuma)</option>${comissoes().map(c => `<option value="${esc(c.id)}" ${d.comissaoId === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></div>
+      <div class="field"><label for="dNum">Doc nº</label><input type="text" id="dNum" value="${esc(d.numero || '')}"></div>
+      <div class="field"><label for="dReu">Reunião</label><select id="dReu"><option value="">(nenhuma: seção do acervo)</option>${reunioes().map(r => `<option value="${esc(r.id)}" ${d.reuniaoId === r.id ? 'selected' : ''}>${esc(r.codigo || r.nome)}</option>`).join('')}</select></div>
+      <div class="field" id="wPas"><label for="dPas">Pasta da reunião</label><select id="dPas">${PASTAS_DOC.map(([k, n]) => `<option value="${k}" ${pastaAuto(d) === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+      <div class="field" id="wSec"><label for="dSec">Seção do acervo</label><select id="dSec">${SECOES_DOC.slice(1).map(([k, n]) => `<option value="${k}" ${d.secao === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+      <div class="field" id="wAno"><label for="dAno">Ano</label><input type="number" id="dAno" min="1900" max="2200" value="${esc(d.ano || anoAtual)}"></div>
+      <div class="field"><label for="dDat">Data do documento</label><input type="date" id="dDat" value="${esc(d.data || '')}"></div>
+      <div class="field"><label for="dTip">Tipo</label><input type="text" id="dTip" list="dlTip" value="${esc(d.tipoDoc || '')}" placeholder="ex.: Convocação, Ata, Relatório"><datalist id="dlTip">${['Convocação', 'Retificação', 'Ata', 'Relatório', 'Proposta', 'Ofício', 'Solicitação', 'Parecer', 'Estatuto', 'Regimento', 'Relatório financeiro', 'Composição'].map(x => `<option value="${x}">`).join('')}</datalist></div>
       <div class="field"><label for="dOri">Origem</label><input type="text" id="dOri" list="dlIg2" value="${esc(d.origem || '')}"><datalist id="dlIg2">${igrejasCfg().map(i => `<option value="${esc(i)}">`).join('')}</datalist></div>
-      <div class="field"><label for="dTip">Tipo</label><input type="text" id="dTip" value="${esc(d.tipoDoc || '')}" placeholder="ex.: Livro de atas, Relatório"></div>
+      <div class="field"><label for="dCom">Comissão que examina</label><select id="dCom"><option value="">(nenhuma)</option>${comissoes().map(c => `<option value="${esc(c.id)}" ${d.comissaoId === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></div>
       <div class="field span3"><label for="dRes">Resumo</label><textarea id="dRes" rows="3">${esc(d.resumo || '')}</textarea></div>
-      <div class="field span3"><label for="dArq">Arquivo (PDF ou imagem, até 15 MB)</label>${d.arquivo ? `<p class="small" style="margin:0">Atual: ${esc(d.arquivo.nome)} (${esc(A().tamanho(d.arquivo.tamanho || 0))})</p>` : ''}<input type="file" id="dArq" accept="application/pdf,image/*"></div></div>`,
+      <div class="field span3"><label class="chk"><input type="checkbox" id="dRst" ${d.restrito ? 'checked' : ''}> Acesso restrito à Mesa (dados pessoais sensíveis, como atestados, conforme a LGPD)</label></div>
+      <div class="field span3"><label for="dArq">Arquivo (PDF, imagem, Word ou Excel, até 15 MB)</label>${d.arquivo ? `<p class="small" style="margin:0">Atual: ${esc(d.arquivo.nome)} (${esc(A().tamanho(d.arquivo.tamanho || 0))})</p>` : ''}<input type="file" id="dArq" accept="${ACEITOS}"></div></div>`,
       `${!novo ? '<button class="btn danger" id="dDel" style="margin-right:auto">Excluir</button>' : ''}<button class="btn" data-x>Cancelar</button><button class="btn primary" id="dOk">Salvar</button>`, true);
+    const vis = () => { const temReu = !!$('#dReu', m.el).value; $('#wPas', m.el).hidden = !temReu; $('#wSec', m.el).hidden = temReu; $('#wAno', m.el).hidden = temReu || $('#dSec', m.el).value === 'institucional'; };
+    $('#dReu', m.el).onchange = vis; $('#dSec', m.el).onchange = vis; vis();
     $('[data-x]', m.el).onclick = m.fechar;
     $('#dOk', m.el).onclick = async () => {
       const v = id => $('#' + id, m.el).value.trim();
-      const item = { id: d.id, reuniaoId: d.reuniaoId, numero: v('dNum'), titulo: v('dTit'), comissaoId: v('dCom'), origem: v('dOri'), tipoDoc: v('dTip'), resumo: v('dRes'), arquivoNome: d.arquivoNome || '' };
+      const rid = v('dReu');
+      const item = { id: d.id, reuniaoId: rid, numero: v('dNum'), titulo: v('dTit'), comissaoId: v('dCom'), origem: v('dOri'), tipoDoc: v('dTip'), resumo: v('dRes'), arquivoNome: d.arquivoNome || '',
+        data: v('dDat'), restrito: $('#dRst', m.el).checked, pasta: rid ? v('dPas') : '', secao: rid ? '' : v('dSec'), ano: rid ? (reuniao(rid) || {}).ano || '' : (v('dSec') === 'institucional' ? '' : Number(v('dAno')) || '') };
       const res = await salvarItem('documento', item, 'Documento salvo.');
       if (!res) return;
       const f = $('#dArq', m.el).files[0];
-      if (f) {
-        if (f.size > 15e6) return A().toast('O arquivo passa de 15 MB.', true);
-        await A().acao(async () => A().api({ action: 'reuniao', op: 'enviar_arquivo', id: res.item.id, nome: f.name, dados: await A().lerArquivo(f) }), 'Arquivo anexado.');
-        delete pdfCache[res.item.id];
-        await A().recarregar();
-      }
+      if (f && await enviarArquivoDoc(res.item.id, f)) { A().toast('Arquivo anexado.'); await A().recarregar(); }
       m.fechar(); A().render();
     };
     if ($('#dDel', m.el)) $('#dDel', m.el).onclick = async () => {
-      if (!await A().confirmar('Excluir este documento e o arquivo dele?', 'Excluir')) return;
+      if (!await A().confirmar('Excluir este documento e o arquivo dele? Essa ação não pode ser desfeita.', 'Excluir')) return;
       if (await A().acao(() => A().api({ action: 'reuniao', op: 'excluir', id: d.id }), 'Documento excluído.')) { await A().recarregar(); m.fechar(); A().render(); }
     };
   }
@@ -1064,7 +1088,7 @@
         const pres = (r.mesa || []).find(x => /^presidente$/i.test(x.cargo));
         return `<div class="card reu-card ${r.tipoReuniao === 'E' ? 'extra' : ''}">
           <div class="row-wrap" style="justify-content:space-between"><div><span class="tag ${r.tipoReuniao === 'E' ? 'gray' : ''}">${tipoNome(r)}</span> <b>${esc(r.codigo || '')}</b> <span class="small muted">${esc(periodo(r))}${r.local ? ' · ' + esc(r.local) : ''}</span></div>
-            <div class="row-wrap"><button class="btn sm" data-usar="${esc(r.id)}">Abrir</button><a class="btn sm" href="#/ata-geral/${encodeURIComponent(r.id)}">${ata ? 'Ata' : 'Ata (a lavrar)'}</a>${isAdmin() ? `<button class="btn sm ghost" data-edr="${esc(r.id)}">Editar</button>` : ''}</div></div>
+            <div class="row-wrap"><button class="btn sm" data-usar="${esc(r.id)}">Abrir</button><a class="btn sm" href="#/acervo/${encodeURIComponent(r.ano)}/reuniao/${encodeURIComponent(r.id)}">Pasta</a><a class="btn sm" href="#/ata-geral/${encodeURIComponent(r.id)}">${ata ? 'Ata' : 'Ata (a lavrar)'}</a>${isAdmin() ? `<button class="btn sm ghost" data-edr="${esc(r.id)}">Editar</button>` : ''}</div></div>
           ${r.materia ? `<p style="margin:8px 0 0"><b>Assunto:</b> ${esc(r.materia)}</p>` : ''}
           ${r.dataConvocacao || r.convocadaPor ? `<p class="small" style="margin:6px 0 0">Convocada${r.dataConvocacao ? ' em ' + esc(dataBr(r.dataConvocacao)) : ''}${r.convocadaPor ? ' por ' + esc(r.convocadaPor) : ''}.</p>` : ''}
           ${linhas(r.pauta).length ? `<div class="small" style="margin-top:6px"><b>Pauta:</b><ol style="margin:4px 0 0;padding-left:20px">${linhas(r.pauta).map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}
@@ -1081,7 +1105,7 @@
     $$('[data-pdf]').forEach(b => b.onclick = () => abrirPdf(b.getAttribute('data-pdf')));
     $$('[data-conv]').forEach(b => b.onclick = () => {
       const r = reuniao(b.getAttribute('data-conv'));
-      editarDocumento({ reuniaoId: r.id, numero: '', titulo: 'Convocação da ' + (r.codigo || 'reunião'), comissaoId: '', tipoDoc: 'Convocação', origem: 'Presidência do ' + sigla(), resumo: r.materia || '' }, true);
+      editarDocumento({ reuniaoId: r.id, numero: '', titulo: 'Convocação da ' + (r.codigo || 'reunião'), comissaoId: '', tipoDoc: 'Convocação', pasta: 'convocacao', origem: 'Secretaria Executiva do ' + sigla(), data: r.dataConvocacao || '', resumo: r.materia || '' }, { semNumero: true });
     });
   }
 
@@ -1182,5 +1206,7 @@
       default: return telaReuniao();
     }
   }
-  window.IPB_REUNIAO = { render, pendentes, camposComissao, lerCamposComissao, criarPadrao, COMISSOES_PADRAO, folhaParecer };
+  window.IPB_REUNIAO = { render, pendentes, camposComissao, lerCamposComissao, criarPadrao, COMISSOES_PADRAO, folhaParecer,
+    // usados pelo acervo (acervo.js) e pela tesouraria (tesouraria.js)
+    h: { chip, itens, cfg, sigla, nomePresb, reunioes, reuniao, comissoes, comissao, documentos, pareceres, abrirPdf, editarDocumento, enviarArquivoDoc, pastaAuto, salvarItem, dataBr, dataExtenso, periodo, tipoNome, nomeMesa, numero, lsGet, lsSet, isAdmin, pdfCache, MESES, PASTAS_DOC, SECOES_DOC, ACEITOS, imprimir, CSS_FOLHA, REU_KEY } };
 })();

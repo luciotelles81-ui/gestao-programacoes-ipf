@@ -334,7 +334,7 @@
             ${nav('verificar', 'Verificar assinatura', '✓')}
             <div class="nav-label">Reunião do concílio</div>
             ${nav('reuniao', 'Reunião', '⚖')}${nav('reunioes', 'Reuniões e convocações', '◷')}${nav('ata-geral', 'Ata da reunião', '✎')}${nav('comissoes', 'Comissões', '⚑', window.IPB_REUNIAO ? window.IPB_REUNIAO.pendentes() : 0)}
-            ${nav('documentos', 'Documentos', '▣')}${nav('delegados', 'Delegados', '☺')}${nav('historico', 'Histórico do presbitério', '↗')}
+            ${nav('acervo', 'Acervo de documentos', '▣')}${nav('tesouraria', 'Tesouraria', '$')}${nav('documentos', 'Documentos da reunião', '▤')}${nav('delegados', 'Delegados', '☺')}${nav('historico', 'Histórico do presbitério', '↗')}
             ${isAdmin() ? `<div class="nav-label">Administração</div>
               ${nav('admin/igrejas', 'Igrejas', '⌂')}${nav('admin/usuarios', 'Usuários e acessos', '☺')}
               ${nav('admin/modelos', 'Modelos de relatório', '☰')}${nav('admin/comissoes', 'Comissões', '⚑')}${nav('admin/registro', 'Registro de ações', '≡')}` : ''}
@@ -1517,6 +1517,8 @@
       case 'ata': return telaAta(a[0]);
       case 'verificar': return telaVerificar(a[0]);
       case 'admin': return telaAdmin(a[0]);
+      case 'acervo': if (window.IPB_ACERVO) return window.IPB_ACERVO.render(a); return telaPainel();
+      case 'tesouraria': if (window.IPB_TESOURARIA) return window.IPB_TESOURARIA.render(a); return telaPainel();
       case 'reuniao': case 'reunioes': case 'ata-geral': case 'comissoes': case 'comissao': case 'documentos': case 'delegados': case 'historico': case 'parecer':
         if (window.IPB_REUNIAO) return window.IPB_REUNIAO.render(p, a);
         return telaPainel();
