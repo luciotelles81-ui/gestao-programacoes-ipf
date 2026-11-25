@@ -59,7 +59,8 @@
     H.igrejas.forEach(i => { const ex = db.igrejas.find(x => x.id === i.id); if (ex) Object.assign(ex, i); else db.igrejas.push(i); });
     let n = 0;
     H.relatorios.forEach(h => {
-      if (db.relatorios.some(r => r.id === h.id)) return;
+      const ex = db.relatorios.find(r => r.id === h.id);
+      if (ex) { if (!(ex.anexos || []).length && (h.anexos || []).length) { ex.anexos = h.anexos; n++; } return; }
       const m = h.modelo || snapshot(db.modelos.find(x => x.id === h.modeloId) || (window.IPB_MODELOS_PADRAO || []).find(x => x.id === h.modeloId));
       db.relatorios.push(Object.assign(h, { modelo: m, criadoPor: null, criadoPorNome: h.criadoPorNome || 'Importação', createdAt: h.createdAt || h.enviadoEm, updatedAt: h.updatedAt || h.enviadoEm, analise: h.analise || novaAnalise() }));
       n++;
@@ -507,6 +508,7 @@
       if (!an) fail('Anexo não encontrado.', 'NOTFOUND');
       let bytes;
       if (an.origem === 'pacote') bytes = await lerPacoteArquivo(an.arquivo);
+      else if (an.origem === 'reunioes') { const bl = await lerArquivoReuniao({ arquivo: { pacote: an.arquivo, tipo: an.tipo } }); if (!bl) fail('O arquivo original ainda não foi aberto neste navegador. Entre como admin com a senha dos dados.'); return { blob: bl, nome: an.nome, tipo: an.tipo }; }
       else { const v = await idbOp('readonly', st => st.get(an.id)); if (!v) fail('O arquivo não está neste navegador.'); return { blob: v, nome: an.nome, tipo: an.tipo }; }
       return { blob: new Blob([bytes], { type: an.tipo }), nome: an.nome, tipo: an.tipo };
     }

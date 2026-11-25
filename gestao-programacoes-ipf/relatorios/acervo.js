@@ -12,6 +12,7 @@
   const ANOS_PADRAO = [2025, 2026, 2027];
   const SECOES = [
     { id: 'reunioes', nome: 'Reuniões do concílio', desc: 'A ordinária e as extraordinárias, em ordem. Cada uma com convocação, atas, relatórios e anexos.' },
+    { id: 'igrejas', nome: 'Relatórios das igrejas', desc: 'Relatórios dos conselhos e informações cadastrais e estatísticas enviados para cada reunião ordinária.' },
     { id: 'executiva', nome: 'Comissão Executiva', desc: 'Atas e resoluções da Comissão Executiva entre as reuniões.' },
     { id: 'tesouraria', nome: 'Tesouraria', desc: 'Movimento financeiro, balancetes e exame de contas.' },
     { id: 'concilios', nome: 'Sínodo e Supremo Concílio', desc: 'Convocações e decisões dos concílios superiores.' },
@@ -122,7 +123,7 @@
         ${ctx && H().isAdmin() ? `<label class="btn primary sm">⇪ Enviar arquivos<input type="file" id="acvUp" multiple accept="${esc(H().ACEITOS)}" hidden></label>` : ''}
       </div></div>`;
     const busca = Q.busca.trim() ? resultadosBusca() : '';
-    shell('acervo', head('Acervo de documentos', 'Todos os documentos do presbitério, por ano e por seção. Clique num arquivo para ver sem baixar.') +
+    shell('acervo', head('Acervo de documentos', 'Todos os documentos do ' + A().ORG.tipoMin + ', por ano e por seção. Clique num arquivo para ver sem baixar.') +
       `<div class="acv">${rail}<section class="acv-main ${ctx && H().isAdmin() ? 'acv-drop' : ''}" id="acvMain">${tools}${busca || corpo}
       ${ctx && H().isAdmin() ? '<div class="acv-dz small muted">Arraste arquivos para cá para guardar nesta pasta (PDF, imagem, Word ou Excel, até 15 MB cada).</div>' : ''}
       <p class="small muted acv-seg">Acesso só para usuários cadastrados. Cada envio guarda quem enviou, quando e a impressão digital do arquivo (SHA-256), e fica no registro de ações.</p></section></div>`);

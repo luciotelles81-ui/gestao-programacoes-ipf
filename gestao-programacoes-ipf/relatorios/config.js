@@ -9,3 +9,19 @@ window.IPB_CONFIG = {
   supabaseUrl: '',
   supabaseAnonKey: ''
 };
+
+/**
+ * Identidade do concílio. Para usar o sistema em outro presbitério ou num sínodo,
+ * troque só estes valores (veja "Usar em outro concílio" no README).
+ *   tipo: 'Presbitério' ou 'Sínodo'
+ *   unidades: quem manda relatórios ao concílio ('igrejas' num presbitério, 'presbitérios' num sínodo)
+ */
+window.IPB_ORG = {
+  sistema: 'Sistema de Gestão PLRN',
+  tipo: 'Presbitério',
+  nome: 'Presbitério Litorâneo do RN',
+  sigla: 'PLRN',
+  sinodo: 'Sínodo do Rio Grande do Norte',
+  unidade: 'igreja',
+  unidades: 'igrejas'
+};

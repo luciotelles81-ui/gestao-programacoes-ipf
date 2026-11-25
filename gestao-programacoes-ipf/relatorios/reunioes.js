@@ -78,8 +78,9 @@
   const S = () => A().S;
   const itens = tipo => ((S().d && S().d.reuniao) || []).filter(x => x.tipo === tipo);
   const cfg = () => itens('cfg')[0] || {};
-  const sigla = () => cfg().sigla || 'Presbitério';
-  const nomePresb = () => cfg().nome || 'Presbitério';
+  const ORG = () => A().ORG;
+  const sigla = () => cfg().sigla || ORG().sigla || ORG().tipo;
+  const nomePresb = () => cfg().nome || ORG().nome || ORG().tipo;
   function igrejasCfg() {
     const l = linhas(cfg().igrejas);
     return l.length ? l : (S().d.igrejas || []).filter(i => i.ativo !== false).map(i => i.nome);
@@ -151,7 +152,7 @@
   function subReuniao(r) { const esc = A().esc; return r ? `${esc(r.codigo || '')} · ${esc(r.nome || '')}${periodo(r) ? ' · ' + esc(periodo(r)) : ''}${r.local ? ' · ' + esc(r.local) : ''}` : 'Nenhuma reunião cadastrada.'; }
   function semReuniao(pagina, titulo) {
     const esc = A().esc;
-    A().shell(pagina, A().head(titulo, 'Nenhuma reunião cadastrada ainda.') + `<div class="card"><p style="margin-top:0">Para começar, a Mesa (administrador) cadastra os dados do presbitério e a reunião, ou importa o pacote de dados de reuniões anteriores.</p>
+    A().shell(pagina, A().head(titulo, 'Nenhuma reunião cadastrada ainda.') + `<div class="card"><p style="margin-top:0">Para começar, a Mesa (administrador) cadastra os dados do ${esc(ORG().tipoMin)} e a reunião, ou importa o pacote de dados de reuniões anteriores.</p>
       ${isAdmin() ? '<a class="btn primary" href="#/reuniao">Configurar a reunião</a>' : '<p class="muted small" style="margin:0">Peça ao Secretário Executivo ou ao Presidente para cadastrar a reunião.</p>'}</div>`);
     void esc;
   }
@@ -238,7 +239,7 @@
       ['comissao', 'Comissões', 'Cada comissão trabalha no seu ambiente: lê os documentos e os membros redigem juntos o parecer no modelo de costume. O cabeçalho já vem pronto com o código da reunião, o período, o local, o Doc nº e a data.'],
       ['relator', 'Relator', 'O Relator conclui o parecer e o envia ao plenário. Depois disso, só a Mesa altera.'],
       ['plenario', 'Plenário', 'No plenário, a Mesa registra a decisão: aprovado, aprovado com emendas ou rejeitado. As sessões são públicas (art. 72); o quórum é de três ministros e dois presbíteros (art. 86).'],
-      ['graficos', 'Ata e gráficos', 'Ao final, a Secretaria imprime a ata e os relatórios da reunião, que ficam no acervo, e os números alimentam os gráficos do presbitério.']
+      ['graficos', 'Ata e gráficos', 'Ao final, a Secretaria imprime a ata e os relatórios da reunião, que ficam no acervo, e os números alimentam os gráficos do ' + ORG().tipoMin + '.']
     ];
     const esc = A().esc;
     return `<div class="card fluxo-card"><div class="section-title" style="margin-top:0">Como funciona a reunião</div>
@@ -253,15 +254,15 @@
     const rs = reunioes();
     return `<div class="card"><div class="section-title" style="margin-top:0">Configuração da Mesa</div>
       <div class="grid g2">
-        <div><div class="lbl">Presbitério</div><p style="margin:4px 0">${esc(c.nome || 'Não informado')}${c.sigla ? ' (' + esc(c.sigla) + ')' : ''}<br><span class="small muted">${esc(c.sinodo || '')}${c.cidade ? ' · ' + esc(c.cidade) : ''}</span><br><span class="small muted">${igrejasCfg().length} igrejas e congregações</span></p>
-          <button class="btn sm" id="bCfg">Editar dados do presbitério</button></div>
+        <div><div class="lbl">${esc(ORG().tipo)}</div><p style="margin:4px 0">${esc(c.nome || ORG().nome || 'Não informado')}${c.sigla ? ' (' + esc(c.sigla) + ')' : ''}<br><span class="small muted">${esc(c.sinodo || '')}${c.cidade ? ' · ' + esc(c.cidade) : ''}</span><br><span class="small muted">${igrejasCfg().length} igrejas e congregações</span></p>
+          <button class="btn sm" id="bCfg">Editar dados do ${esc(ORG().tipoMin)}</button></div>
         <div><div class="lbl">Reuniões</div>
           <div class="tbl-wrap"><table><tbody>${rs.map(r => `<tr class="click" data-reu="${esc(r.id)}"><td>${esc(r.codigo || '')}${r.id === c.reuniaoAtual ? ' <span class="tag">atual</span>' : ''}</td><td class="small">${esc(periodo(r))}</td></tr>`).join('') || '<tr><td class="muted">Nenhuma reunião.</td></tr>'}</tbody></table></div>
           <button class="btn sm" id="bNovaReu" style="margin-top:8px">+ Nova reunião</button></div>
       </div>
       <div class="grid g2" style="margin-top:14px">
         <div><div class="lbl">Comissões do concílio</div><p class="small muted" style="margin:4px 0">Nome, grupo, modelo de parecer e base legal de cada comissão.</p><a class="btn sm" href="#/admin/comissoes">Abrir comissões</a></div>
-        <div><div class="lbl">Importar ou levar para outro presbitério</div><p class="small muted" style="margin:4px 0">Importe o pacote de reuniões anteriores (arquivo .json) e depois os PDFs dos documentos. Para outro presbitério, exporte só a estrutura (comissões e dados da Mesa) e ajuste os nomes.</p>
+        <div><div class="lbl">Importar ou levar para outro concílio</div><p class="small muted" style="margin:4px 0">Importe o pacote de reuniões anteriores (arquivo .json) e depois os PDFs dos documentos. Para outro presbitério, exporte só a estrutura (comissões e dados da Mesa) e ajuste os nomes.</p>
           <div class="row-wrap"><label class="btn sm">Importar pacote (.json)<input type="file" id="fPac" accept=".json,application/json" hidden></label>
           <label class="btn sm">Enviar PDFs dos documentos<input type="file" id="fPdfs" accept="application/pdf,image/*" multiple hidden></label>
           <button class="btn sm" id="bExp">Exportar estrutura</button></div>
@@ -282,8 +283,8 @@
     const { esc, modal, $ } = A();
     const c = cfg();
     const f = (id, l, v, extra) => `<div class="field ${extra || ''}"><label for="${id}">${l}</label><input type="text" id="${id}" value="${esc(v || '')}"></div>`;
-    const m = modal('Dados do presbitério', `<div class="grid g2">
-      ${f('cNome', 'Nome do presbitério', c.nome, 'span2')}${f('cSigla', 'Sigla', c.sigla)}${f('cSinodo', 'Sínodo', c.sinodo)}
+    const m = modal('Dados do ' + ORG().tipoMin, `<div class="grid g2">
+      ${f('cNome', 'Nome do ' + ORG().tipoMin, c.nome || ORG().nome, 'span2')}${f('cSigla', 'Sigla', c.sigla)}${f('cSinodo', 'Sínodo', c.sinodo)}
       ${f('cCidade', 'Cidade (Sala de Sessões)', c.cidade)}${f('cUf', 'UF', c.uf)}
       ${f('cPres', 'Presidente', c.presidente)}${f('cSec', 'Secretário Executivo', c.secretario)}${f('cTes', 'Tesoureiro', c.tesoureiro)}
       <div class="field span2"><label for="cIg">Igrejas e congregações <span class="help">uma por linha, como aparecem nos pareceres</span></label><textarea id="cIg" rows="8">${esc(c.igrejas || '')}</textarea>
@@ -294,7 +295,7 @@
     $('#cOk', m.el).onclick = async () => {
       const v = id => $('#' + id, m.el).value.trim();
       const item = { nome: v('cNome'), sigla: v('cSigla'), sinodo: v('cSinodo'), cidade: v('cCidade'), uf: v('cUf'), presidente: v('cPres'), secretario: v('cSec'), tesoureiro: v('cTes'), igrejas: v('cIg'), reuniaoAtual: c.reuniaoAtual || '' };
-      if (await salvarItem('cfg', item, 'Dados do presbitério salvos.')) { m.fechar(); A().render(); }
+      if (await salvarItem('cfg', item, 'Dados do ' + ORG().tipoMin + ' salvos.')) { m.fechar(); A().render(); }
     };
   }
   function editarReuniao(r) {
@@ -401,7 +402,7 @@
   }
   function exportarEstrutura() {
     const c = Object.assign({}, cfg()); delete c.reuniaoAtual;
-    const est = { versao: 1, descricao: 'Estrutura do Sistema de Reuniões (Relatórios IPB): dados da Mesa e comissões do concílio. Ajuste os nomes e importe no outro presbitério.', itens: [Object.assign({ tipo: 'cfg', id: 'cfg' }, c, { presidente: '', secretario: '', tesoureiro: '' })].concat(comissoes().map(x => ({ tipo: 'comissao', id: x.id, nome: x.nome, grupo: x.grupo, modelo: x.modelo, ordem: x.ordem, base: x.base, titulo: x.titulo }))) };
+    const est = { versao: 1, descricao: 'Estrutura do ' + ORG().sistema + ': dados da Mesa e comissões do concílio. Ajuste os nomes e importe no outro presbitério ou sínodo.', itens: [Object.assign({ tipo: 'cfg', id: 'cfg' }, c, { presidente: '', secretario: '', tesoureiro: '' })].concat(comissoes().map(x => ({ tipo: 'comissao', id: x.id, nome: x.nome, grupo: x.grupo, modelo: x.modelo, ordem: x.ordem, base: x.base, titulo: x.titulo }))) };
     A().baixar('estrutura-' + (sigla() || 'presbiterio').toLowerCase() + '.json', JSON.stringify(est, null, 2), 'application/json');
   }
 
@@ -1046,7 +1047,7 @@
     const fins = itens('financa').sort((a, b) => a.ano - b.ano);
     const anosF = fins.map(f => Number(f.ano));
     const fmtN = (v, curto) => v == null ? '–' : (curto ? num(v) : num(v));
-    let html = head('Histórico do presbitério', 'Números informados pelas comissões de Estatísticas e de Finanças em cada reunião. Os indicadores de cada igreja continuam em Indicadores.',
+    let html = head('Histórico do ' + ORG().tipoMin, 'Números informados pelas comissões de Estatísticas e de Finanças em cada reunião. Os indicadores de cada igreja continuam em Indicadores.',
       isAdmin() ? '<button class="btn" id="bEst">Editar estatísticas</button><button class="btn" id="bFin">Editar finanças</button>' : '');
     if (!anosE.length && !fins.length) {
       html += '<div class="card"><p class="muted" style="margin:0">Ainda não há números. A Mesa pode digitá-los aqui ou importar o pacote das reuniões anteriores.</p></div>';
@@ -1071,7 +1072,7 @@
       }
       if (fins.length) {
         const sf = [['resultado', 'Resultado do ano'], ['saldoAcumulado', 'Saldo acumulado'], ['verbaPrevista', 'Verba prevista']].filter(([k]) => fins.some(f => f.valores && temValor(f.valores[k])));
-        html += `<div class="card"><div class="section-title" style="margin-top:0">Tesouraria do presbitério</div><div style="max-width:640px">${barras(anosF.map(String), sf.map(([k, l], i) => ({ nome: l, cor: CORES[i], vals: fins.map(f => numero((f.valores || {})[k])) })), (v, c) => c ? moneyK(v) : money(v), { label: 'Tesouraria por ano' })}</div>
+        html += `<div class="card"><div class="section-title" style="margin-top:0">Tesouraria do ${esc(ORG().tipoMin)}</div><div style="max-width:640px">${barras(anosF.map(String), sf.map(([k, l], i) => ({ nome: l, cor: CORES[i], vals: fins.map(f => numero((f.valores || {})[k])) })), (v, c) => c ? moneyK(v) : money(v), { label: 'Tesouraria por ano' })}</div>
           <div class="tbl-wrap"><table><thead><tr><th>Item</th>${anosF.map(a => `<th class="num">${a}</th>`).join('')}</tr></thead><tbody>${CAMPOS_FIN.filter(([k]) => fins.some(f => f.valores && temValor(f.valores[k]))).map(([k, l]) => `<tr><td>${esc(l)}</td>${fins.map(f => `<td class="num">${f.valores && temValor(f.valores[k]) ? money(numero(f.valores[k])) : '–'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
           <p class="small muted" style="margin:8px 0 0">Fontes: ${[...new Set(fins.map(f => f.fonte).filter(Boolean))].map(esc).join('; ') || 'digitado pela Mesa'}.</p></div>`;
       }
@@ -1085,8 +1086,8 @@
     const anos = [...new Set(itens('estatistica').map(e => Number(e.ano)))].sort();
     const ano0 = anos.length ? anos[anos.length - 1] : new Date().getFullYear() - 1;
     const linhasDe = ano => [TOTAL].concat(igrejasCfg()).map(ig => ({ ig, e: itens('estatistica').find(x => Number(x.ano) === ano && x.igreja === ig) }));
-    const m = modal('Estatísticas do presbitério', `<div class="row-wrap" style="align-items:end"><div class="field"><label for="eAno">Ano</label><input type="number" id="eAno" value="${ano0}"></div><div class="field" style="flex:1"><label for="eFon">Fonte</label><input type="text" id="eFon" placeholder="ex.: Relatório da Comissão de Estatísticas, Doc. 87/2026"></div></div>
-      <p class="small muted">A primeira linha é o total do presbitério informado pela comissão; se ficar em branco, o gráfico soma as igrejas.</p><div id="eTab"></div>`,
+    const m = modal('Estatísticas do ' + ORG().tipoMin, `<div class="row-wrap" style="align-items:end"><div class="field"><label for="eAno">Ano</label><input type="number" id="eAno" value="${ano0}"></div><div class="field" style="flex:1"><label for="eFon">Fonte</label><input type="text" id="eFon" placeholder="ex.: Relatório da Comissão de Estatísticas, Doc. 87/2026"></div></div>
+      <p class="small muted">A primeira linha é o total do ${esc(ORG().tipoMin)} informado pela comissão; se ficar em branco, o gráfico soma as igrejas.</p><div id="eTab"></div>`,
       '<button class="btn" data-x>Cancelar</button><button class="btn primary" id="eOk">Salvar</button>', true);
     const desenhar = () => {
       const ano = Number($('#eAno', m.el).value);
@@ -1115,7 +1116,7 @@
     const { esc, modal, $, $$ } = A();
     const fins = itens('financa').sort((a, b) => a.ano - b.ano);
     const ult = fins[fins.length - 1];
-    const m = modal('Finanças do presbitério', `<div class="row-wrap" style="align-items:end"><div class="field"><label for="fAno">Ano</label><input type="number" id="fAno" value="${ult ? ult.ano : new Date().getFullYear() - 1}"></div><div class="field" style="flex:1"><label for="fFon">Fonte</label><input type="text" id="fFon"></div></div><div class="grid g2" id="fCampos"></div>`,
+    const m = modal('Finanças do ' + ORG().tipoMin, `<div class="row-wrap" style="align-items:end"><div class="field"><label for="fAno">Ano</label><input type="number" id="fAno" value="${ult ? ult.ano : new Date().getFullYear() - 1}"></div><div class="field" style="flex:1"><label for="fFon">Fonte</label><input type="text" id="fFon"></div></div><div class="grid g2" id="fCampos"></div>`,
       '<button class="btn" data-x>Cancelar</button><button class="btn primary" id="fOk">Salvar</button>', true);
     const desenhar = () => {
       const ano = Number($('#fAno', m.el).value);
@@ -1143,7 +1144,7 @@
     const { esc, shell, head, $$ } = A();
     const rs = reunioes();
     const anos = [...new Set(rs.map(r => r.ano))].sort((a, b) => b - a);
-    let html = head('Reuniões e convocações', 'Todas as reuniões do presbitério, ordinárias e extraordinárias, com a convocação, a mesa e a ata de cada uma.', isAdmin() ? '<button class="btn primary" id="bNovaR">+ Nova reunião</button>' : '');
+    let html = head('Reuniões e convocações', 'Todas as reuniões do ' + ORG().tipoMin + ', ordinárias e extraordinárias, com a convocação, a mesa e a ata de cada uma.', isAdmin() ? '<button class="btn primary" id="bNovaR">+ Nova reunião</button>' : '');
     if (!rs.length) html += '<div class="card"><p class="muted" style="margin:0">Nenhuma reunião cadastrada.</p></div>';
     anos.forEach(ano => {
       const doAno = rs.filter(r => r.ano === ano).sort((a, b) => String(a.dataInicio || '').localeCompare(String(b.dataInicio || '')));

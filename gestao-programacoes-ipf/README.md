@@ -65,7 +65,7 @@ Com `apiUrl` vazio, o site funciona em **modo local**: os dados ficam só no nav
 
 ---
 
-## Relatórios IPB (pasta `relatorios/`)
+## Sistema de Gestão PLRN (pasta `relatorios/`)
 
 Sistema separado para o Presbitério receber, registrar e analisar os relatórios das igrejas, no padrão da Igreja Presbiteriana do Brasil. Endereço: `/relatorios/` (por exemplo, https://gestao-programacoes-ipf.vercel.app/relatorios/).
 
@@ -138,3 +138,13 @@ No Supabase, rode de novo `supabase/relatorios.sql`: ele cria as tabelas `ipb_re
 4. No primeiro acesso, o sistema pede para criar o administrador. Ele cadastra os usuários das igrejas e as comissões.
 
 Se os modelos ou os dados históricos mudarem, gere o SQL de novo com `node ferramentas/gerar-sql-dados.js`.
+
+
+## Usar em outro concílio (presbitério ou sínodo)
+
+O sistema foi feito para ser replicado. Para outro presbitério ou para um sínodo:
+
+1. Em `relatorios/config.js`, troque os valores de `window.IPB_ORG`: nome do sistema, `tipo` (`Presbitério` ou `Sínodo`), nome, sigla, sínodo e `unidades` (`igrejas` num presbitério, `presbitérios` num sínodo). Telas, títulos, impressão e login passam a usar esses nomes.
+2. Em `relatorios/manifest.webmanifest` e no `<title>` de `relatorios/index.html`, troque o nome do aplicativo (é o nome que aparece ao instalar no celular).
+3. Cadastre as igrejas (ou os presbitérios) em Administração → Igrejas, e a Mesa e as comissões em Reunião → Configuração da Mesa. A estrutura de um concílio pode ser exportada e importada em outro (Reunião → "Importar ou levar para outro concílio").
+4. Os dados de anos anteriores entram por um pacote cifrado próprio (`ferramentas/gerar-pacote-reunioes.js`), com a senha do novo concílio. Os dados de um concílio nunca vão para o repositório sem criptografia.

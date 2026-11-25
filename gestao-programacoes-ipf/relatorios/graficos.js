@@ -293,10 +293,10 @@
     const anoI = anosI.includes(G.ano) ? G.ano : anosI[anosI.length - 1];
     const ant = anosI.filter(a => a < anoI).pop();
     const tot = (c, a) => a == null ? null : DI.total(a, c);
-    const abas = [['tesouraria', 'Tesouraria do presbitério'], ['rol', 'Rol de membros'], ['sociedades', 'Sociedades internas'], ['financas', 'Finanças das igrejas']];
+    const abas = [['tesouraria', 'Tesouraria do ' + A().ORG.tipoMin], ['rol', 'Rol de membros'], ['sociedades', 'Sociedades internas'], ['financas', 'Finanças das igrejas']];
     if (!abas.some(x => x[0] === G.aba)) G.aba = 'tesouraria';
     const acoes = H().isAdmin() ? '<button class="btn" id="gEst">Editar estatísticas</button><button class="btn" id="gFin">Editar finanças</button>' : '';
-    let html = head('Gráficos do presbitério', `Caixa da tesouraria, membros, sociedades internas e finanças das igrejas${anoI ? ' · dados de ' + anosI.join(', ') : ''}. Em cada gráfico, escolha a forma no seletor ao lado do título.`, acoes);
+    let html = head('Gráficos do ' + A().ORG.tipoMin, `Caixa da tesouraria, membros, sociedades internas e finanças das igrejas${anoI ? ' · dados de ' + anosI.join(', ') : ''}. Em cada gráfico, escolha a forma no seletor ao lado do título.`, acoes);
     // quadros principais
     html += `<div class="gf-top row-wrap"><label class="small muted" for="gAno">Ano das igrejas</label><select id="gAno">${anosI.map(a => `<option ${a === anoI ? 'selected' : ''}>${a}</option>`).join('')}</select></div>`;
     html += `<div class="kpis gf-kpis">${kpi('Membros (rol)', tot('membros', anoI), tot('membros', ant), ant)}${kpi('Membros comungantes', tot('comungantes', anoI), tot('comungantes', ant), ant)}${kpi('Ministros', tot('ministros', anoI), tot('ministros', ant), ant)}${kpi('Presbíteros', tot('presbiteros', anoI), tot('presbiteros', ant), ant)}${kpi('Diáconos', tot('diaconos', anoI), tot('diaconos', ant), ant)}</div>`;
@@ -371,12 +371,12 @@
     const comIg = igs.filter(i => DI.v(ano, i.k, 'membros') != null || DI.v(ano, i.k, 'comungantes') != null);
     let html = chips('igs', DI.igs.map(i => [i.k, i.nome]), sel, 'Igrejas nos gráficos');
     html += '<div class="grid g2">';
-    html += card('r-anos', 'Rol de membros do presbitério', 'comungantes e não comungantes, por ano', { cats: anos.map(String), series: [{ nome: 'Comungantes', vals: anos.map(a => DI.total(a, 'comungantes')) }, { nome: 'Não comungantes', vals: anos.map(a => DI.total(a, 'naoComungantes')) }], fmt: 'num', eixo: 'Ano', somaCats: false }, 'empilhadas');
+    html += card('r-anos', 'Rol de membros do ' + A().ORG.tipoMin, 'comungantes e não comungantes, por ano', { cats: anos.map(String), series: [{ nome: 'Comungantes', vals: anos.map(a => DI.total(a, 'comungantes')) }, { nome: 'Não comungantes', vals: anos.map(a => DI.total(a, 'naoComungantes')) }], fmt: 'num', eixo: 'Ano', somaCats: false }, 'empilhadas');
     html += card('r-pizza', 'Participação de cada igreja no rol', `membros em ${ano}`, { cats: comIg.map(i => i.nome), series: [{ nome: 'Membros', vals: comIg.map(i => DI.v(ano, i.k, 'membros') != null ? DI.v(ano, i.k, 'membros') : DI.v(ano, i.k, 'comungantes')) }], fmt: 'num', eixo: 'Igreja', somaCats: true }, 'pizza');
     html += card('r-ig', 'Membros por igreja', `${ano}${ant ? ' comparado a ' + ant : ''}`, { cats: comIg.map(i => i.nome), series: (ant ? [ant, ano] : [ano]).map(a => ({ nome: String(a), vals: comIg.map(i => DI.v(a, i.k, 'membros')) })), fmt: 'num', eixo: 'Igreja', somaCats: true, somaSeries: false }, 'barras');
     html += card('r-com', 'Comungantes por igreja ao longo dos anos', 'compare as igrejas marcadas', { cats: anos.map(String), series: comIg.slice(0, 8).map(i => ({ nome: i.nome, vals: anos.map(a => DI.v(a, i.k, 'comungantes')) })), fmt: 'num', eixo: 'Ano', somaSeries: false }, 'linhas');
     html += card('r-of', 'Oficiais por igreja', String(ano), { cats: comIg.map(i => i.nome), series: [['ministros', 'Ministros'], ['presbiteros', 'Presbíteros'], ['diaconos', 'Diáconos']].map(([k, l]) => ({ nome: l, vals: comIg.map(i => DI.v(ano, i.k, k)) })), fmt: 'num', eixo: 'Igreja', somaCats: true }, 'colunas');
-    html += card('r-of-anos', 'Oficiais do presbitério por ano', 'ministros, presbíteros e diáconos', { cats: anos.map(String), series: [['ministros', 'Ministros'], ['presbiteros', 'Presbíteros'], ['diaconos', 'Diáconos']].map(([k, l]) => ({ nome: l, vals: anos.map(a => DI.total(a, k)) })), fmt: 'num', eixo: 'Ano' }, 'colunas');
+    html += card('r-of-anos', 'Oficiais do ' + A().ORG.tipoMin + ' por ano', 'ministros, presbíteros e diáconos', { cats: anos.map(String), series: [['ministros', 'Ministros'], ['presbiteros', 'Presbíteros'], ['diaconos', 'Diáconos']].map(([k, l]) => ({ nome: l, vals: anos.map(a => DI.total(a, k)) })), fmt: 'num', eixo: 'Ano' }, 'colunas');
     html += '</div>';
     html += quadro('Quadro: rol de membros por igreja', anos, igs, DI, [['membros', 'Membros'], ['comungantes', 'Comungantes'], ['naoComungantes', 'Não comungantes']], 'num');
     return html + nota(DI, ano);
@@ -392,7 +392,7 @@
     let html = chips('igs', DI.igs.map(i => [i.k, i.nome]), sel, 'Igrejas nos gráficos');
     html += `<div class="kpis">${SOC.map(s => kpi(SOC_NOME[s], DI.total(ano, 'soc_' + s), null, null, 'num', 'sócios em ' + ano)).join('')}</div>`;
     html += '<div class="grid g2">';
-    html += card('s-anos', 'Sócios de cada sociedade por ano', 'total do presbitério', { cats: anos.map(String), series: SOC.map(s => ({ nome: s, vals: anos.map(a => DI.total(a, 'soc_' + s)) })), fmt: 'num', eixo: 'Ano' }, 'colunas');
+    html += card('s-anos', 'Sócios de cada sociedade por ano', 'total do ' + A().ORG.tipoMin, { cats: anos.map(String), series: SOC.map(s => ({ nome: s, vals: anos.map(a => DI.total(a, 'soc_' + s)) })), fmt: 'num', eixo: 'Ano' }, 'colunas');
     html += card('s-pizza', 'Peso de cada sociedade', `sócios em ${ano}`, { cats: SOC.map(s => SOC_NOME[s]), series: [{ nome: 'Sócios', vals: SOC.map(s => DI.total(ano, 'soc_' + s)) }], fmt: 'num', eixo: 'Sociedade', somaCats: true }, 'rosca');
     html += card('s-ig', 'Sociedades em cada igreja', String(ano), { cats: comIg.map(i => i.nome), series: SOC.map(s => ({ nome: s, vals: comIg.map(i => DI.v(ano, i.k, 'soc_' + s)) })), fmt: 'num', eixo: 'Igreja', somaCats: true }, 'empilhadas');
     const socSel = SOC.includes(G.socSel) ? G.socSel : 'SAF';
@@ -449,12 +449,12 @@
     const linhas = igs.filter(i => cols.some(c => DI.v(c.a, i.k, c.k) != null));
     return `<div class="card"><div class="card-head"><h2>${esc(titulo)}</h2><span class="muted small">total e por igreja</span></div><div class="tbl-wrap"><table class="gf-tbl"><thead><tr><th>Igreja</th>${cols.map(c => `<th class="num">${esc(c.l)}</th>`).join('')}${soAno ? '<th class="num">Total</th>' : ''}</tr></thead><tbody>
       ${linhas.map(i => `<tr><td>${esc(i.nome)}</td>${cols.map(c => { const v = DI.v(c.a, i.k, c.k); return `<td class="num">${v == null ? '–' : esc(f.l(v))}</td>`; }).join('')}${soAno ? `<td class="num"><b>${esc(f.l(cols.reduce((s, c) => s + (DI.v(c.a, i.k, c.k) || 0), 0)))}</b></td>` : ''}</tr>`).join('')}
-      <tr class="tot"><td>Presbitério</td>${cols.map(c => { const v = DI.total(c.a, c.k); return `<td class="num" title="${esc(DI.fonteTotal(c.a, c.k))}">${v == null ? '–' : esc(f.l(v))}</td>`; }).join('')}${soAno ? `<td class="num">${esc(f.l(cols.reduce((s, c) => s + (DI.total(c.a, c.k) || 0), 0)))}</td>` : ''}</tr>
+      <tr class="tot"><td>${A().esc(A().ORG.tipo)}</td>${cols.map(c => { const v = DI.total(c.a, c.k); return `<td class="num" title="${esc(DI.fonteTotal(c.a, c.k))}">${v == null ? '–' : esc(f.l(v))}</td>`; }).join('')}${soAno ? `<td class="num">${esc(f.l(cols.reduce((s, c) => s + (DI.total(c.a, c.k) || 0), 0)))}</td>` : ''}</tr>
     </tbody></table></div></div>`;
   }
   function nota(DI, ano) {
     const fontes = [...new Set(Object.values(DI.D[ano] || {}).map(e => e.fonte))];
-    return `<p class="small muted">Fontes de ${ano}: ${A().esc(fontes.join(' e ') || 'sem relatórios das igrejas')}. A linha "Presbitério" usa o total da Comissão de Estatísticas quando ele existe; senão, soma as igrejas.</p>`;
+    return `<p class="small muted">Fontes de ${ano}: ${A().esc(fontes.join(' e ') || 'sem relatórios das igrejas')}. A linha "${A().esc(A().ORG.tipo)}" usa o total da Comissão de Estatísticas quando ele existe; senão, soma as igrejas.</p>`;
   }
   function semDados() { return '<div class="card"><p class="muted" style="margin:0">Ainda não há números das igrejas. Eles vêm dos relatórios de estatística enviados pelas igrejas ou da Comissão de Estatísticas (botão Editar estatísticas).</p></div>'; }
 

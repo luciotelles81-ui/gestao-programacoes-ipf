@@ -1,8 +1,12 @@
-/* Relatórios IPB · aplicação (sem dependências externas) */
+/* Sistema de Gestão (concílios da IPB) · aplicação (sem dependências externas) */
 (function () {
   'use strict';
   const CFG = window.IPB_CONFIG || {};
   const SERVER = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
+  // identidade do concílio (config.js): nome do sistema, presbitério ou sínodo, sigla
+  const ORG = Object.assign({ sistema: 'Sistema de Gestão', tipo: 'Presbitério', nome: 'Presbitério', sigla: '', sinodo: '', unidade: 'igreja', unidades: 'igrejas' }, window.IPB_ORG || {});
+  ORG.tipoMin = ORG.tipo.toLowerCase();
+  document.title = ORG.sistema;
   const TOKEN_KEY = 'ipb-relatorios-token';
   const THEME_KEY = 'ipb-relatorios-tema';
   const ROLE_NOMES = { admin: 'Administrador', editor: 'Editor (preenche relatórios)', analista: 'Analista (comissão)', leitor: 'Somente leitura' };
@@ -40,7 +44,7 @@
     setTimeout(() => t.remove(), err ? 6000 : 3500);
   }
   const igreja = id => (S.d && S.d.igrejas.find(i => i.id === id)) || null;
-  const igNome = id => { const i = igreja(id); return i ? i.nome : 'Presbitério (todas as igrejas)'; };
+  const igNome = id => { const i = igreja(id); return i ? i.nome : ORG.tipo + ' (todas as ' + ORG.unidades + ')'; };
   const isAdmin = () => S.user && S.user.role === 'admin';
   const isPresb = () => S.user && !S.user.igrejaId;
   const podeEditar = r => (isAdmin() || S.user.role === 'editor') && ['Rascunho', 'Devolvido'].includes(r.status);
@@ -229,7 +233,7 @@
   }
   function telaPrimeiroAcesso() {
     root().innerHTML = `<div class="login-form" style="min-height:100vh"><div class="card"><h2>Primeiro acesso</h2>
-      <p class="muted small" style="margin:4px 0 0">O sistema ainda não tem usuários. Crie o administrador do Presbitério. Ele cadastra os demais usuários e as comissões.</p>
+      <p class="muted small" style="margin:4px 0 0">O sistema ainda não tem usuários. Crie o administrador do ${esc(ORG.tipo)}. Ele cadastra os demais usuários e as comissões.</p>
       <form id="fPA"><div class="field"><label>Nome completo</label><input type="text" id="paN" required></div>
       <div class="field"><label>Usuário</label><input type="text" id="paU" value="admin" required autocomplete="username"></div>
       <div class="field"><label>Senha (mínimo 8 caracteres)</label><input type="password" id="paS" required autocomplete="new-password"></div>
@@ -245,7 +249,7 @@
     root().innerHTML = `
       <div class="login">
         <div class="login-hero">
-          <div class="brand" style="padding:0">${logo(48)}<div><b>Relatórios IPB</b><span>Presbitério Litorâneo do RN</span></div></div>
+          <div class="brand" style="padding:0">${logo(48)}<div><b>${esc(ORG.sistema)}</b><span>${esc(ORG.nome)}</span></div></div>
           <div>
             <h1>Relatórios das igrejas, do preenchimento ao parecer da comissão.</h1>
             <p>Formulários oficiais, histórico dos anos anteriores, exame de atas pelo Manual Presbiteriano e assinatura eletrônica dos membros da comissão.</p>
@@ -263,15 +267,15 @@
             <p class="muted small" style="margin:4px 0 0">Escolha a igreja e informe seu usuário e senha.</p>
             <form id="fLogin">
               <div class="field"><label for="lIg">Igreja</label>
-                <select id="lIg"><option value="">Presbitério (comissões e administração)</option>${igs.map(i => `<option value="${esc(i.id)}">${esc(i.nome)}</option>`).join('')}</select></div>
+                <select id="lIg"><option value="">${esc(ORG.tipo)} (comissões e administração)</option>${igs.map(i => `<option value="${esc(i.id)}">${esc(i.nome)}</option>`).join('')}</select></div>
               <div class="field"><label for="lUs">Usuário</label><input id="lUs" type="text" autocomplete="username" required></div>
               <div class="field"><label for="lPw">Senha</label><input id="lPw" type="password" autocomplete="current-password" required></div>
               <button class="btn primary" type="submit">Entrar</button>
             </form>
             <p class="small" style="margin-top:14px"><a href="#/verificar">Verificar uma assinatura</a></p>
-            ${SERVER ? '' : S.publico && (S.publico.pacoteFechado || S.publico.reunioesFechadas) ? `<div class="alert info" style="margin-top:14px"><div><b>Dados do Presbitério</b><br>Para carregar os relatórios de 2023 a 2025 com os PDFs originais e as reuniões do presbitério (acervo, membros das comissões e tesouraria), deixe "Presbitério" na igreja, use o usuário <code>admin</code> e a <b>senha dos dados</b> que você recebeu. Isso só é preciso uma vez neste navegador.</div></div>
+            ${SERVER ? '' : S.publico && (S.publico.pacoteFechado || S.publico.reunioesFechadas) ? `<div class="alert info" style="margin-top:14px"><div><b>Dados do ${esc(ORG.tipo)}</b><br>Para carregar os relatórios de 2023 a 2025 com os PDFs originais e as reuniões do ${esc(ORG.tipoMin)} (acervo, membros das comissões e tesouraria), deixe "${esc(ORG.tipo)}" na igreja, use o usuário <code>admin</code> e a <b>senha dos dados</b> que você recebeu. Isso só é preciso uma vez neste navegador.</div></div>
               <div class="demo"><b>Modo demonstração</b> (dados só neste navegador). Para só testar, sem os dados reais: <code>admin</code>/<code>admin123</code>.</div>`
-              : `<div class="demo"><b>Modo demonstração</b> (dados só neste navegador). Presbitério: ${S.publico && S.publico.pacoteAberto ? '<code>admin</code> com a senha dos dados' : '<code>admin</code>/<code>admin123</code>'}, <code>relator</code>/<code>relator123</code>, <code>membro</code>/<code>membro123</code>. Igreja Filadélfia: <code>secretario</code>/<code>secretario123</code>.</div>`}
+              : `<div class="demo"><b>Modo demonstração</b> (dados só neste navegador). ${esc(ORG.tipo)}: ${S.publico && S.publico.pacoteAberto ? '<code>admin</code> com a senha dos dados' : '<code>admin</code>/<code>admin123</code>'}, <code>relator</code>/<code>relator123</code>, <code>membro</code>/<code>membro123</code>. Igreja Filadélfia: <code>secretario</code>/<code>secretario123</code>.</div>`}
           </div>
         </div>
       </div>`;
@@ -287,8 +291,8 @@
       catch (err) { erro.style.color = '#b3261e'; erro.textContent = err.message || String(err); }
       btn.disabled = false;
       if (!r) return;
-      if (r.pacoteAberto) toast('Dados do Presbitério carregados: ' + r.pacoteAberto + ' relatórios com os originais anexados.');
-      if (r.reunioesAbertas) setTimeout(() => toast('Reuniões, acervo, membros das comissões e tesouraria carregados (' + r.reunioesAbertas + ' itens).'), r.pacoteAberto ? 3500 : 0);
+      if (r.pacoteAberto) toast('Dados do ' + ORG.tipo + ' carregados: ' + r.pacoteAberto + ' relatórios com os originais anexados.');
+      if (r.reunioesAbertas) setTimeout(() => toast('Dados do ' + ORG.tipoMin + ' carregados: reuniões, acervo, relatórios das igrejas, membros das comissões e tesouraria (' + r.reunioesAbertas + ' itens).'), r.pacoteAberto ? 3500 : 0);
       S.publico = null;
       S.token = r.token;
       try { localStorage.setItem(TOKEN_KEY, r.token); } catch (err) { /* sem armazenamento */ }
@@ -329,10 +333,10 @@
     const u = S.user;
     const nav = (h, label, ic, n) => `<a href="#/${h}" class="${pagina === h.split('/')[0] || (h === 'admin/comissoes' && pagina === 'admin-comissoes') ? 'active' : ''}">${ic} ${label}${n ? `<span class="count">${n}</span>` : ''}</a>`;
     root().innerHTML = `
-      <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><b>Relatórios IPB</b></div>
+      <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><b>${esc(ORG.sistema)}</b></div>
       <div class="app">
         <aside class="side" id="side">
-          <div class="brand">${logo(34)}<div><b>Relatórios IPB</b><span>${esc(u.igrejaId ? (igreja(u.igrejaId) || {}).sigla || '' : 'Presbitério')}</span></div></div>
+          <div class="brand">${logo(34)}<div><b>${esc(ORG.sistema)}</b><span>${esc(u.igrejaId ? (igreja(u.igrejaId) || {}).sigla || '' : ORG.tipo)}</span></div></div>
           <nav class="nav">
             ${nav('painel', 'Painel', '▦')}
             ${nav('indicadores', 'Indicadores', '↗')}
@@ -341,13 +345,13 @@
             ${nav('verificar', 'Verificar assinatura', '✓')}
             <div class="nav-label">Reunião do concílio</div>
             ${nav('reuniao', 'Reunião', '⚖')}${nav('reunioes', 'Reuniões e convocações', '◷')}${nav('mesa', 'Mesa e secretarias', '♜')}${nav('ata-geral', 'Ata da reunião', '✎')}${nav('comissoes', 'Comissões', '⚑', window.IPB_REUNIAO ? window.IPB_REUNIAO.pendentes() : 0)}
-            ${nav('acervo', 'Acervo de documentos', '▣')}${nav('tesouraria', 'Tesouraria do presbitério', '$')}${nav('documentos', 'Documentos da reunião', '▤')}${nav('delegados', 'Membros das comissões', '☺')}${nav('historico', 'Gráficos do presbitério', '◔')}
+            ${nav('acervo', 'Acervo de documentos', '▣')}${nav('tesouraria', 'Tesouraria do ' + ORG.tipoMin, '$')}${nav('documentos', 'Documentos da reunião', '▤')}${nav('delegados', 'Membros das comissões', '☺')}${nav('historico', 'Gráficos do presbitério', '◔')}
             ${isAdmin() ? `<div class="nav-label">Administração</div>
               ${nav('admin/igrejas', 'Igrejas', '⌂')}${nav('admin/usuarios', 'Usuários e acessos', '☺')}
               ${nav('admin/modelos', 'Modelos de relatório', '☰')}${nav('admin/comissoes', 'Comissões', '⚑')}${nav('admin/registro', 'Registro de ações', '≡')}` : ''}
           </nav>
           <div class="side-foot">
-            <div class="who"><b>${esc(u.nome)}</b><span>${esc(ROLE_NOMES[u.role] || u.role)} · ${esc(u.igrejaId ? igNome(u.igrejaId) : 'Presbitério')}</span></div>
+            <div class="who"><b>${esc(u.nome)}</b><span>${esc(ROLE_NOMES[u.role] || u.role)} · ${esc(u.igrejaId ? igNome(u.igrejaId) : ORG.tipo)}</span></div>
             <div class="row">
               <button class="side-btn" id="bConta">Minha senha</button>
               <button class="side-btn" id="bTema">Tema</button>
@@ -504,7 +508,7 @@
       return { nome: l, v: anoCon.cons.length ? sim / anoCon.cons.length : 0, extra: sim + ' de ' + anoCon.cons.length + ' relatórios' };
     }) : [];
 
-    const html = head('Painel', esc(unica ? igNome(unica) : 'Presbitério Litorâneo do RN · ' + igs.length + ' igrejas e congregações'),
+    const html = head('Painel', esc(unica ? igNome(unica) : ORG.nome + ' · ' + igs.length + (ORG.unidades === 'igrejas' ? ' igrejas e congregações' : ' ' + ORG.unidades)),
       unica ? '' : `<select id="fIg" aria-label="Filtrar igreja" style="min-width:240px"><option value="">Todas as igrejas</option>${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>`) + `
       <div class="kpis">
         <div class="kpi"><div class="l">Membros comungantes ${ult.igrejasEst ? '(' + ult.ano + ')' : ''}</div><div class="v">${num(ult.com)}</div>${delta(ult.com, pen && pen.com, num)}</div>
@@ -685,14 +689,14 @@
       const tot = ind.fmt === 'pct' ? null : vs.reduce((a, b) => a + b, 0);
       const med = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
       const maxAbs = Math.max(1e-9, ...igs.flatMap(i => anosInd.map(a => Math.abs(val(i, a) || 0))));
-      html = head('Indicadores', 'Compare um indicador entre as igrejas do Presbitério.', seg) + `
+      html = head('Indicadores', 'Compare um indicador entre as ' + ORG.unidades + ' do ' + ORG.tipo + '.', seg) + `
         <div class="card"><div class="filters" style="margin:0">
           <div class="field" style="min-width:320px"><label for="iInd">Indicador</label><select id="iInd">${grupos.map(g => `<optgroup label="${esc(g)}">${IND.filter(i => i.grupo === g).map(i => `<option value="${i.id}" ${i.id === ind.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</optgroup>`).join('')}</select></div>
           <div class="field"><label for="iAno">Ano</label><select id="iAno">${anosInd.map(a => `<option ${a === ano ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
         </div></div>
         <div class="kpis">
           <div class="kpi"><div class="l">Igrejas com dado em ${ano}</div><div class="v">${rank.length}</div></div>
-          ${tot != null ? `<div class="kpi"><div class="l">Total do Presbitério</div><div class="v">${esc(fmtInd(tot, ind.fmt, true))}</div></div>` : ''}
+          ${tot != null ? `<div class="kpi"><div class="l">Total do ${esc(ORG.tipo)}</div><div class="v">${esc(fmtInd(tot, ind.fmt, true))}</div></div>` : ''}
           <div class="kpi"><div class="l">Média por igreja</div><div class="v">${esc(fmtInd(med, ind.fmt, true))}</div></div>
           ${rank.length ? `<div class="kpi"><div class="l">Maior valor</div><div class="v" style="font-size:18px">${esc(rank[0].i.sigla || rank[0].i.nome)}</div><div class="d muted">${esc(fmtInd(rank[0].v, ind.fmt))}</div></div>` : ''}
         </div>
@@ -700,7 +704,7 @@
           <div class="card"><div class="card-head"><h2>${esc(ind.nome)}</h2><span class="muted small">${ano} · da maior para a menor</span></div>
             ${rank.length ? hbarras(rank.map(x => ({ nome: x.i.sigla || x.i.nome, v: x.v, extra: x.i.nome + (x.p != null ? ' · ' + (ano - 1) + ': ' + fmtInd(x.p, ind.fmt) : '') })), (v, c) => fmtInd(v, ind.fmt, c), 'var(--c1)') : '<div class="list-empty">Sem dados neste ano.</div>'}
             ${ind.id === 'dizscPct' ? '<p class="small muted">Referência: o dízimo ao Supremo Concílio é 10% dos dízimos.</p>' : ''}</div>
-          <div class="card"><div class="card-head"><h2>Total ou média do Presbitério por ano</h2><span class="muted small">${ind.fmt === 'pct' ? 'média das igrejas' : 'soma das igrejas com dado'}</span></div>
+          <div class="card"><div class="card-head"><h2>Total ou média do ${esc(ORG.tipo)} por ano</h2><span class="muted small">${ind.fmt === 'pct' ? 'média das igrejas' : 'soma das igrejas com dado'}</span></div>
             ${barras(anosInd.map(String), [{ nome: ind.nome, cor: 'var(--c1)', vals: anosInd.map(a => { const v = igs.map(i => val(i, a)).filter(x => x != null); return ind.fmt === 'pct' ? (v.length ? v.reduce((x, y) => x + y, 0) / v.length : 0) : v.reduce((x, y) => x + y, 0); }) }], (v, ax) => fmtInd(v, ind.fmt, ax), { label: ind.nome, h: 220 })}
             <p class="small muted">Igrejas com dado: ${anosInd.map(a => a + ': ' + contagem(a)).join(' · ')}. Anos com poucas igrejas não são comparáveis com os demais.</p></div>
         </div>
@@ -964,7 +968,7 @@
       ${lista.map(an => {
         const pdf = an.tipo === 'application/pdf';
         const podeExcluir = isAdmin() || (an.porId && an.porId === S.user.id);
-        return `<div class="anx"><span class="ic">${pdf ? 'PDF' : 'IMG'}</span><div class="grow"><b>${esc(an.nome)}</b>${an.original ? ' <span class="tag">relatório original</span>' : ''}<div class="small muted">${tamanho(an.tamanho || 0)} · ${an.origem === 'pacote' ? 'importado do arquivo enviado pelo Presbitério' : 'anexado por ' + esc(an.porNome || '') + ' em ' + dt(an.em, true)}</div></div>
+        return `<div class="anx"><span class="ic">${pdf ? 'PDF' : 'IMG'}</span><div class="grow"><b>${esc(an.nome)}</b>${an.original ? ' <span class="tag">relatório original</span>' : ''}<div class="small muted">${tamanho(an.tamanho || 0)} · ${an.origem === 'pacote' || an.origem === 'reunioes' ? 'importado do arquivo enviado pelo ' + ORG.tipo : 'anexado por ' + esc(an.porNome || '') + ' em ' + dt(an.em, true)}</div></div>
           <div class="actions"><button class="btn sm primary" data-cmp="${esc(an.id)}">Comparar com o formulário</button><button class="btn sm" data-abr="${esc(an.id)}">Abrir</button>${podeExcluir ? `<button class="btn sm ghost" data-axc="${esc(an.id)}">Excluir</button>` : ''}</div></div>`;
       }).join('') || '<p class="muted" style="margin:0">Nenhum arquivo anexado a este relatório.</p>'}
       ${podeAnexar() ? `<div class="filters" style="margin:14px 0 0"><div class="field" style="min-width:280px"><label for="axF">Anexar PDF ou imagem (até 15 MB)</label><input type="file" id="axF" accept="application/pdf,image/*"></div><button class="btn" id="bAnexar">Anexar</button></div>` : ''}
@@ -1359,16 +1363,16 @@
         <div><b>Editor</b><br><span class="muted">Preenche e envia os relatórios da sua igreja. Envia atas.</span></div>
         <div><b>Analista</b><br><span class="muted">Membro de comissão: analisa, escreve pareceres e assina.</span></div>
         <div><b>Somente leitura</b><br><span class="muted">Vê relatórios e o painel, sem alterar nada.</span></div>
-      </div><p class="small muted" style="margin:10px 0 0">Usuários sem igreja são do Presbitério e veem todas as igrejas. Usuários de uma igreja veem só a própria.</p></div>
+      </div><p class="small muted" style="margin:10px 0 0">Usuários sem igreja são do ${esc(ORG.tipo)} e veem todas as ${esc(ORG.unidades)}. Usuários de uma igreja veem só a própria.</p></div>
       <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Nome</th><th>Usuário</th><th>Igreja</th><th>Perfil</th><th>Cargo</th><th>Situação</th></tr></thead><tbody>
-      ${us.map(u => `<tr class="click" data-ed="${esc(u.id)}"><td>${esc(u.nome)}</td><td class="code">${esc(u.username)}</td><td>${esc(u.igrejaId ? igNome(u.igrejaId) : 'Presbitério')}</td><td>${esc(ROLE_NOMES[u.role] || u.role)}</td><td>${esc(u.cargo || '')}</td><td>${u.ativo === false ? '<span class="tag gray">inativo</span>' : '<span class="tag">ativo</span>'}</td></tr>`).join('')}
+      ${us.map(u => `<tr class="click" data-ed="${esc(u.id)}"><td>${esc(u.nome)}</td><td class="code">${esc(u.username)}</td><td>${esc(u.igrejaId ? igNome(u.igrejaId) : ORG.tipo)}</td><td>${esc(ROLE_NOMES[u.role] || u.role)}</td><td>${esc(u.cargo || '')}</td><td>${u.ativo === false ? '<span class="tag gray">inativo</span>' : '<span class="tag">ativo</span>'}</td></tr>`).join('')}
       </tbody></table></div></div>`);
     const abrir = u => {
       u = u || { ativo: true, role: 'editor', igrejaId: '' };
       const m = modal(u.id ? 'Editar usuário' : 'Novo usuário', `<div class="grid g2">
         <div class="field"><label>Nome completo</label><input type="text" id="uN" value="${esc(u.nome || '')}"></div>
         <div class="field"><label>Usuário (login)</label><input type="text" id="uU" value="${esc(u.username || '')}"></div>
-        <div class="field"><label>Igreja</label><select id="uI"><option value="">Presbitério (todas)</option>${S.d.igrejas.map(i => `<option value="${esc(i.id)}" ${u.igrejaId === i.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select></div>
+        <div class="field"><label>Igreja</label><select id="uI"><option value="">${esc(ORG.tipo)} (todas)</option>${S.d.igrejas.map(i => `<option value="${esc(i.id)}" ${u.igrejaId === i.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select></div>
         <div class="field"><label>Perfil de acesso</label><select id="uR">${Object.entries(ROLE_NOMES).map(([k, l]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="field"><label>Cargo / função</label><input type="text" id="uC" value="${esc(u.cargo || '')}" placeholder="Ex.: Secretário do Conselho"></div>
         <div class="field"><label>E-mail</label><input type="email" id="uE" value="${esc(u.email || '')}"></div>
@@ -1539,7 +1543,7 @@
     render();
   }
   // funções do app usadas pelo módulo da reunião do concílio (reunioes.js)
-  window.IPB_APP = { S, api, esc, $, $$, shell, head, modal, confirmar, toast, acao, recarregar, render, ir, barras, hbarras, ligarTips, baixar, isAdmin, num, money, moneyK, pct, dt, lerArquivo, tamanho, logo, ctx, modelo };
+  window.IPB_APP = { ORG, S, api, esc, $, $$, shell, head, modal, confirmar, toast, acao, recarregar, render, ir, barras, hbarras, ligarTips, baixar, isAdmin, num, money, moneyK, pct, dt, lerArquivo, tamanho, logo, ctx, modelo };
   window.addEventListener('beforeunload', e => { if (S.edit && S.edit.sujo) { e.preventDefault(); e.returnValue = ''; } });
   iniciar();
 })();
