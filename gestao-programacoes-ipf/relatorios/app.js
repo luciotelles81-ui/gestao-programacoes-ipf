@@ -278,7 +278,13 @@
     $('#fLogin').onsubmit = async e => {
       e.preventDefault();
       const btn = $('#fLogin button'); btn.disabled = true;
-      const r = await acao(() => api({ action: 'login', igrejaId: $('#lIg').value || null, username: $('#lUs').value.trim(), senha: $('#lPw').value.trim() }));
+      let erro = $('#lErr');
+      if (!erro) { erro = document.createElement('p'); erro.id = 'lErr'; erro.setAttribute('role', 'alert'); erro.style.cssText = 'color:#b3261e;font-weight:600;margin:.6rem 0 0'; btn.insertAdjacentElement('afterend', erro); }
+      erro.textContent = 'Entrando… na primeira vez, os dados levam alguns segundos para abrir.';
+      erro.style.color = 'inherit';
+      let r = null;
+      try { r = await api({ action: 'login', igrejaId: $('#lIg').value || null, username: $('#lUs').value.trim(), senha: $('#lPw').value.trim() }); erro.textContent = ''; }
+      catch (err) { erro.style.color = '#b3261e'; erro.textContent = err.message || String(err); }
       btn.disabled = false;
       if (!r) return;
       if (r.pacoteAberto) toast('Dados do Presbitério carregados: ' + r.pacoteAberto + ' relatórios com os originais anexados.');

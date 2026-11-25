@@ -79,10 +79,21 @@
     let p;
     try { const r = await fetch('dados/reunioes.json', { cache: 'no-store' }); if (!r.ok) { motivoReunioes = 'o arquivo dos dados das reuniões não foi encontrado (erro ' + r.status + ')'; return 0; } p = await r.json(); } catch (e) { motivoReunioes = 'não consegui baixar os dados das reuniões (' + (e.message || e) + ')'; return 0; }
     let corpo;
+    // aceita a senha digitada com espaços, traços diferentes ou letras em outra caixa
+    const limpa = senha.replace(/\s+/g, '').replace(/[\u2010-\u2015\u2212_.]/g, '-');
+    const semTraco = limpa.replace(/-/g, '');
+    const comTraco = semTraco.length === 20 ? semTraco.match(/.{5}/g).join('-') : limpa;
+    const tentativas = [...new Set([senha, limpa, comTraco, comTraco.charAt(0).toUpperCase() + comTraco.slice(1).toLowerCase(), comTraco.toLowerCase()])];
     try {
-      const key = await chavePacote(senha, p);
-      const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(p.iv) }, key, b64d(p.ct));
-      corpo = JSON.parse(new TextDecoder().decode(pt));
+      for (const t of tentativas) {
+        try {
+          const key = await chavePacote(t, p);
+          const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(p.iv) }, key, b64d(p.ct));
+          corpo = JSON.parse(new TextDecoder().decode(pt));
+          break;
+        } catch (e) { /* tenta a próxima forma */ }
+      }
+      if (!corpo) throw new Error('senha');
     } catch (e) { motivoReunioes = 'a senha digitada (' + senha.length + ' caracteres) não abre os dados das reuniões' + (crypto.subtle ? '' : ' (navegador sem criptografia)'); return 0; }
     const n = importarItens(u, corpo.itens || [], now(), true);
     db.pacoteReunioes = { chave: corpo.chaveArquivos, em: now() };
