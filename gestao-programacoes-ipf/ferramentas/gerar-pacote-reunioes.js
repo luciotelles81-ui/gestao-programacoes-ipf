@@ -43,6 +43,8 @@ const MIME = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg
     n++; bytes += buf.length;
   }
   const corpo = { itens: pk.itens, chaveArquivos: b64(chaveArq), descricao: pk.descricao || '' };
+  // opcional: igrejas e relatórios de anos anteriores (formato do backup do Relatórios IPB)
+  if (Array.isArray(pk.igrejas) && Array.isArray(pk.relatorios)) { corpo.igrejas = pk.igrejas; corpo.relatorios = pk.relatorios.map(r => Object.assign({}, r, { criadoPor: null, anexos: [] })); }
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(senha), 'PBKDF2', false, ['deriveKey']);
   const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: ITER, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);

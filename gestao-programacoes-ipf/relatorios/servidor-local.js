@@ -52,6 +52,20 @@
     const base = await crypto.subtle.importKey('raw', enc.encode(senha), 'PBKDF2', false, ['deriveKey']);
     return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64d(p.salt), iterations: p.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
   }
+  // igrejas e relatórios de anos anteriores (mesmo formato do pacote dos dados do Presbitério)
+  function juntarRelatorios(H) {
+    const temRel = id => db.relatorios.some(r => r.igrejaId === id);
+    db.igrejas = db.igrejas.filter(i => temRel(i.id) || db.usuarios.some(u => u.igrejaId === i.id) || !H.igrejas.some(h => h.nome === i.nome));
+    H.igrejas.forEach(i => { const ex = db.igrejas.find(x => x.id === i.id); if (ex) Object.assign(ex, i); else db.igrejas.push(i); });
+    let n = 0;
+    H.relatorios.forEach(h => {
+      if (db.relatorios.some(r => r.id === h.id)) return;
+      const m = h.modelo || snapshot(db.modelos.find(x => x.id === h.modeloId) || (window.IPB_MODELOS_PADRAO || []).find(x => x.id === h.modeloId));
+      db.relatorios.push(Object.assign(h, { modelo: m, criadoPor: null, criadoPorNome: h.criadoPorNome || 'Importação', createdAt: h.createdAt || h.enviadoEm, updatedAt: h.updatedAt || h.enviadoEm, analise: h.analise || novaAnalise() }));
+      n++;
+    });
+    return n;
+  }
   async function abrirPacote(senha) {
     const p = await pacoteInfo();
     if (!p) return false;
@@ -95,8 +109,9 @@
       }
       if (!corpo) throw new Error('senha');
     } catch (e) { motivoReunioes = 'a senha digitada (' + senha.length + ' caracteres) não abre os dados das reuniões' + (crypto.subtle ? '' : ' (navegador sem criptografia)'); return 0; }
-    const n = importarItens(u, corpo.itens || [], now(), true);
-    db.pacoteReunioes = { chave: corpo.chaveArquivos, em: now() };
+    let n = importarItens(u, corpo.itens || [], now(), true);
+    if (Array.isArray(corpo.igrejas) && Array.isArray(corpo.relatorios)) n += juntarRelatorios(corpo);
+    db.pacoteReunioes = { chave: corpo.chaveArquivos, em: now(), versao: p.salt };
     return n;
   }
   async function lerArquivoReuniao(d) {
@@ -203,7 +218,9 @@
       save();
     }
     let reunioes = 0; motivoReunioes = '';
-    if (!igrejaId && norm(username) === 'admin' && !db.pacoteReunioes && senha) {
+    // abre o pacote das reuniões na primeira vez e de novo quando ele é atualizado
+    const versaoReunioes = !igrejaId && norm(username) === 'admin' && senha ? await fetch('dados/reunioes.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(p => p && p.salt).catch(() => null) : null;
+    if (versaoReunioes && (!db.pacoteReunioes || db.pacoteReunioes.versao !== versaoReunioes)) {
       const ad = db.usuarios.find(x => x.id === 'us_admin') || db.usuarios.find(x => x.role === 'admin' && !x.igrejaId);
       if (!ad) motivoReunioes = 'não há administrador do Presbitério neste navegador';
       if (ad && (reunioes = await abrirReunioes(senha, ad))) {
