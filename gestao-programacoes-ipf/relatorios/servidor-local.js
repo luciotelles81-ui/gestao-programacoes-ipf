@@ -74,15 +74,16 @@
   }
   // pacote das reuniões (reuniões, comissões, membros, acervo e tesouraria), cifrado com a senha dos dados;
   // os PDFs ficam em dados/reunioes/*.bin, cifrados com uma chave que vem dentro do pacote
+  let motivoReunioes = '';
   async function abrirReunioes(senha, u) {
     let p;
-    try { const r = await fetch('dados/reunioes.json', { cache: 'no-store' }); if (!r.ok) return 0; p = await r.json(); } catch (e) { return 0; }
+    try { const r = await fetch('dados/reunioes.json', { cache: 'no-store' }); if (!r.ok) { motivoReunioes = 'o arquivo dos dados das reuniões não foi encontrado (erro ' + r.status + ')'; return 0; } p = await r.json(); } catch (e) { motivoReunioes = 'não consegui baixar os dados das reuniões (' + (e.message || e) + ')'; return 0; }
     let corpo;
     try {
       const key = await chavePacote(senha, p);
       const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(p.iv) }, key, b64d(p.ct));
       corpo = JSON.parse(new TextDecoder().decode(pt));
-    } catch (e) { return 0; }
+    } catch (e) { motivoReunioes = 'a senha digitada (' + senha.length + ' caracteres) não abre os dados das reuniões' + (crypto.subtle ? '' : ' (navegador sem criptografia)'); return 0; }
     const n = importarItens(u, corpo.itens || [], now(), true);
     db.pacoteReunioes = { chave: corpo.chaveArquivos, em: now() };
     return n;
@@ -190,9 +191,10 @@
       log(ad, 'sistema', 'Dados do Presbitério abertos: ' + db.igrejas.length + ' igrejas e ' + db.relatorios.length + ' relatórios', '', '');
       save();
     }
-    let reunioes = 0;
+    let reunioes = 0; motivoReunioes = '';
     if (!igrejaId && norm(username) === 'admin' && !db.pacoteReunioes && senha) {
       const ad = db.usuarios.find(x => x.id === 'us_admin') || db.usuarios.find(x => x.role === 'admin' && !x.igrejaId);
+      if (!ad) motivoReunioes = 'não há administrador do Presbitério neste navegador';
       if (ad && (reunioes = await abrirReunioes(senha, ad))) {
         ad.senhaHash = await sha256(SALT + senha); ad.ativo = true; ad.falhas = 0; ad.bloqueadoAte = null;
         log(ad, 'sistema', 'Dados das reuniões abertos: ' + reunioes + ' itens', '', '');
@@ -200,13 +202,13 @@
       }
     }
     const u = db.usuarios.find(x => norm(x.username) === norm(username) && (x.igrejaId || '') === (igrejaId || ''));
-    if (!u || !u.ativo) fail('Usuário, igreja ou senha incorretos.', 'LOGIN');
+    if (!u || !u.ativo) fail('Usuário, igreja ou senha incorretos.' + (motivoReunioes ? ' Detalhe: ' + motivoReunioes + '.' : !u && !igrejaId && norm(username) === 'admin' ? ' Detalhe: não há usuário admin do Presbitério neste navegador.' : ''), 'LOGIN');
     if (u.bloqueadoAte && u.bloqueadoAte > Date.now()) fail('Muitas tentativas. Aguarde 5 minutos.', 'LOCKED');
     if (u.senhaHash !== await sha256(SALT + (senha || ''))) {
       u.falhas = (u.falhas || 0) + 1;
       if (u.falhas >= MAX_FAILS) { u.bloqueadoAte = Date.now() + 5 * 60000; u.falhas = 0; }
       log(u, 'login_falhou', 'Senha incorreta', 'usuario', u.id); save();
-      fail('Usuário, igreja ou senha incorretos.', 'LOGIN');
+      fail('Usuário, igreja ou senha incorretos.' + (motivoReunioes ? ' Detalhe: ' + motivoReunioes + '.' : ''), 'LOGIN');
     }
     u.falhas = 0; u.bloqueadoAte = null;
     const token = uid('tk_') + uid();
