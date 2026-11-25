@@ -72,6 +72,29 @@
     db.pacote = { chave: b64e(new Uint8Array(await crypto.subtle.exportKey('raw', key))), em: now() };
     return true;
   }
+  // pacote das reuniões (reuniões, comissões, membros, acervo e tesouraria), cifrado com a senha dos dados;
+  // os PDFs ficam em dados/reunioes/*.bin, cifrados com uma chave que vem dentro do pacote
+  async function abrirReunioes(senha, u) {
+    let p;
+    try { const r = await fetch('dados/reunioes.json', { cache: 'no-store' }); if (!r.ok) return 0; p = await r.json(); } catch (e) { return 0; }
+    let corpo;
+    try {
+      const key = await chavePacote(senha, p);
+      const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(p.iv) }, key, b64d(p.ct));
+      corpo = JSON.parse(new TextDecoder().decode(pt));
+    } catch (e) { return 0; }
+    const n = importarItens(u, corpo.itens || [], now(), true);
+    db.pacoteReunioes = { chave: corpo.chaveArquivos, em: now() };
+    return n;
+  }
+  async function lerArquivoReuniao(d) {
+    if (!db.pacoteReunioes || !d.arquivo || !d.arquivo.pacote) return null;
+    const key = await crypto.subtle.importKey('raw', b64d(db.pacoteReunioes.chave), 'AES-GCM', false, ['decrypt']);
+    const r = await fetch(d.arquivo.pacote);
+    if (!r.ok) return null;
+    const buf = new Uint8Array(await r.arrayBuffer());
+    return new Blob([await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12))], { type: d.arquivo.tipo || 'application/pdf' });
+  }
   async function lerPacoteArquivo(arq) {
     if (!db.pacote) fail('Os dados do Presbitério ainda não foram abertos neste navegador. Entre como admin com a senha dos dados.');
     const key = await crypto.subtle.importKey('raw', b64d(db.pacote.chave), 'AES-GCM', false, ['decrypt']);
@@ -156,7 +179,7 @@
   /* ---------------- ações ---------------- */
   const A = {};
 
-  A.publico = async () => ({ igrejas: db.igrejas.filter(i => i.ativo).map(i => ({ id: i.id, nome: i.nome, sigla: i.sigla })), modo: 'local', pacoteAberto: !!db.pacote, pacoteFechado: !db.pacote && !!(await pacoteInfo()) });
+  A.publico = async () => ({ igrejas: db.igrejas.filter(i => i.ativo).map(i => ({ id: i.id, nome: i.nome, sigla: i.sigla })), modo: 'local', pacoteAberto: !!db.pacote, pacoteFechado: !db.pacote && !!(await pacoteInfo()), reunioesFechadas: !db.pacoteReunioes && await fetch('dados/reunioes.json', { method: 'HEAD', cache: 'no-store' }).then(r => r.ok).catch(() => false) });
 
   A.login = async ({ igrejaId, username, senha }) => {
     let aberto = 0;
@@ -166,6 +189,15 @@
       aberto = db.relatorios.filter(r => (r.anexos || []).some(a => a.origem === 'pacote')).length;
       log(ad, 'sistema', 'Dados do Presbitério abertos: ' + db.igrejas.length + ' igrejas e ' + db.relatorios.length + ' relatórios', '', '');
       save();
+    }
+    let reunioes = 0;
+    if (!igrejaId && norm(username) === 'admin' && !db.pacoteReunioes && senha) {
+      const ad = db.usuarios.find(x => x.id === 'us_admin') || db.usuarios.find(x => x.role === 'admin' && !x.igrejaId);
+      if (ad && (reunioes = await abrirReunioes(senha, ad))) {
+        ad.senhaHash = await sha256(SALT + senha); ad.ativo = true; ad.falhas = 0; ad.bloqueadoAte = null;
+        log(ad, 'sistema', 'Dados das reuniões abertos: ' + reunioes + ' itens', '', '');
+        save();
+      }
     }
     const u = db.usuarios.find(x => norm(x.username) === norm(username) && (x.igrejaId || '') === (igrejaId || ''));
     if (!u || !u.ativo) fail('Usuário, igreja ou senha incorretos.', 'LOGIN');
@@ -181,7 +213,7 @@
     db.sessoes = db.sessoes.filter(s => s.expira > Date.now());
     db.sessoes.push({ token, usuarioId: u.id, expira: Date.now() + SESSION_DAYS * 86400000 });
     log(u, 'login', '', 'usuario', u.id); save();
-    return { token, usuario: pubUser(u), pacoteAberto: aberto || undefined };
+    return { token, usuario: pubUser(u), pacoteAberto: aberto || undefined, reunioesAbertas: reunioes || undefined };
   };
 
   A.logout = ({ token }) => { db.sessoes = db.sessoes.filter(s => s.token !== token); save(); return {}; };
@@ -576,6 +608,27 @@
     const rel = ds.find(d => d.funcao === 'Relator' && d.userId);
     return rel ? rel.userId === u.id : podeParecer(u, comissaoId, reuniaoId);
   }
+  function importarItens(u, itens, t, doPacote) {
+    let n = 0;
+    for (const x of itens) {
+      if (!x || !R_TIPOS.includes(x.tipo) || !x.id) continue;
+      const ex = rGet(x.id);
+      const base = { id: String(x.id), tipo: x.tipo };
+      const rec = Object.assign(ex || base, pick(x, R_CAMPOS[x.tipo]), { updatedAt: t });
+      if (x.tipo === 'parecer') { rec.status = P_STATUS.includes(x.status) ? x.status : 'rascunho'; rec.emendas = x.emendas || ''; rec.historico = rec.historico || [{ em: t, por: u.nome, acao: 'Importado' }]; }
+      // o PDF é enviado depois, arquivo por arquivo; no pacote do presbitério ele vem cifrado em dados/reunioes/
+      if (x.tipo === 'documento') rec.arquivo = ex && ex.arquivo ? ex.arquivo : (doPacote && x.arquivo && /^dados\/reunioes\/[\w-]+\.bin$/.test(x.arquivo.pacote || '') ? clone(x.arquivo) : null);
+      if (!ex) rItens().push(rec);
+      n++;
+    }
+    for (const c of (itens || []).filter(x => x && x.tipo === 'comissao' && x.id && x.nome)) {
+      const ex = db.comissoes.find(y => y.id === c.id);
+      const rec = Object.assign(ex || { id: c.id, membros: [], ativa: true }, pick(c, COMISSAO_CAMPOS));
+      if (!ex) db.comissoes.push(rec);
+      n++;
+    }
+    return n;
+  }
   const R_CAMPOS = {
     cfg: ['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria'],
     reuniao: ['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta', 'legislatura', 'secretarias', 'tutores', 'representantes', 'campo'],
@@ -623,7 +676,7 @@
       const d = rGet(id);
       if (!d || d.tipo !== 'documento' || !d.arquivo) fail('Este documento não tem arquivo.', 'NOTFOUND');
       if (d.restrito === true && !isAdmin(u)) fail('Documento de acesso restrito à Mesa (dados pessoais).', 'FORBIDDEN');
-      const v = await idbOp('readonly', st => st.get('rd_' + d.id));
+      const v = await idbOp('readonly', st => st.get('rd_' + d.id)) || await lerArquivoReuniao(d).catch(() => null);
       if (!v) fail('O PDF deste documento não está neste navegador. Envie o arquivo de novo.', 'NOTFOUND');
       return { blob: v, nome: d.arquivo.nome, tipo: d.arquivo.tipo };
     }
@@ -647,23 +700,7 @@
       if (!Array.isArray(itens)) fail('Arquivo inválido.');
       // o tesoureiro pode importar (copiar o ano) só itens da tesouraria
       if (!isAdmin(u) && !(ehTesoureiro(u) && itens.every(x => x && x.tipo === 'tesouraria'))) fail('Apenas o administrador importa dados.', 'FORBIDDEN');
-      let n = 0;
-      for (const x of itens) {
-        if (!x || !R_TIPOS.includes(x.tipo) || !x.id) continue;
-        const ex = rGet(x.id);
-        const base = { id: String(x.id), tipo: x.tipo };
-        const rec = Object.assign(ex || base, pick(x, R_CAMPOS[x.tipo]), { updatedAt: t });
-        if (x.tipo === 'parecer') { rec.status = P_STATUS.includes(x.status) ? x.status : 'rascunho'; rec.emendas = x.emendas || ''; rec.historico = rec.historico || [{ em: t, por: u.nome, acao: 'Importado' }]; }
-        if (x.tipo === 'documento') rec.arquivo = ex ? ex.arquivo || null : null; // o PDF é enviado depois, arquivo por arquivo
-        if (!ex) rItens().push(rec);
-        n++;
-      }
-      for (const c of (itens || []).filter(x => x && x.tipo === 'comissao' && x.id && x.nome)) {
-        const ex = db.comissoes.find(y => y.id === c.id);
-        const rec = Object.assign(ex || { id: c.id, membros: [], ativa: true }, pick(c, COMISSAO_CAMPOS));
-        if (!ex) db.comissoes.push(rec);
-        n++;
-      }
+      const n = importarItens(u, itens, t, false);
       log(u, 'importar', n + ' itens da reunião importados', 'reuniao', ''); save();
       return { importados: n };
     }

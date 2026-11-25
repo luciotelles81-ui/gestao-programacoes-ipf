@@ -269,7 +269,7 @@
               <button class="btn primary" type="submit">Entrar</button>
             </form>
             <p class="small" style="margin-top:14px"><a href="#/verificar">Verificar uma assinatura</a></p>
-            ${SERVER ? '' : S.publico && S.publico.pacoteFechado ? `<div class="alert info" style="margin-top:14px"><div><b>Dados do Presbitério</b><br>Para carregar os relatórios de 2023 a 2025 com os PDFs originais, deixe "Presbitério" na igreja, use o usuário <code>admin</code> e a <b>senha dos dados</b> que você recebeu. Isso só é preciso uma vez neste navegador.</div></div>
+            ${SERVER ? '' : S.publico && (S.publico.pacoteFechado || S.publico.reunioesFechadas) ? `<div class="alert info" style="margin-top:14px"><div><b>Dados do Presbitério</b><br>Para carregar os relatórios de 2023 a 2025 com os PDFs originais e as reuniões do presbitério (acervo, membros das comissões e tesouraria), deixe "Presbitério" na igreja, use o usuário <code>admin</code> e a <b>senha dos dados</b> que você recebeu. Isso só é preciso uma vez neste navegador.</div></div>
               <div class="demo"><b>Modo demonstração</b> (dados só neste navegador). Para só testar, sem os dados reais: <code>admin</code>/<code>admin123</code>.</div>`
               : `<div class="demo"><b>Modo demonstração</b> (dados só neste navegador). Presbitério: ${S.publico && S.publico.pacoteAberto ? '<code>admin</code> com a senha dos dados' : '<code>admin</code>/<code>admin123</code>'}, <code>relator</code>/<code>relator123</code>, <code>membro</code>/<code>membro123</code>. Igreja Filadélfia: <code>secretario</code>/<code>secretario123</code>.</div>`}
           </div>
@@ -282,6 +282,7 @@
       btn.disabled = false;
       if (!r) return;
       if (r.pacoteAberto) toast('Dados do Presbitério carregados: ' + r.pacoteAberto + ' relatórios com os originais anexados.');
+      if (r.reunioesAbertas) setTimeout(() => toast('Reuniões, acervo, membros das comissões e tesouraria carregados (' + r.reunioesAbertas + ' itens).'), r.pacoteAberto ? 3500 : 0);
       S.publico = null;
       S.token = r.token;
       try { localStorage.setItem(TOKEN_KEY, r.token); } catch (err) { /* sem armazenamento */ }
