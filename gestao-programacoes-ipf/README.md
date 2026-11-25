@@ -87,19 +87,26 @@ Sistema separado para o Presbitério receber, registrar e analisar os relatório
 
 **Modo demonstração**: com `relatorios/config.js` vazio, tudo roda no navegador (dados só naquele navegador), com usuários de exemplo (`admin`/`admin123`). Para carregar o histórico e os PDFs originais, entre como `admin` (igreja: Presbitério) com a **senha dos dados**; a partir daí essa é a senha do admin naquele navegador. A IA não funciona nesse modo: a proposta de análise é montada pelas verificações automáticas e a conferência de atas é manual.
 
-### Reunião do concílio (comissões, delegados, pareceres e ata)
+### Reunião do concílio (comissões, membros, pareceres e ata)
 
 Módulo `relatorios/reunioes.js`, no menu **Reunião do concílio**. Segue a Constituição da IPB: reuniões ordinária e extraordinária (arts. 73 e 74), quórum de três ministros e dois presbíteros (art. 86), comissões (art. 99) e relatório dos secretários de causa (art. 106, § 1º).
 
-- **Reunião**: painel da reunião escolhida no topo, com as comissões, os delegados, os documentos e os pareceres. A Mesa (perfil administrador: Presidente e Secretário Executivo) cadastra os dados do presbitério e as reuniões.
+- **Reunião**: painel da reunião escolhida no topo, com as comissões, os membros, os documentos e os pareceres. A Mesa (perfil administrador: Presidente e Secretário Executivo) cadastra os dados do presbitério e as reuniões.
 - **Reuniões e convocações**: todas as reuniões de cada ano, ordinárias e extraordinárias, com a convocação (data, quem convocou, assunto e pauta, PDF anexado), a mesa diretora e a ata.
 - **Mesa diretora**: em cada reunião, nome, título e cargo de quem foi eleito (Presidente, Vice, Secretário Executivo, secretários, tesoureiro).
 - **Ata da reunião**: formulário com número, livro, folhas, horários, ministros e presbíteros presentes (o sistema confere o quórum), devocional, expediente e deliberações. A ata já traz a mesa, a pauta e os pareceres com a decisão do plenário. Imprime ou baixa para o Word.
-- **Comissões**: cada comissão tem o seu ambiente, com a atribuição, os delegados, os documentos encaminhados a ela (com o PDF) e os pareceres desta e das reuniões anteriores. Em **Administração → Comissões** ficam o grupo, o modelo de parecer, a ordem e a base legal; o botão *Criar comissões do concílio* cria as de costume.
-- **Delegados**: a Mesa define, por reunião, quem está em cada comissão e a função (**Relator** ou **Participante**), e pode vincular o delegado a um usuário. Só um relator por comissão; "Copiar da reunião anterior" adianta o cadastro.
-- **Pareceres**: três modelos, iguais aos papéis usados no presbitério: exame de livro de atas, relatório final (apontamentos, recomendações, determinações) e relatório de secretaria. O cabeçalho sai pronto (Secretaria Executiva, código da reunião, período, local, Doc nº, destino, data) e termina com *Sala de Sessões* e as assinaturas. Delegados escrevem; o relator conclui e envia ao plenário; a Mesa registra a decisão (aprovado, com emendas ou rejeitado).
+- **Comissões**: cada comissão tem o seu ambiente, com a atribuição, os membros, os documentos encaminhados a ela (com o PDF) e os pareceres desta e das reuniões anteriores. Em **Administração → Comissões** ficam o grupo, o modelo de parecer, a ordem e a base legal; o botão *Criar comissões do concílio* cria as de costume.
+- **Membros das comissões**: a Mesa define, por reunião, quem está em cada comissão e a função (**Relator** ou **Participante**), e pode vincular o membro a um usuário. Um relator por comissão (no exame de livros de atas, um por igreja); "Copiar da reunião anterior" adianta o cadastro.
+- **Pareceres**: três modelos, iguais aos papéis usados no presbitério: exame de livro de atas, relatório final (apontamentos, recomendações, determinações) e relatório de secretaria. O cabeçalho sai pronto (Secretaria Executiva, código da reunião, período, local, Doc nº, destino, data) e termina com *Sala de Sessões* e as assinaturas. Os membros escrevem; o relator conclui e envia ao plenário; a Mesa registra a decisão (aprovado, com emendas ou rejeitado).
 - **Documentos**: lista numerada da reunião, com busca, comissão responsável e PDF original.
-- **Histórico do presbitério**: gráficos e tabela de membros, oficiais, EBD, sociedades, crescimento por igreja e tesouraria, a partir dos relatórios das comissões de Estatísticas e de Finanças.
+- **Gráficos do presbitério** (`relatorios/graficos.js`): no alto, os quadros principais (membros, comungantes, ministros, presbíteros e diáconos, com a variação desde o ano anterior). Abaixo, quatro abas:
+  - **Tesouraria do presbitério** (abre primeiro): saldo anterior, entradas, saídas e saldo; entradas e saídas por mês; saldo mês a mês; de onde vem a receita; contribuição de cada igreja; despesas por rubrica; evolução das rubricas escolhidas; comparação entre anos e o histórico da Comissão de Finanças.
+  - **Rol de membros**: total por ano, participação de cada igreja, membros por igreja, comungantes ao longo dos anos, oficiais, e o quadro por igreja.
+  - **Sociedades internas**: UPH, SAF, UMP, UPA e UCP, no total e por igreja, com o peso de cada sociedade.
+  - **Finanças das igrejas**: receita e despesa totais, quanto cada igreja representa (pizza), receita e despesa por rubrica, evolução das rubricas, comparação de igrejas numa rubrica e o quadro detalhado no modelo do formulário oficial da IPB. As rubricas seguem o modelo de relatório: incluir ou excluir uma rubrica no modelo muda os gráficos.
+  - Cada gráfico tem um seletor de forma (colunas, colunas empilhadas, barras, linhas, área, pizza, rosca ou tabela), mostra os números nas marcas e lembra a escolha. As igrejas e as rubricas podem ser marcadas para comparar.
+  - Os números das igrejas vêm dos relatórios de estatística enviados por elas; o total do presbitério usa o da Comissão de Estatísticas quando existe.
+- **Mesa e secretarias**: por reunião ordinária, a Mesa Executiva eleita, os secretários de cada secretaria de causa, os representantes ao Supremo Concílio, os tutores eclesiásticos e a distribuição de campo.
 - **Identidade visual**: verde Pantone 350C e cinza K70, logotipo oficial em `relatorios/img/`, letra Zapf Humanist (ou Optima, o mesmo desenho) nas telas e títulos e Times New Roman no texto dos documentos, como pede o Programa de Identidade Visual da IPB.
 - **Outros presbitérios**: *Exportar estrutura* gera um arquivo com os dados da Mesa e as comissões, para importar em outro presbitério.
 
@@ -111,13 +118,13 @@ Módulo `relatorios/reunioes.js`, no menu **Reunião do concílio**. Segue a Con
   - Clicar num arquivo abre a prévia ao lado dos dados (local, tipo, data, origem, quem enviou e quando, SHA-256), sem baixar. Word e Excel são baixados.
   - A Mesa envia vários arquivos de uma vez, ou arrasta para a pasta. Aceita PDF, imagem, Word e Excel até 15 MB. *Editar ou mover* troca a pasta, a seção ou a reunião.
   - **Segurança**: só usuários cadastrados veem o acervo; só a Mesa envia, edita ou exclui; exclusão pede confirmação; cada envio grava quem enviou, quando e a impressão digital SHA-256, e entra no registro de ações. Um documento pode ser marcado como **restrito à Mesa** (dados pessoais sensíveis, LGPD), e o servidor recusa o arquivo para os demais.
-- **Tesouraria** (`relatorios/tesouraria.js`): o controle de caixa administrativo, no formato dos relatórios do tesoureiro.
+- **Tesouraria do presbitério** (`relatorios/tesouraria.js`): o controle de caixa administrativo, no formato dos relatórios do tesoureiro.
   - Três grupos: **dízimo dos pastores**, **contribuição das igrejas (3%)** e **despesas e compromissos**.
-  - Cada conta tem o previsto anual e mensal, o que restou do ano anterior e os lançamentos de cada mês (dia e valor). O lançamento marcado *ref. ano anterior* entra no caixa do mês, mas não conta no realizado do ano.
+  - Cada rubrica tem o previsto anual e mensal, o que restou do ano anterior e os lançamentos de cada mês (dia e valor). O lançamento marcado *ref. ano anterior* entra no caixa do mês, mas não conta no realizado do ano.
   - A tabela mostra o realizado, o previsto até o mês escolhido, a diferença e o percentual (verde, amarelo ou vermelho).
   - O resumo traz o saldo anterior, as entradas, as saídas e o saldo mês a mês, com gráficos por igreja e por pastor.
-  - *Copiar as contas do ano anterior* abre o novo ano já com as contas e o que restou de cada uma.
-  - Imprime em A4 deitado. Só a Mesa altera.
+  - *Copiar as rubricas do ano anterior* abre o novo ano já com as rubricas e o que restou de cada uma. Rubricas podem ser incluídas e excluídas.
+  - Imprime em A4 deitado. Só o administrador e os usuários que ele marca como **tesoureiros** (botão *Tesoureiros*) lançam, criam ou excluem rubricas e mudam o saldo anterior; o servidor confere de novo (`cfg.tesoureiros`).
 
 **Dados das reuniões anteriores**: como o repositório é público, os números, os resumos e os PDFs das reuniões do PLRN não ficam aqui. Entre como administrador, vá em **Reunião → Configuração da Mesa**, use *Importar pacote (.json)* e depois *Enviar PDFs dos documentos* (selecione todos os PDFs de uma vez; cada um encontra o seu documento pelo nome do arquivo).
 

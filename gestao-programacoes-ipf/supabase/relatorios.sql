@@ -176,8 +176,8 @@ $$;
 create or replace function ipb_r_campos(tipo text) returns text[]
 language sql immutable as $$
   select case tipo
-    when 'cfg' then array['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria']
-    when 'reuniao' then array['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta']
+    when 'cfg' then array['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria']
+    when 'reuniao' then array['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta', 'legislatura', 'secretarias', 'tutores', 'representantes', 'campo']
     when 'delegado' then array['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId']
     when 'documento' then array['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito']
     when 'parecer' then array['reuniaoId', 'comissaoId', 'modelo', 'data', 'destino', 'cidade', 'docNumero', 'titulo', 'assunto', 'docsAnalisados', 'origens', 'documentoIds', 'campos', 'assinaturas']
@@ -198,6 +198,13 @@ language sql stable as $$
 $$;
 
 -- quem conclui o parecer: a Mesa ou o relator (se o relator não tem usuário, quem pode escrever)
+-- a tesouraria do presbitério: só o administrador e os usuários marcados como tesoureiro (cfg.tesoureiros)
+create or replace function ipb_r_tesoureiro(u ipb_usuarios) returns boolean
+language sql stable as $$
+  select u.role = 'admin' or (u.role <> 'leitor' and exists (
+    select 1 from ipb_reuniao_itens where id = 'cfg' and jsonb_typeof(doc->'tesoureiros') = 'array' and doc->'tesoureiros' ? u.id))
+$$;
+
 create or replace function ipb_r_relator(u ipb_usuarios, com text, reu text) returns boolean
 language sql stable as $$
   select u.role = 'admin' or coalesce(
@@ -213,7 +220,7 @@ begin
   if p_tipo in ('delegado', 'parecer', 'ata') and not exists (select 1 from ipb_reuniao_itens where id = m->>'reuniaoId' and tipo = 'reuniao') then perform ipb_fail('Escolha a reunião.'); end if;
   if p_tipo in ('delegado', 'parecer') and not exists (select 1 from ipb_comissoes where id = m->>'comissaoId') then perform ipb_fail('Escolha a comissão.'); end if;
   if p_tipo = 'delegado' then
-    if coalesce(trim(m->>'nome'), '') = '' and coalesce(m->>'userId', '') = '' then perform ipb_fail('Informe o nome do delegado.'); end if;
+    if coalesce(trim(m->>'nome'), '') = '' and coalesce(m->>'userId', '') = '' then perform ipb_fail('Informe o nome do membro.'); end if;
     if coalesce(m->>'funcao', '') not in ('Relator', 'Participante') then perform ipb_fail('A função deve ser Relator ou Participante.'); end if;
   end if;
   if p_tipo = 'documento' and coalesce(trim(m->>'titulo'), '') = '' then perform ipb_fail('Informe o título do documento.'); end if;
@@ -714,8 +721,12 @@ begin
     end if;
 
     if v_op = 'importar' then
-      if u.role <> 'admin' then perform ipb_fail('Apenas o administrador importa dados.', 'FORBIDDEN'); end if;
       if jsonb_typeof(req->'itens') is distinct from 'array' then perform ipb_fail('Arquivo inválido.'); end if;
+      -- o tesoureiro pode importar (copiar o ano) só itens da tesouraria
+      if u.role <> 'admin' and not (ipb_r_tesoureiro(u) and not exists (
+           select 1 from jsonb_array_elements(req->'itens') e where coalesce(e->>'tipo', '') <> 'tesouraria')) then
+        perform ipb_fail('Apenas o administrador importa dados.', 'FORBIDDEN');
+      end if;
       v_n := 0;
       for it in select e from jsonb_array_elements(req->'itens') e loop
         v_tipo := it->>'tipo';
@@ -757,7 +768,7 @@ begin
     if v_op = 'excluir' then
       select doc into r from ipb_reuniao_itens where id = req->>'id';
       if r is null then perform ipb_fail('Registro não encontrado.', 'NOTFOUND'); end if;
-      if not (u.role = 'admin' or (r->>'tipo' = 'parecer' and r->>'status' = 'rascunho' and r->>'criadoPor' = u.id)) then
+      if not (u.role = 'admin' or (r->>'tipo' = 'tesouraria' and ipb_r_tesoureiro(u)) or (r->>'tipo' = 'parecer' and r->>'status' = 'rascunho' and r->>'criadoPor' = u.id)) then
         perform ipb_fail('Você não pode excluir este registro.', 'FORBIDDEN');
       end if;
       if r->>'tipo' = 'reuniao' then delete from ipb_reuniao_itens where doc->>'reuniaoId' = r->>'id'; end if;
@@ -773,11 +784,17 @@ begin
     if v_tipo = 'cfg' then it := it || '{"id":"cfg"}'; end if;
     select doc into ex from ipb_reuniao_itens where id = it->>'id' for update;
     if ex is not null and ex->>'tipo' <> v_tipo then perform ipb_fail('Registro de outro tipo.'); end if;
-    if v_tipo <> 'parecer' and u.role <> 'admin' then perform ipb_fail('Apenas a Mesa (administrador) pode fazer isso.', 'FORBIDDEN'); end if;
+    if v_tipo = 'tesouraria' then
+      if not ipb_r_tesoureiro(u) then perform ipb_fail('Apenas o tesoureiro e o administrador editam a tesouraria.', 'FORBIDDEN'); end if;
+    elsif v_tipo = 'cfg' and u.role <> 'admin' and ipb_r_tesoureiro(u) then
+      it := jsonb_build_object('id', 'cfg') || ipb_pick(it, array['tesouraria']);  -- o tesoureiro só muda o saldo anterior
+    elsif v_tipo <> 'parecer' and u.role <> 'admin' then
+      perform ipb_fail('Apenas a Mesa (administrador) pode fazer isso.', 'FORBIDDEN');
+    end if;
     m := coalesce(ex, '{}'::jsonb) || ipb_pick(it, ipb_r_campos(v_tipo));
     perform ipb_r_validar(v_tipo, m);
     if v_tipo = 'parecer' then
-      if not ipb_r_pode_parecer(u, m->>'comissaoId', m->>'reuniaoId') then perform ipb_fail('Você não é delegado desta comissão.', 'FORBIDDEN'); end if;
+      if not ipb_r_pode_parecer(u, m->>'comissaoId', m->>'reuniaoId') then perform ipb_fail('Você não é membro desta comissão.', 'FORBIDDEN'); end if;
       if ex is not null and u.role <> 'admin' then
         if ex->>'status' in ('aprovado', 'emendas', 'rejeitado') then perform ipb_fail('O plenário já decidiu sobre este parecer.', 'FORBIDDEN'); end if;
         if ex->>'comissaoId' <> m->>'comissaoId' or ex->>'reuniaoId' <> m->>'reuniaoId' then perform ipb_fail('Não é possível mudar a comissão do parecer.', 'FORBIDDEN'); end if;
@@ -799,7 +816,8 @@ begin
         end if;
         if r->>'funcao' = 'Relator' then
           update ipb_reuniao_itens set doc = doc || '{"funcao":"Participante"}'
-           where tipo = 'delegado' and id <> v_id and doc->>'comissaoId' = r->>'comissaoId' and doc->>'reuniaoId' = r->>'reuniaoId' and doc->>'funcao' = 'Relator';
+           where tipo = 'delegado' and id <> v_id and doc->>'comissaoId' = r->>'comissaoId' and doc->>'reuniaoId' = r->>'reuniaoId' and doc->>'funcao' = 'Relator'
+             and coalesce(doc->>'igreja', '') = coalesce(r->>'igreja', '');
         end if;
       end if;
       if v_tipo = 'documento' then r := r || jsonb_build_object('arquivo', coalesce(ex->'arquivo', 'null'::jsonb)); end if;
@@ -822,4 +840,4 @@ revoke all on function ipb_api(jsonb) from public;
 grant execute on function ipb_api(jsonb) to anon, authenticated;
 -- as funções auxiliares não ficam expostas
 revoke all on function ipb_fail(text, text), ipb_sessao(text), ipb_registrar(ipb_usuarios, text, text, text, text) from public, anon, authenticated;
-revoke all on function ipb_pick(jsonb, text[]), ipb_r_campos(text), ipb_r_pode_parecer(ipb_usuarios, text, text), ipb_r_relator(ipb_usuarios, text, text), ipb_r_validar(text, jsonb) from public, anon, authenticated;
+revoke all on function ipb_pick(jsonb, text[]), ipb_r_campos(text), ipb_r_pode_parecer(ipb_usuarios, text, text), ipb_r_relator(ipb_usuarios, text, text), ipb_r_tesoureiro(ipb_usuarios), ipb_r_validar(text, jsonb) from public, anon, authenticated;

@@ -16,6 +16,27 @@
   ];
   const MES3 = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const T = { aba: 'resumo', ate: {} };
+  // edita: o administrador e os usuários que ele marcou como tesoureiro (cfg.tesoureiros); o servidor confere de novo
+  function podeEditar() {
+    const u = A().S.user;
+    if (!u) return false;
+    if (u.role === 'admin') return true;
+    const t = H().cfg().tesoureiros;
+    return u.role !== 'leitor' && Array.isArray(t) && t.includes(u.id);
+  }
+  function escolherTesoureiros() {
+    const { esc, modal, $, $$ } = A();
+    const t = new Set(H().cfg().tesoureiros || []);
+    const us = (A().S.d.usuarios || []).filter(u => u.ativo !== false && u.role !== 'leitor' && u.role !== 'admin');
+    const m = modal('Quem edita a tesouraria', `<p class="small muted" style="margin-top:0">O administrador sempre edita. Marque quem mais pode lançar, criar e excluir rubricas e mudar o saldo anterior.</p>
+      ${us.length ? us.map(u => `<label class="chk"><input type="checkbox" value="${esc(u.id)}" ${t.has(u.id) ? 'checked' : ''}> ${esc(u.nome)}${u.cargo ? ' <span class="muted small">· ' + esc(u.cargo) + '</span>' : ''}</label>`).join('') : '<p class="muted">Nenhum usuário com perfil de editor ou analista. Cadastre o tesoureiro em Usuários.</p>'}`,
+      '<button class="btn" data-x>Cancelar</button><button class="btn primary" id="tsOk">Salvar</button>');
+    $('[data-x]', m.el).onclick = m.fechar;
+    $('#tsOk', m.el).onclick = async () => {
+      const ids = $$('input[type=checkbox]', m.el).filter(i => i.checked).map(i => i.value);
+      if (await H().salvarItem('cfg', { tesoureiros: ids }, 'Tesoureiros salvos.')) { m.fechar(); A().render(); }
+    };
+  }
   const nf2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fm = v => nf2.format(Number(v) || 0);
   // aceita "1.348,63", "1348,63" e "1348.63"
@@ -83,12 +104,12 @@
     const { esc, shell, head, $, $$ } = A();
     if (aba) T.aba = aba;
     const mAte = ate(ano);
-    const adm = H().isAdmin();
+    const adm = podeEditar();
     const res = resumoAno(ano, mAte);
     const nContas = contas(ano).length;
     const acoes = `<div class="row-wrap tes-acoes"><select id="tAno" aria-label="Ano">${anosTes().map(a => `<option ${a === ano ? 'selected' : ''}>${a}</option>`).join('')}</select>
       <select id="tAte" aria-label="Até o mês">${MES3.map((m, i) => `<option value="${i + 1}" ${i + 1 === mAte ? 'selected' : ''}>até ${m}</option>`).join('')}</select>
-      <button class="btn" id="tImp">Imprimir</button>${adm ? '<button class="btn primary" id="tLan">+ Lançamento</button>' : ''}</div>`;
+      <button class="btn" id="tImp">Imprimir</button>${A().S.user && A().S.user.role === 'admin' ? '<button class="btn" id="tQuem" title="Escolher quem edita a tesouraria">Tesoureiros</button>' : ''}${adm ? '<button class="btn primary" id="tLan">+ Lançamento</button>' : ''}</div>`;
     let html = head('Tesouraria', `Controle de caixa administrativo do ${esc(H().sigla())} em ${ano}, de janeiro até ${H().MESES[mAte - 1]}.`, acoes);
     html += `<div class="kpis">
       <div class="kpi"><div class="l">Saldo anterior</div><div class="v">${fm(saldoAnterior(ano))}</div>${adm ? '<button class="btn sm ghost" id="tSaldo">Alterar</button>' : '<div class="s">Restos de ' + (ano - 1) + '</div>'}</div>
@@ -97,16 +118,17 @@
       <div class="kpi"><div class="l">Saldo calculado</div><div class="v ${res.saldo < 0 ? 'neg' : ''}">${fm(res.saldo)}</div><div class="s">Saldo anterior + entradas − saídas</div></div></div>`;
     html += `<div class="tabs" role="tablist">${[['resumo', 'Resumo do ano']].concat(GRUPOS.map(g => [g.id, g.nome])).map(([k, n]) => `<button type="button" role="tab" data-aba="${k}" class="${T.aba === k ? 'on' : ''}" aria-selected="${T.aba === k}">${n}</button>`).join('')}</div>`;
     if (!nContas) {
-      html += `<div class="card"><p style="margin-top:0">Ainda não há contas em ${ano}.</p>${adm ? `<div class="row-wrap">${contas(ano - 1).length ? `<button class="btn primary" id="tCopiar">Copiar as contas de ${ano - 1}</button>` : ''}<button class="btn" data-nova="pastores">+ Conta</button></div><p class="small muted">Ao copiar, o sistema traz as mesmas contas, com o previsto anual e mensal, e calcula o que restou de ${ano - 1} em cada uma.</p>` : '<p class="small muted">O tesoureiro ou a Mesa cadastra as contas do ano.</p>'}</div>`;
+      html += `<div class="card"><p style="margin-top:0">Ainda não há rubricas em ${ano}.</p>${adm ? `<div class="row-wrap">${contas(ano - 1).length ? `<button class="btn primary" id="tCopiar">Copiar as rubricas de ${ano - 1}</button>` : ''}<button class="btn" data-nova="pastores">+ Rubrica</button></div><p class="small muted">Ao copiar, o sistema traz as mesmas rubricas, com o previsto anual e mensal, e calcula o que restou de ${ano - 1} em cada uma.</p>` : '<p class="small muted">O tesoureiro ou o administrador cadastra as rubricas do ano.</p>'}</div>`;
     } else if (T.aba === 'resumo') html += telaResumo(ano, mAte, res);
     else html += telaGrupo(ano, GRUPOS.find(g => g.id === T.aba) || GRUPOS[0], mAte);
-    html += `<p class="small muted">Relatórios do tesoureiro em PDF ficam no <a href="#/acervo/${ano}/secao/tesouraria">Acervo › ${ano} › Tesouraria</a>.${adm ? '' : ' Só a Mesa altera os lançamentos.'}</p>`;
+    html += `<p class="small muted">Relatórios do tesoureiro em PDF ficam no <a href="#/acervo/${ano}/secao/tesouraria">Acervo › ${ano} › Tesouraria</a>.${adm ? '' : ' Só o tesoureiro e o administrador alteram os lançamentos e as rubricas.'}</p>`;
     shell('tesouraria', html);
     A().ligarTips(A().$('#main') || document.body);
     $('#tAno').onchange = e => A().ir('tesouraria/' + e.target.value);
     $('#tAte').onchange = e => { T.ate[ano] = Number(e.target.value); tela(ano); };
     $('#tImp').onclick = () => imprimir(ano);
     $$('[data-aba]').forEach(b => b.onclick = () => { T.aba = b.getAttribute('data-aba'); tela(ano); });
+    if ($('#tQuem')) $('#tQuem').onclick = escolherTesoureiros;
     if (!adm) return;
     $('#tLan').onclick = () => lancamento(ano, null, null);
     if ($('#tSaldo')) $('#tSaldo').onclick = () => editarSaldo(ano);
@@ -138,7 +160,7 @@
   function tabelaGrupo(ano, g, mAte, paraImprimir) {
     const esc = A().esc;
     const cs = doGrupo(ano, g.id);
-    const adm = H().isAdmin() && !paraImprimir;
+    const adm = podeEditar() && !paraImprimir;
     const tot = { anual: 0, mensal: 0, resto: 0, mes: Array(12).fill(0), real: 0, prev: 0 };
     const linhas = cs.map((c, i) => {
       const k = calc(c, mAte);
@@ -154,13 +176,13 @@
         <td class="num"><b>${fm(k.realizado)}</b></td><td class="num">${fm(k.previsto)}</td><td class="num ${k.dif < 0 && g.rec ? 'neg' : ''}">${fm(k.dif)}</td><td class="num">${pctPill(k.pct, !g.rec)}</td></tr>`;
     }).join('');
     return `<div class="tbl-wrap"><table class="tes-tbl grande"><thead><tr><th>#</th><th>${g.col}</th><th class="num">Anual</th><th class="num">Mensal</th><th class="num">Resta ${ano - 1}</th>${MES3.slice(0, mAte).map(m => `<th class="num">${m}</th>`).join('')}<th class="num">Realizado</th><th class="num">Previsto p/ período</th><th class="num">Diferença</th><th class="num">%</th></tr></thead>
-      <tbody>${linhas || `<tr><td colspan="${9 + mAte}" class="list-empty">Nenhuma conta neste grupo.</td></tr>`}</tbody>
+      <tbody>${linhas || `<tr><td colspan="${9 + mAte}" class="list-empty">Nenhuma rubrica neste grupo.</td></tr>`}</tbody>
       ${cs.length ? `<tfoot><tr><td></td><td><b>Total</b></td><td class="num">${fm(tot.anual)}</td><td class="num">${fm(tot.mensal)}</td><td class="num">${fm(tot.resto)}</td>${tot.mes.slice(0, mAte).map(v => `<td class="num">${v ? fm(v) : ''}</td>`).join('')}<td class="num"><b>${fm(tot.real)}</b></td><td class="num">${fm(tot.prev)}</td><td class="num">${fm(tot.real - tot.prev)}</td><td class="num">${pctPill(tot.prev ? tot.real / tot.prev : null, !g.rec)}</td></tr></tfoot>` : ''}
     </table></div>`;
   }
   function telaGrupo(ano, g, mAte) {
-    return `<div class="card"><div class="row-wrap" style="justify-content:space-between;margin-bottom:8px"><div class="small muted">Valores do mês somam todos os lançamentos; <sup>*</sup> quita ${ano - 1} e não conta no realizado de ${ano}. ${H().isAdmin() ? 'Clique num mês para lançar e no nome para editar a conta. Para ver mais meses, mude o "até" no alto.' : ''}</div>
-      ${H().isAdmin() ? `<button class="btn sm" data-nova="${g.id}">+ Conta</button>` : ''}</div>${tabelaGrupo(ano, g, mAte)}</div>`;
+    return `<div class="card"><div class="row-wrap" style="justify-content:space-between;margin-bottom:8px"><div class="small muted">Valores do mês somam todos os lançamentos; <sup>*</sup> quita ${ano - 1} e não conta no realizado de ${ano}. ${podeEditar() ? 'Clique num mês para lançar e no nome para editar ou excluir a rubrica. Para ver mais meses, mude o "até" no alto.' : ''}</div>
+      ${podeEditar() ? `<button class="btn sm" data-nova="${g.id}">+ Rubrica</button>` : ''}</div>${tabelaGrupo(ano, g, mAte)}</div>`;
   }
 
   /* ======================= edição ======================= */
@@ -169,7 +191,7 @@
     const { esc, modal, $ } = A();
     const novo = !c || !c.id;
     c = Object.assign({ grupo: 'pastores', nome: '', previstoAnual: '', mensal: '', restoAnterior: '', obs: '' }, c || {});
-    const m = modal(novo ? 'Nova conta' : 'Conta: ' + esc(c.nome), `<div class="grid g2">
+    const m = modal(novo ? 'Nova rubrica' : 'Rubrica: ' + esc(c.nome), `<div class="grid g2">
       <div class="field"><label for="cGr">Grupo</label><select id="cGr">${GRUPOS.map(g => `<option value="${g.id}" ${c.grupo === g.id ? 'selected' : ''}>${g.nome}</option>`).join('')}</select></div>
       <div class="field"><label for="cNo">Nome</label><input type="text" id="cNo" value="${esc(c.nome)}" placeholder="ex.: IP Maanaim, Rev. Fulano, Aluguel"></div>
       <div class="field"><label for="cAn">Previsto no ano (R$)</label><input type="text" inputmode="decimal" id="cAn" value="${c.previstoAnual !== '' ? fm(c.previstoAnual) : ''}"></div>
@@ -182,23 +204,23 @@
     $('#cOk', m.el).onclick = async () => {
       const an = valor($('#cAn', m.el).value), me = $('#cMe', m.el).value.trim() ? valor($('#cMe', m.el).value) : r2(an / 12);
       const ordem = Number($('#cOr', m.el).value) || (novo ? doGrupo(ano, $('#cGr', m.el).value).length + 1 : c.ordem);
-      const ok = await salvar({ id: c.id, ano, grupo: $('#cGr', m.el).value, nome: $('#cNo', m.el).value.trim(), previstoAnual: an, mensal: me, restoAnterior: valor($('#cRe', m.el).value), ordem, obs: $('#cOb', m.el).value.trim(), lancamentos: c.lancamentos || [] }, 'Conta salva.');
+      const ok = await salvar({ id: c.id, ano, grupo: $('#cGr', m.el).value, nome: $('#cNo', m.el).value.trim(), previstoAnual: an, mensal: me, restoAnterior: valor($('#cRe', m.el).value), ordem, obs: $('#cOb', m.el).value.trim(), lancamentos: c.lancamentos || [] }, 'Rubrica salva.');
       if (ok) { m.fechar(); A().render(); }
     };
     if ($('#cDel', m.el)) $('#cDel', m.el).onclick = async () => {
-      if (!await A().confirmar(`Excluir a conta "${c.nome}" e todos os lançamentos dela em ${ano}?`, 'Excluir')) return;
-      if (await A().acao(() => A().api({ action: 'reuniao', op: 'excluir', id: c.id }), 'Conta excluída.')) { await A().recarregar(); m.fechar(); A().render(); }
+      if (!await A().confirmar(`Excluir a rubrica "${c.nome}" e todos os lançamentos dela em ${ano}?`, 'Excluir')) return;
+      if (await A().acao(() => A().api({ action: 'reuniao', op: 'excluir', id: c.id }), 'Rubrica excluída.')) { await A().recarregar(); m.fechar(); A().render(); }
     };
   }
   function lancamento(ano, c, mes) {
     const { esc, modal, $, $$ } = A();
     const cs = contas(ano);
-    if (!cs.length) return A().toast('Cadastre as contas do ano primeiro.', true);
+    if (!cs.length) return A().toast('Cadastre as rubricas do ano primeiro.', true);
     c = c || cs[0]; mes = mes || ate(ano);
     const linha = l => `<div class="tes-lan"><input type="number" min="1" max="31" class="lDia" value="${esc(l.dia || '')}" aria-label="Dia" placeholder="dia"><input type="text" inputmode="decimal" class="lVal" value="${l.valor ? fm(l.valor) : ''}" aria-label="Valor" placeholder="0,00"><label class="chk small"><input type="checkbox" class="lRef" ${l.ref ? 'checked' : ''}> ref. ${ano - 1}</label><button type="button" class="btn sm ghost lTira" aria-label="Tirar">×</button></div>`;
     const lista = (cc, mm) => { const ls = (cc.lancamentos || []).filter(l => Number(l.mes) === mm); return (ls.length ? ls : [{}]).map(linha).join(''); };
     const m = modal('Lançamentos', `<div class="grid g2">
-      <div class="field"><label for="lCo">Conta</label><select id="lCo">${GRUPOS.map(g => `<optgroup label="${g.nome}">${doGrupo(ano, g.id).map(x => `<option value="${esc(x.id)}" ${x.id === c.id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</optgroup>`).join('')}</select></div>
+      <div class="field"><label for="lCo">Rubrica</label><select id="lCo">${GRUPOS.map(g => `<optgroup label="${g.nome}">${doGrupo(ano, g.id).map(x => `<option value="${esc(x.id)}" ${x.id === c.id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</optgroup>`).join('')}</select></div>
       <div class="field"><label for="lMe">Mês</label><select id="lMe">${H().MESES.map((n, i) => `<option value="${i + 1}" ${i + 1 === mes ? 'selected' : ''}>${n} de ${ano}</option>`).join('')}</select></div></div>
       <div class="lbl" style="margin-top:10px">Dia e valor de cada entrada ou pagamento no mês</div><div id="lLis">${lista(c, mes)}</div>
       <button type="button" class="btn sm" id="lMais" style="margin-top:6px">+ Outro lançamento no mês</button>
@@ -229,9 +251,9 @@
   }
   async function copiarAno(ano) {
     const ant = contas(ano - 1);
-    if (!await A().confirmar(`Criar em ${ano} as ${ant.length} contas de ${ano - 1}, com o mesmo previsto e o que restou de cada uma?`, 'Copiar')) return;
+    if (!await A().confirmar(`Criar em ${ano} as ${ant.length} rubricas de ${ano - 1}, com o mesmo previsto e o que restou de cada uma?`, 'Copiar')) return;
     const itens = ant.map(c => { const k = calc(c, 12); return { tipo: 'tesouraria', id: 'te_' + ano + '_' + c.id.replace(/^te_(\d{4}_)?/, ''), ano, grupo: c.grupo, nome: c.nome, ordem: c.ordem, previstoAnual: c.previstoAnual, mensal: c.mensal, restoAnterior: c.grupo === 'despesas' ? 0 : r2(Math.max(0, (Number(c.previstoAnual) || 0) - k.realizado) + k.resta), lancamentos: [], obs: '' }; });
-    const r = await A().acao(() => A().api({ action: 'reuniao', op: 'importar', itens }), itens.length + ' contas criadas.');
+    const r = await A().acao(() => A().api({ action: 'reuniao', op: 'importar', itens }), itens.length + ' rubricas criadas.');
     if (r) { await A().recarregar(); A().render(); }
   }
   function imprimir(ano) {
@@ -246,5 +268,5 @@
     const ano = Number(a[0]) || (window.IPB_ACERVO ? window.IPB_ACERVO.anoPadrao() : new Date().getFullYear());
     return tela(ano, a[1]);
   }
-  window.IPB_TESOURARIA = { render, calc, valor };
+  window.IPB_TESOURARIA = { render, calc, valor, resumoAno, contas, saldoAnterior, podeEditar, GRUPOS, anosTes, ultimoMes };
 })();

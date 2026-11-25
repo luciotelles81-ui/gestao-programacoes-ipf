@@ -564,6 +564,12 @@
     if (ds.some(d => d.userId === u.id)) return true;
     return u.role === 'analista' && !ds.some(d => d.userId);
   }
+  // a tesouraria do presbitério é editada só pelo administrador e pelos usuários marcados como tesoureiro (cfg.tesoureiros)
+  function ehTesoureiro(u) {
+    if (isAdmin(u)) return true;
+    const c = rGet('cfg');
+    return !!(c && Array.isArray(c.tesoureiros) && c.tesoureiros.includes(u.id) && u.role !== 'leitor');
+  }
   function souRelator(u, comissaoId, reuniaoId) {
     if (isAdmin(u)) return true;
     const ds = delegadosDe(comissaoId, reuniaoId);
@@ -571,8 +577,8 @@
     return rel ? rel.userId === u.id : podeParecer(u, comissaoId, reuniaoId);
   }
   const R_CAMPOS = {
-    cfg: ['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria'],
-    reuniao: ['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta'],
+    cfg: ['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria'],
+    reuniao: ['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta', 'legislatura', 'secretarias', 'tutores', 'representantes', 'campo'],
     delegado: ['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId'],
     documento: ['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito'],
     parecer: ['reuniaoId', 'comissaoId', 'modelo', 'data', 'destino', 'cidade', 'docNumero', 'titulo', 'assunto', 'docsAnalisados', 'origens', 'documentoIds', 'campos', 'assinaturas'],
@@ -584,7 +590,7 @@
   function rValidar(tipo, it) {
     if (tipo === 'reuniao' && !(it.ano > 1900 && it.numero > 0)) fail('Informe o número e o ano da reunião.');
     if (tipo === 'delegado') {
-      if (!String(it.nome || '').trim() && !it.userId) fail('Informe o nome do delegado.');
+      if (!String(it.nome || '').trim() && !it.userId) fail('Informe o nome do membro.');
       if (!['Relator', 'Participante'].includes(it.funcao)) fail('A função deve ser Relator ou Participante.');
       if (!rGet(it.reuniaoId)) fail('Escolha a reunião.');
       if (!db.comissoes.find(c => c.id === it.comissaoId)) fail('Escolha a comissão.');
@@ -638,8 +644,9 @@
       return { item: rSemArquivo(d) };
     }
     if (op === 'importar') {
-      if (!isAdmin(u)) fail('Apenas o administrador importa dados.', 'FORBIDDEN');
       if (!Array.isArray(itens)) fail('Arquivo inválido.');
+      // o tesoureiro pode importar (copiar o ano) só itens da tesouraria
+      if (!isAdmin(u) && !(ehTesoureiro(u) && itens.every(x => x && x.tipo === 'tesouraria'))) fail('Apenas o administrador importa dados.', 'FORBIDDEN');
       let n = 0;
       for (const x of itens) {
         if (!x || !R_TIPOS.includes(x.tipo) || !x.id) continue;
@@ -673,7 +680,7 @@
     if (op === 'excluir') {
       const x = rGet(id);
       if (!x) fail('Registro não encontrado.', 'NOTFOUND');
-      const pode = isAdmin(u) || (x.tipo === 'parecer' && x.status === 'rascunho' && x.criadoPor === u.id);
+      const pode = isAdmin(u) || (x.tipo === 'tesouraria' && ehTesoureiro(u)) || (x.tipo === 'parecer' && x.status === 'rascunho' && x.criadoPor === u.id);
       if (!pode) fail('Você não pode excluir este registro.', 'FORBIDDEN');
       db.reuniao = rItens().filter(y => y.id !== id);
       if (x.tipo === 'reuniao') db.reuniao = db.reuniao.filter(y => y.reuniaoId !== id);
@@ -687,12 +694,14 @@
     if (tipo === 'cfg') it.id = 'cfg';
     const ex = it.id ? rGet(it.id) : null;
     if (ex && ex.tipo !== tipo) fail('Registro de outro tipo.');
-    if (tipo !== 'parecer' && !isAdmin(u)) fail('Apenas a Mesa (administrador) pode fazer isso.', 'FORBIDDEN');
+    if (tipo === 'tesouraria') { if (!ehTesoureiro(u)) fail('Apenas o tesoureiro e o administrador editam a tesouraria.', 'FORBIDDEN'); }
+    else if (tipo === 'cfg' && !isAdmin(u) && ehTesoureiro(u)) { for (const k of Object.keys(it)) if (k !== 'id' && k !== 'tesouraria') delete it[k]; } // o tesoureiro só muda o saldo anterior
+    else if (tipo !== 'parecer' && !isAdmin(u)) fail('Apenas a Mesa (administrador) pode fazer isso.', 'FORBIDDEN');
     rValidar(tipo, Object.assign({}, ex || {}, it));
     let rec;
     if (tipo === 'parecer') {
       const alvo = Object.assign({}, ex || {}, it);
-      if (!podeParecer(u, alvo.comissaoId, alvo.reuniaoId)) fail('Você não é delegado desta comissão.', 'FORBIDDEN');
+      if (!podeParecer(u, alvo.comissaoId, alvo.reuniaoId)) fail('Você não é membro desta comissão.', 'FORBIDDEN');
       if (ex && P_PLENARIO.includes(ex.status) && !isAdmin(u)) fail('O plenário já decidiu sobre este parecer.', 'FORBIDDEN');
       if (ex && (ex.comissaoId !== alvo.comissaoId || ex.reuniaoId !== alvo.reuniaoId) && !isAdmin(u)) fail('Não é possível mudar a comissão do parecer.', 'FORBIDDEN');
       let st = it.status === 'concluido' ? 'concluido' : 'rascunho';
@@ -702,7 +711,8 @@
     } else {
       rec = Object.assign(ex || { id: it.id && tipo === 'cfg' ? 'cfg' : uid({ reuniao: 'ru_', delegado: 'de_', documento: 'do_', estatistica: 'es_', financa: 'fi_', ata: 'ag_', tesouraria: 'te_' }[tipo] || 'x_'), tipo, createdAt: t }, pick(it, R_CAMPOS[tipo]), { updatedAt: t });
       if (tipo === 'delegado' && rec.userId) { const us = db.usuarios.find(x => x.id === rec.userId); if (!us) rec.userId = null; else if (!rec.nome) rec.nome = us.nome; }
-      if (tipo === 'delegado' && rec.funcao === 'Relator') delegadosDe(rec.comissaoId, rec.reuniaoId).forEach(d => { if (d.id !== rec.id && d.funcao === 'Relator') d.funcao = 'Participante'; });
+      // um relator por comissão; no exame de atas, um por igreja (campo igreja)
+      if (tipo === 'delegado' && rec.funcao === 'Relator') delegadosDe(rec.comissaoId, rec.reuniaoId).forEach(d => { if (d.id !== rec.id && d.funcao === 'Relator' && (d.igreja || '') === (rec.igreja || '')) d.funcao = 'Participante'; });
       if (tipo === 'documento') rec.arquivo = ex ? ex.arquivo || null : null;
     }
     if (!ex) rItens().push(rec);

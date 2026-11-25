@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Inclusão, registro e análise dos relatórios das igrejas, no padrão da Igreja Presbiteriana do Brasil.">
   <title>Relatórios IPB</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libertinus+Sans:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#2c5234">
   <meta name="mobile-web-app-capable" content="yes">
@@ -18,12 +21,14 @@
     :root {
       color-scheme: light;
       /* identidade visual da IPB (Programa de Identidade Visual): verde Pantone 350C e cinza K70;
-         letra Zapf Humanist (Optima é o mesmo desenho) e Times New Roman nos demais textos */
+         letra Zapf Humanist (Optima é o mesmo desenho) e Times New Roman nos demais textos.
+         Libertinus Sans (livre, Google Fonts) tem o mesmo traço humanista com hastes alargadas
+         e garante a mesma letra em qualquer aparelho. */
       --brand: #2c5234;          /* verde IPB, Pantone 350C */
       --brand-dark: #1e3b25;
       --brand-soft: #e6eee7;
       --ipb-cinza: #58595b;      /* cinza IPB, K70 */
-      --fonte-ipb: 'Zapf Humanist 601 BT', 'Zapf Humanist', Optima, 'URW Classico', Candara, 'Segoe UI', sans-serif;
+      --fonte-ipb: 'Libertinus Sans', 'Zapf Humanist 601 BT', 'Zapf Humanist', Optima, 'URW Classico', Candara, 'Segoe UI', sans-serif;
       --fonte-texto: 'Times New Roman', Times, 'Liberation Serif', serif;
       --brand-contrast: #ffffff;
       --bg: #f3f6f4;
@@ -318,6 +323,66 @@
     .est-tab input { width: 74px; }
     .est-tab td:first-child { white-space: nowrap; }
     .como summary { cursor: pointer; }
+    /* gráficos do presbitério */
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .gf-top { align-items: center; margin: -4px 0 10px; }
+    .gf-top select { width: auto; }
+    .gf-head { align-items: flex-start; gap: 10px; }
+    .gf-head h2 { margin: 0; }
+    .gf-tipo select { width: auto; font-size: 13px; padding: 5px 8px; }
+    .gf-svg { overflow-x: auto; }
+    .gf-svg text.ax { fill: var(--muted); font-size: 11px; }
+    .gf-svg text.vl, .gf-pie text.vl { fill: var(--text); font-size: 11px; font-weight: 700; }
+    .gf-svg text.vl.in, .gf-pie text.vl.in { fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.35); stroke-width: 2px; }
+    .gf-pie text.ax { fill: var(--muted); font-size: 11px; }
+    .gf-svg rect:hover, .gf-pie path:hover, .gf-svg circle:hover { opacity: .85; }
+    .gf-pies { display: flex; flex-wrap: wrap; gap: 18px; }
+    .gf-pie { flex: 1 1 300px; min-width: 0; }
+    .gf-pie-in { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .gf-pie-in svg { flex: 0 0 auto; }
+    .gf-leg { flex: 1 1 180px; font-size: 12.5px; border-collapse: collapse; }
+    .gf-leg td { padding: 3px 6px; border-bottom: 1px solid var(--border); }
+    .gf-leg td i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    .gf-leg tr.tot td, .gf-tbl tr.tot td { font-weight: 700; background: var(--surface-2); }
+    .gf-tbl td, .gf-tbl th { white-space: nowrap; }
+    .gf-quadro td:first-child { white-space: normal; min-width: 180px; }
+    .gf-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 12px; }
+    .gf-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 10px 3px 7px; font-size: 12.5px; cursor: pointer; background: var(--surface); }
+    .gf-chip input { width: auto; margin: 0; }
+    .gf-chip:has(input:checked) { background: var(--brand-soft); border-color: var(--brand); }
+    .gf-det { margin: 0 0 8px; }
+    .gf-det summary { cursor: pointer; color: var(--brand); }
+    .gf-det .gf-chips { margin: 8px 0 0; }
+    .gf-seg { margin: 0 0 10px; }
+    .gf-seg button { padding: 5px 10px; font-size: 13px; }
+    .gf-faixa .kpi { box-shadow: none; }
+    @media (max-width: 640px) { .gf-svg svg { min-width: 540px; } .gf-head { flex-wrap: wrap; } }
+    /* mesa e secretarias */
+    .mesa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+    .mesa-pessoa { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); }
+    .mesa-pessoa .c { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+    .mesa-pessoa b { display: block; font-family: var(--fonte-ipb); font-size: 15px; margin-top: 2px; }
+    .mesa-pessoa.vaga b { color: var(--muted); font-weight: 400; font-style: italic; }
+    .dica { position: relative; border-bottom: 1px dotted currentColor; cursor: help; }
+    .dica:hover::after, .dica:focus::after { content: attr(data-dica); position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; white-space: pre-line; width: max-content; max-width: 300px; background: var(--text); color: #fff; font-size: 12px; line-height: 1.45; padding: 8px 10px; border-radius: 8px; box-shadow: var(--shadow-lg); font-weight: 400; }
+    .fluxo { list-style: none; margin: 4px 0 0; padding: 0; display: flex; align-items: flex-start; gap: 2px; }
+    .fx-passo { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 6px 2px; border-radius: 10px; cursor: help; outline: none; }
+    .fx-passo:hover, .fx-passo:focus-visible { background: var(--surface-2); }
+    .fx-ic { width: 54px; height: 54px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; transition: background .15s, color .15s; }
+    .fx-passo:hover .fx-ic, .fx-passo:focus .fx-ic { background: var(--brand); color: #fff; }
+    .fx-n { font-family: var(--fonte-ipb); font-weight: 700; font-size: 13.5px; line-height: 1.2; }
+    .fx-n small { display: inline-block; min-width: 18px; color: var(--muted); font-weight: 400; }
+    .fx-seta { flex: 0 0 auto; align-self: flex-start; margin-top: 18px; font-size: 26px; line-height: 1; color: var(--border-strong); }
+    .fx-dica { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); width: 260px; z-index: 30; background: var(--text); color: #fff; font-size: 12.5px; line-height: 1.5; text-align: left; padding: 10px 12px; border-radius: 10px; box-shadow: var(--shadow-lg); opacity: 0; visibility: hidden; transition: opacity .12s; pointer-events: none; }
+    .fx-passo.ini .fx-dica { left: 0; transform: none; }
+    .fx-passo.fim .fx-dica { left: auto; right: 0; transform: none; }
+    .fx-passo:hover .fx-dica, .fx-passo:focus .fx-dica { opacity: 1; visibility: visible; }
+    @media (max-width: 640px) {
+      .fluxo { flex-wrap: wrap; row-gap: 10px; }
+      .fx-passo { flex: 1 1 30%; }
+      .fx-seta { display: none; }
+      .fx-dica { width: 220px; }
+    }
     .como ol { line-height: 1.6; padding-left: 20px; }
     .parecer-folha { background: #fff; color: #111; width: 794px; max-width: none; box-sizing: border-box; margin: 0 auto; padding: 46px 56px; font-family: var(--fonte-texto); font-size: 15px; line-height: 1.5; color-scheme: light; }
     .parecer-folha + .parecer-folha { margin-top: 18px; }
@@ -628,6 +693,7 @@
   <script src="reunioes.js"></script>
   <script src="acervo.js"></script>
   <script src="tesouraria.js"></script>
+  <script src="graficos.js"></script>
   <script src="app.js"></script>
   <script>if ('serviceWorker' in navigator && location.protocol !== 'file:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 </body>
