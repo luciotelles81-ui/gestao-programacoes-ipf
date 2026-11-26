@@ -415,7 +415,7 @@
       <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><a href="#/painel" style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:8px">${logo(30)}<b>${esc(ORG.sistema)}</b></a></div>
       <div class="app">
         <aside class="side" id="side">
-          <a class="brand" href="#/painel" title="Ir para a página inicial (Painel)">${logo(62)}<div class="brand-txt"><b>${duasLinhas(ORG.sistema)}</b><span class="brand-org">${u.igrejaId ? esc((igreja(u.igrejaId) || {}).sigla || igNome(u.igrejaId)) : (ORG.sigla ? '<i>' + esc(ORG.sigla) + '</i>' : '') + esc(ORG.tipo)}</span></div></a>
+          <a class="brand" href="#/painel" title="Ir para a página inicial (Painel)">${logo(72)}<div class="brand-txt"><b>${duasLinhas(ORG.sistema)}</b><span class="brand-org">${ORG.sigla ? '<i>' + esc(ORG.sigla) + '</i>' : ''}<em>${esc(u.igrejaId ? igNome(u.igrejaId) : ORG.nome)}</em></span></div></a>
           <nav class="nav">
             ${nav('painel', 'Painel', '▦')}
             ${nav('indicadores', 'Indicadores', '↗')}
@@ -651,7 +651,8 @@
         saldo: C ? C.V('fin_saldo_seguinte') : null, saldo0: C0 ? C0.V('fin_saldo_seguinte') : null, prof: C ? C.V('com_profissoes') : 0, pend };
     }).map((p, k) => Object.assign(p, { _k: k }))
       .sort((a, b) => (ehCongregacao(a.i) - ehCongregacao(b.i)) || (temFin(b) - temFin(a)) || (a._k - b._k));
-    function nomeTabela(n) { return String(n || '').replace(/^Igreja Presbiteriana (d[aoe]s? |em )?/i, 'IP ').replace(/^Congrega[çc][ãa]o Presbiterial (d[aoe]s? |em )?/i, 'CP ').replace(/^Congrega[çc][ãa]o /i, 'Congregação '); }
+    function vR(v) { return (v < 0 ? '−' : '') + new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(Number(v) || 0)); }
+    function nomeTabela(n) { return String(n || '').replace(/^Igreja Presbiteriana (d[aoe]s? |em )?/i, 'IP ').replace(/^Congrega[çc][ãa]o Presbiterial (d[aoe]s? |em )?/i, 'CP ').replace(/^Congrega[çc][ãa]o /i, 'Cong. '); }
     function temFin(p) { return p.e && (p.rec != null || p.diz || p.ofe || p.verba || p.sc) ? 1 : 0; }
 
     // Conformidade do Relatório do Conselho (último ano)
@@ -695,17 +696,16 @@
       </div>` : ''}
       ${conf.length ? `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Relatório do Conselho: situação das igrejas</h2><span class="muted small">${anoCon.ano} · % dos relatórios que responderam "Sim"</span></div><div id="confBars">${hbarras(conf, (v) => pct(v), C1)}</div>${matriz}</div>` : ''}
       <div class="card" style="margin-top:16px"><div class="card-head"><h2>Igrejas em ${anoRef || '–'}</h2><button class="btn sm ghost no-print" id="bCsv">Baixar planilha (CSV)</button></div>
-        <div class="tbl-wrap"><table class="tab-fin"><thead><tr><th>Igreja</th><th class="num">Receitas</th><th class="num">Evolução<span>sobre ${anoRef ? anoRef - 1 : 'ano anterior'}</span></th><th class="num">Despesas</th><th class="num">Resultado</th><th class="num">Dízimo SC<span>% dos dízimos</span></th><th class="num">Verba presbiterial<span>devida: ${pct(TAXA_PRESB())} de dízimos e ofertas</span></th><th class="num">Saldo final<span>para o ano seguinte</span></th></tr></thead><tbody>
-        ${porIgreja.map((p, k) => (porIgreja.some(x => ehCongregacao(x.i)) && (k === 0 || ehCongregacao(p.i) !== ehCongregacao(porIgreja[k - 1].i)) ? `<tr class="grp-row"><td colspan="20">${ehCongregacao(p.i) ? 'Congregações' : 'Igrejas'}</td></tr>` : '') + `<tr class="${p.e ? 'click' : ''}" ${p.e ? `data-go="relatorio/${esc(p.e.id)}"` : ''}><td class="nome" title="${esc(p.i.nome)}">${esc(nomeTabela(p.i.nome))}</td>
-          <td class="num">${p.rec == null ? '–' : money(p.rec)}</td>
-          <td class="num">${p.rec != null && p.rec0 ? `<span class="${p.rec >= p.rec0 ? 'up' : 'down'}">${p.rec >= p.rec0 ? '+' : '−'}${pct(Math.abs(p.rec - p.rec0) / p.rec0)}</span>` : '–'}</td>
-          <td class="num">${p.desp == null ? '–' : money(p.desp)}</td>
-          <td class="num">${p.rec == null ? '–' : `<span class="${p.rec - p.desp >= 0 ? '' : 'down'}">${money(p.rec - p.desp)}</span>`}</td>
-          <td class="num">${p.e ? (p.sc ? money(p.sc) + ' <span class="muted small">(' + pct(p.diz ? p.sc / p.diz : 0) + ')</span>' : '<span class="down">não repassou</span>') : '–'}</td>
-          <td class="num">${p.e ? (p.verba ? money(p.verba) : '<span class="down">não repassou</span>') + (base3(p) ? ` <div class="small ${p.verba >= base3(p) - 0.5 ? 'up' : 'down'}">${pct(p.verba / ((p.diz || 0) + (p.ofe || 0)))} · devido ${money(base3(p))}</div>` : '') : '–'}</td>
-          <td class="num">${p.saldo == null ? '–' : money(p.saldo) + (p.saldo0 != null ? ` <div class="small muted">${anoRef - 1}: ${money(p.saldo0)}</div><div class="small ${p.saldo >= p.saldo0 ? 'up' : 'down'}">${p.saldo >= p.saldo0 ? '+' : '−'}${money(Math.abs(p.saldo - p.saldo0))}</div>` : '')}</td></tr>`).join('')}
+        <div class="tbl-wrap"><table class="tab-fin"><thead><tr><th>Igreja</th><th class="num">Receitas<span>R$ · sobre ${anoRef ? anoRef - 1 : 'ano ant.'}</span></th><th class="num">Despesas<span>R$</span></th><th class="num">Resultado<span>R$</span></th><th class="num">Dízimo SC<span>R$ · % dos dízimos</span></th><th class="num">Verba presbiterial<span>R$ · devida ${pct(TAXA_PRESB())}</span></th><th class="num">Saldo final<span>R$ · ano seguinte</span></th></tr></thead><tbody>
+        ${porIgreja.map((p, k) => (porIgreja.some(x => ehCongregacao(x.i)) && (k === 0 || ehCongregacao(p.i) !== ehCongregacao(porIgreja[k - 1].i)) ? `<tr class="grp-row"><td colspan="7">${ehCongregacao(p.i) ? 'Congregações' : 'Igrejas'}</td></tr>` : '') + `<tr class="${p.e ? 'click' : ''}" ${p.e ? `data-go="relatorio/${esc(p.e.id)}"` : ''}><td class="nome" title="${esc(p.i.nome)}">${esc(nomeTabela(p.i.nome))}</td>
+          <td class="num">${p.rec == null ? '–' : vR(p.rec) + (p.rec0 ? `<div class="sub ${p.rec >= p.rec0 ? 'up' : 'down'}">${p.rec >= p.rec0 ? '+' : '−'}${pct(Math.abs(p.rec - p.rec0) / p.rec0)}</div>` : '')}</td>
+          <td class="num">${p.desp == null ? '–' : vR(p.desp)}</td>
+          <td class="num">${p.rec == null ? '–' : `<span class="${p.rec - p.desp >= 0 ? '' : 'down'}">${vR(p.rec - p.desp)}</span>`}</td>
+          <td class="num">${p.e ? (p.sc ? vR(p.sc) + `<div class="sub muted">${pct(p.diz ? p.sc / p.diz : 0)}</div>` : '<span class="down">não repassou</span>') : '–'}</td>
+          <td class="num">${p.e ? (p.verba ? vR(p.verba) : '<span class="down">não repassou</span>') + (base3(p) ? `<div class="sub ${p.verba >= base3(p) - 0.5 ? 'up' : 'down'}">${pct(p.verba / ((p.diz || 0) + (p.ofe || 0)))} · devido ${vR(base3(p))}</div>` : '') : '–'}</td>
+          <td class="num">${p.saldo == null ? '–' : vR(p.saldo) + (p.saldo0 != null ? `<div class="sub muted">${anoRef - 1}: ${vR(p.saldo0)}</div><div class="sub ${p.saldo >= p.saldo0 ? 'up' : 'down'}">${p.saldo >= p.saldo0 ? '+' : '−'}${vR(Math.abs(p.saldo - p.saldo0))}</div>` : '')}</td></tr>`).join('')}
         </tbody></table></div>
-        <p class="small muted">Só informações financeiras, do formulário de estatística de ${anoRef || ''}. Evolução: receita comparada ao ano anterior. Verba presbiterial: a taxa devida é ${pct(TAXA_PRESB())} da receita de dízimos e ofertas. Saldo: a sobra de um ano para o outro é movimento normal do caixa e varia a cada ano. Linhas sem dados: a igreja não enviou o formulário (congregações enviam só o relatório do Conselho).</p>
+        <p class="small muted">Só informações financeiras, do formulário de estatística de ${anoRef || ''}. Valores em reais. Abaixo da receita, a evolução sobre o ano anterior. Verba presbiterial: a taxa devida é ${pct(TAXA_PRESB())} da receita de dízimos e ofertas. Saldo: a sobra de um ano para o outro é movimento normal do caixa e varia a cada ano. Linhas sem dados: a igreja não enviou o formulário (congregações enviam só o relatório do Conselho).</p>
       </div>`;
     shell('painel', html);
     const sel = $('#fIg'); if (sel) sel.onchange = () => { S.filtroIgreja = sel.value; render(); };

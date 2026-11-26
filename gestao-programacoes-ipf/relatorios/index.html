@@ -97,13 +97,14 @@
     /* ---------- layout ---------- */
     .app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
     .side { background: var(--side-bg); color: var(--side-text); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-    .brand { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 14px 8px 18px; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,.12); color: inherit; text-decoration: none; border-radius: 8px; }
+    .brand { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding: 18px 10px 20px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.12); color: inherit; text-decoration: none; border-radius: 10px; }
     a.brand:hover { background: var(--side-hover); }
     .brand svg { flex: none; }
-    .brand-txt { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-    .brand b { display: block; font-size: 14px; line-height: 1.3; letter-spacing: .09em; font-weight: 700; }
-    .brand .brand-org { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--side-muted); letter-spacing: .02em; }
-    .brand .brand-org i { font-style: normal; font-weight: 700; color: #fff; background: rgba(255,255,255,.14); border-radius: 999px; padding: 2px 9px; letter-spacing: .06em; }
+    .brand-txt { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+    .brand b { display: block; font-size: 13px; line-height: 1.45; letter-spacing: .16em; font-weight: 600; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.22); width: 100%; }
+    .brand .brand-org { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .brand .brand-org i { font-style: normal; font-weight: 700; font-size: 12px; color: #fff; background: rgba(255,255,255,.14); border-radius: 999px; padding: 3px 12px; letter-spacing: .1em; }
+    .brand .brand-org em { font-style: normal; font-size: 12px; line-height: 1.35; color: var(--side-muted); }
     .nav-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--side-muted); padding: 14px 10px 4px; }
     .nav a { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: var(--side-text); text-decoration: none; font-size: 14px; font-weight: 500; }
     .nav a:hover { background: var(--side-hover); }
@@ -243,13 +244,15 @@
     .gsw-b.on { background: var(--primary, #2c5234); border-color: var(--primary, #2c5234); color: #fff; }
     .gsw.mini .gsw-bar { margin: 2px 0 4px; } .gsw.mini .gsw-b { padding: 3px 6px; }
     .gsw .gf-pie-in svg { max-width: 180px; }
-    .tab-fin { font-size: 13px; }
-    .tab-fin th { white-space: normal; vertical-align: bottom; line-height: 1.25; padding: 10px 10px; }
+    .tab-fin { font-size: 13px; width: 100%; }
+    .tab-fin th { white-space: nowrap; vertical-align: bottom; line-height: 1.25; padding: 10px 8px; }
     .tab-fin th span { display: block; text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 11px; margin-top: 2px; }
-    .tab-fin td { padding: 9px 10px; vertical-align: top; }
-    .tab-fin td.num, .tab-fin td.num div { white-space: nowrap; }
-    .tab-fin td.nome { white-space: nowrap; font-weight: 600; }
-    .tab-fin td.num div.small { margin-top: 2px; }
+    .tab-fin td { padding: 9px 8px; vertical-align: top; }
+    .tab-fin td.num { white-space: nowrap; }
+    .tab-fin td.nome { font-weight: 600; min-width: 120px; }
+    .tab-fin .sub { font-size: 11.5px; margin-top: 3px; white-space: nowrap; }
+    .tab-fin th:first-child, .tab-fin td:first-child { padding-left: 14px; }
+    .tab-fin th:last-child, .tab-fin td:last-child { padding-right: 14px; }
     tr.grp-row td { background: var(--surface-2, #f1f4f2); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-top: 8px; padding-bottom: 8px; }
     .chart text { fill: var(--muted); font-size: 11px; }
     .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 14px; }
