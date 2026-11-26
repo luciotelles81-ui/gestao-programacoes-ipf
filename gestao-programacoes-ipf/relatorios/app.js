@@ -502,9 +502,50 @@
     });
   }
   function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+  /* ---------- chave da forma do gráfico (colunas, barras, linhas, pizza), lembrada por gráfico ---------- */
+  const GTIPO_KEY = 'ipb-graficos-forma';
+  let GT = {};
+  try { GT = JSON.parse(localStorage.getItem(GTIPO_KEY) || '{}') || {}; } catch (e) { GT = {}; }
+  const GSPEC = {};
+  let gseq = 0;
+  const GOPC = [['colunas', 'Colunas', '<svg viewBox="0 0 16 16"><path d="M2 14h12M4 13V8M8 13V3M12 13V6" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>'],
+    ['barras', 'Barras', '<svg viewBox="0 0 16 16"><path d="M2 2v12M3 4h6M3 8h10M3 12h4" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>'],
+    ['linhas', 'Linhas', '<svg viewBox="0 0 16 16"><path d="M2 12l4-5 3 3 5-7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'],
+    ['pizza', 'Pizza', '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 2v6h6" stroke="currentColor" stroke-width="2" fill="none"/></svg>']];
+  // id: nome estável do gráfico (a escolha fica guardada); sp: { cats, series, fmt:{l,c} }; proprio: desenho próprio para a forma padrão
+  function grafChave(id, sp, padrao, proprio, mini) {
+    const k = 'g' + (++gseq);
+    GSPEC[k] = { id, sp, padrao, proprio };
+    if (gseq % 400 === 0) Object.keys(GSPEC).slice(0, 200).forEach(x => delete GSPEC[x]);
+    const tipo = GOPC.some(o => o[0] === GT[id]) ? GT[id] : padrao;
+    return `<div class="gsw${mini ? ' mini' : ''}" data-gsw="${k}"><div class="gsw-bar" role="group" aria-label="Forma do gráfico">${GOPC.map(([t, l, ic]) => `<button type="button" class="gsw-b${t === tipo ? ' on' : ''}" data-gt="${t}" title="${l}" aria-label="${l}" aria-pressed="${t === tipo}">${ic}${mini ? '' : `<span>${l}</span>`}</button>`).join('')}</div><div class="gsw-c">${grafDesenho(GSPEC[k], tipo)}</div></div>`;
+  }
+  function grafDesenho(g, tipo) {
+    if (tipo === g.padrao && g.proprio) return g.proprio();
+    return window.IPB_GRAFICOS ? window.IPB_GRAFICOS.grafico(tipo, g.sp) : (g.proprio ? g.proprio() : '');
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('.gsw-b');
+    if (!b) return;
+    const w = b.closest('.gsw'), g = GSPEC[w.getAttribute('data-gsw')];
+    if (!g) return;
+    const t = b.getAttribute('data-gt');
+    GT[g.id] = t;
+    try { localStorage.setItem(GTIPO_KEY, JSON.stringify(GT)); } catch (err) { /* sem armazenamento */ }
+    $$('.gsw-b', w).forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); });
+    const c = $('.gsw-c', w);
+    c.innerHTML = grafDesenho(g, t);
+    ligarTips(c);
+  });
+  const fmtObj = fmt => ({ l: v => fmt(v), c: v => fmt(v, true) });
+
   /* barras verticais agrupadas: cats=['2024','2025'], series=[{nome, cor, vals:[]}] */
   function barras(cats, series, fmt, opts) {
     opts = opts || {};
+    const id = 'b:' + (location.hash.split('/')[1] || '') + ':' + (opts.id || opts.label || series.map(s => s.nome).join('+'));
+    return grafChave(id, { cats, series: series.map(s => ({ nome: s.nome, cor: s.cor, vals: s.vals })), fmt: fmtObj(fmt), h: opts.h, titulo: opts.label }, 'colunas', () => barrasSvg(cats, series, fmt, opts));
+  }
+  function barrasSvg(cats, series, fmt, opts) {
     const W = 640, H = opts.h || 240, L = 64, R = 12, T = 14, B = 34;
     const max = niceMax(Math.max(1, ...series.flatMap(s => s.vals.map(v => Number(v) || 0))));
     const gw = (W - L - R) / cats.length;
@@ -531,7 +572,12 @@
     return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.label || '')}">${g}</svg>${leg}</div>`;
   }
   /* barras horizontais (uma série) */
-  function hbarras(itens, fmt, cor) {
+  function hbarras(itens, fmt, cor, idG) {
+    const id = 'h:' + (location.hash.split('/')[1] || '') + ':' + (idG || (cor || '') + ':' + itens.map(i => i.nome).sort().join(',').slice(0, 80));
+    const sp = { cats: itens.map(i => i.nome), series: [{ nome: '', cor: cor && !/^var\(/.test(cor) ? cor : undefined, vals: itens.map(i => i.v) }], fmt: fmtObj(fmt) };
+    return grafChave(id, sp, 'barras', () => hbarrasHtml(itens, fmt, cor));
+  }
+  function hbarrasHtml(itens, fmt, cor) {
     const max = Math.max(1, ...itens.map(i => Math.abs(i.v)));
     return itens.map(i => `<div class="bar-row" data-tip="${esc('<b>' + esc(i.nome) + '</b><br>' + esc(fmt(i.v)) + (i.extra ? '<br>' + esc(i.extra) : ''))}"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.nome)}</span><div class="bar"><i style="width:${Math.max(0, i.v) / max * 100}%;background:${i.cor || cor};border-radius:0 4px 4px 0"></i></div><span class="num small" style="text-align:right">${esc(fmt(i.v, true))}</span></div>`).join('');
   }
@@ -595,7 +641,9 @@
       return { i, e, com: C ? C.V('com_atual') : null, com0: C0 ? C0.V('com_atual') : null, rec: C ? C.V('fin_rec_total') : null, desp: C ? C.V('fin_desp_total') : null,
         diz: C ? C.V('fin_dizimos') : 0, ofe: C ? C.V('fin_ofertas') : 0, sc: C ? C.V('fin_dizimo_sc') : 0, verba: C ? C.V('fin_verba_presb') : 0, rec0: C0 ? C0.V('fin_rec_total') : null,
         saldo: C ? C.V('fin_saldo_seguinte') : null, saldo0: C0 ? C0.V('fin_saldo_seguinte') : null, prof: C ? C.V('com_profissoes') : 0, pend };
-    });
+    }).map((p, k) => Object.assign(p, { _k: k }))
+      .sort((a, b) => (ehCongregacao(a.i) - ehCongregacao(b.i)) || (temFin(b) - temFin(a)) || (a._k - b._k));
+    function temFin(p) { return p.e && (p.rec != null || p.diz || p.ofe || p.verba || p.sc) ? 1 : 0; }
 
     // Conformidade do Relatório do Conselho (último ano)
     const anoCon = anos.filter(a => a.igrejasCon).slice(-1)[0];
@@ -639,7 +687,7 @@
       ${conf.length ? `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Relatório do Conselho: situação das igrejas</h2><span class="muted small">${anoCon.ano} · % dos relatórios que responderam "Sim"</span></div><div id="confBars">${hbarras(conf, (v) => pct(v), C1)}</div>${matriz}</div>` : ''}
       <div class="card" style="margin-top:16px"><div class="card-head"><h2>Igrejas em ${anoRef || '–'}</h2><button class="btn sm ghost no-print" id="bCsv">Baixar planilha (CSV)</button></div>
         <div class="tbl-wrap"><table class="tab-fin"><thead><tr><th>Igreja</th><th class="num">Receitas</th><th class="num">Evolução</th><th class="num">Despesas</th><th class="num">Resultado</th><th class="num">Dízimo SC</th><th class="num">Verba presbiterial (${pct(TAXA_PRESB())} de dízimos e ofertas)</th><th class="num">Saldo para o ano seguinte</th></tr></thead><tbody>
-        ${porIgreja.map(p => `<tr class="${p.e ? 'click' : ''}" ${p.e ? `data-go="relatorio/${esc(p.e.id)}"` : ''}><td>${esc(p.i.nome)}${p.i.tipo && p.i.tipo !== 'Igreja' ? ` <span class="tag gray">${esc(p.i.tipo)}</span>` : ''}</td>
+        ${porIgreja.map((p, k) => (porIgreja.some(x => ehCongregacao(x.i)) && (k === 0 || ehCongregacao(p.i) !== ehCongregacao(porIgreja[k - 1].i)) ? `<tr class="grp-row"><td colspan="20">${ehCongregacao(p.i) ? 'Congregações' : 'Igrejas'}</td></tr>` : '') + `<tr class="${p.e ? 'click' : ''}" ${p.e ? `data-go="relatorio/${esc(p.e.id)}"` : ''}><td>${esc(p.i.nome)}${p.i.tipo && p.i.tipo !== 'Igreja' ? ` <span class="tag gray">${esc(p.i.tipo)}</span>` : ''}</td>
           <td class="num">${p.rec == null ? '–' : money(p.rec)}</td>
           <td class="num">${p.rec != null && p.rec0 ? `<span class="${p.rec >= p.rec0 ? 'up' : 'down'}">${p.rec >= p.rec0 ? '+' : '−'}${pct(Math.abs(p.rec - p.rec0) / p.rec0)}</span>` : '–'}</td>
           <td class="num">${p.desp == null ? '–' : money(p.desp)}</td>
@@ -723,7 +771,10 @@
     });
     return { M, anos: [...anos].sort() };
   }
-  function miniBarras(anos, vals, f) {
+  function miniBarras(anos, vals, f, idG) {
+    return grafChave('m:' + (idG || f), { cats: anos.map(String), series: [{ nome: '', vals }], fmt: { l: v => fmtInd(v, f), c: v => fmtInd(v, f, true) }, h: 170 }, 'colunas', () => miniBarrasSvg(anos, vals, f), true);
+  }
+  function miniBarrasSvg(anos, vals, f) {
     const W = 260, H = 112, T = 18, B = 20, L = 6, R = 6;
     const nums = vals.map(v => v == null ? null : Number(v));
     const max = Math.max(0, ...nums.filter(v => v != null)), min = Math.min(0, ...nums.filter(v => v != null));
@@ -797,7 +848,7 @@
           const vals = anosIg.map(a => D[a][i.id] == null ? null : D[a][i.id]);
           const ua = [...anosIg].reverse().find(a => D[a][i.id] != null);
           const pa = anosIg.filter(a => a < ua).reverse().find(a => D[a][i.id] != null);
-          return `<div class="ind-card"><h4>${esc(i.nome)}</h4><div class="small muted">${ua}: <b style="color:var(--text);font-size:15px">${esc(fmtInd(D[ua][i.id], i.fmt))}</b>${pa ? ' · ' + variacao(D[ua][i.id], D[pa][i.id], i.fmt) + ' desde ' + pa : ''}</div>${miniBarras(anosIg, vals, i.fmt)}</div>`;
+          return `<div class="ind-card"><h4>${esc(i.nome)}</h4><div class="small muted">${ua}: <b style="color:var(--text);font-size:15px">${esc(fmtInd(D[ua][i.id], i.fmt))}</b>${pa ? ' · ' + variacao(D[ua][i.id], D[pa][i.id], i.fmt) + ' desde ' + pa : ''}</div>${miniBarras(anosIg, vals, i.fmt, i.id)}</div>`;
         }).join('')}</div></div>`;
       }).join('');
       const linhas = IND.filter(i => anosIg.some(a => D[a][i.id] != null));

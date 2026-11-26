@@ -32,6 +32,7 @@
     if (a >= 1e3) return s + 'R$ ' + (a / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: a >= 1e5 ? 0 : 1 }) + ' mil';
     return s + 'R$ ' + nf0.format(a);
   }
+  const fm = sp => (sp.fmt && typeof sp.fmt === 'object' ? sp.fmt : FMT[sp.fmt] || FMT.num);
   const pctF = v => (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
 
   /* ======================= motor de gráficos (SVG) ======================= */
@@ -43,7 +44,7 @@
   function rotulo(cat, n) { n = n || 16; const s = String(cat); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
   function colunas(sp, empilhar) {
-    const esc = A().esc, f = FMT[sp.fmt], cs = cores(sp.series);
+    const esc = A().esc, f = fm(sp), cs = cores(sp.series);
     const n = sp.cats.length, ns = sp.series.length;
     const W = Math.max(640, Math.min(1100, n * (empilhar ? 70 : 34 * ns + 26))), Hh = sp.h || 280, L = 70, R = 12, T = 22, B = n > 6 ? 58 : 36;
     const tots = sp.cats.map((_, j) => empilhar ? sp.series.reduce((a, s) => a + Math.max(0, Number(s.vals[j]) || 0), 0) : 0);
@@ -85,7 +86,7 @@
   }
 
   function barras(sp) {
-    const esc = A().esc, f = FMT[sp.fmt], cs = cores(sp.series);
+    const esc = A().esc, f = fm(sp), cs = cores(sp.series);
     const n = sp.cats.length, ns = sp.series.length, bh = ns > 1 ? 14 : 18, gh = ns * (bh + 2) + 10;
     const W = 640, L = 170, R = 96, T = 6, Hh = T + n * gh + 6;
     const vmax = Math.max(0, ...sp.series.flatMap(s => s.vals.map(v => Number(v) || 0)));
@@ -107,7 +108,7 @@
   }
 
   function linhas(sp, area) {
-    const esc = A().esc, f = FMT[sp.fmt], cs = cores(sp.series);
+    const esc = A().esc, f = fm(sp), cs = cores(sp.series);
     const n = sp.cats.length, W = 640, Hh = sp.h || 280, L = 70, R = 24, T = 24, B = n > 8 ? 52 : 34;
     const vals = sp.series.flatMap(s => s.vals.filter(v => v != null).map(Number));
     const top = Math.max(0, ...vals) > 0 ? niceMax(Math.max(...vals)) : 0, bot = Math.min(0, ...vals) < 0 ? -niceMax(-Math.min(...vals)) : 0, span = top - bot || 1;
@@ -134,7 +135,7 @@
 
   // pizza ou rosca: uma por série (até 3), fatias = categorias; acima de 8 fatias, as menores viram "Outras"
   function pizza(sp, rosca) {
-    const esc = A().esc, f = FMT[sp.fmt];
+    const esc = A().esc, f = fm(sp);
     const ser = sp.series.slice(0, 3);
     const corCat = sp.cats.map((_, j) => PAL[j % PAL.length]);
     const um = s => {
@@ -172,7 +173,7 @@
   }
 
   function tabela(sp) {
-    const esc = A().esc, f = FMT[sp.fmt];
+    const esc = A().esc, f = fm(sp);
     const somaCol = sp.series.length > 1 && sp.somaSeries !== false;
     return `<div class="tbl-wrap"><table class="gf-tbl"><thead><tr><th>${esc(sp.eixo || '')}</th>${sp.series.map(s => `<th class="num">${esc(s.nome)}</th>`).join('')}${somaCol ? '<th class="num">Total</th>' : ''}</tr></thead><tbody>
       ${sp.cats.map((c, j) => `<tr><td>${esc(c)}</td>${sp.series.map(s => `<td class="num">${s.vals[j] == null ? '–' : esc(f.l(Number(s.vals[j])))}</td>`).join('')}${somaCol ? `<td class="num"><b>${esc(f.l(sp.series.reduce((a, s) => a + (Number(s.vals[j]) || 0), 0)))}</b></td>` : ''}</tr>`).join('')}
