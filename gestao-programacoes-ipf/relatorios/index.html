@@ -195,6 +195,10 @@
     .kpis-painel .kpi .s { margin-top: auto; padding-top: 6px; }
     @media (max-width: 1000px) { .kpis-painel { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 420px) { .kpis-painel .kpi .l { min-height: 0; } .kpis-painel .kpi { padding: 12px; } }
+    .caixa-res { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+    .caixa-res > div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+    .caixa-res span { font-size: 12px; color: var(--muted); } .caixa-res b { font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    @media (max-width: 1200px) { .caixa-res { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .conf-det { margin-top: 12px; } .conf-det summary { cursor: pointer; color: var(--brand); font-weight: 600; }
     .conf-tab th.c, .conf-tab td.c { text-align: center; font-size: 12px; } .conf-tab th.c { min-width: 82px; white-space: normal; line-height: 1.25; }
     .conf-tab td.c span { font-size: 15px; font-weight: 700; }

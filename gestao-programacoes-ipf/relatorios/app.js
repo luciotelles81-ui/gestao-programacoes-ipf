@@ -475,6 +475,24 @@
     });
     return Object.values(anos).sort((x, y) => x.ano - y.ano);
   }
+  // caixa da tesouraria do presbitério: entradas e saídas por mês do último ano com lançamentos
+  function caixaPresbiterio(C1, C2) {
+    const T = window.IPB_TESOURARIA;
+    const anosT = T ? T.anosTes().filter(a => T.contas(a).length).sort((a, b) => a - b) : [];
+    const head = ano => `<div class="card-head"><h2>Caixa do ${esc(ORG.tipo)}</h2><span class="muted small">${ano ? 'tesouraria · ' + ano : 'tesouraria'}</span></div>`;
+    if (!anosT.length) return `<div class="card">${head('')}<div class="list-empty">Ainda não há lançamentos da tesouraria.</div></div>`;
+    const ano = anosT[anosT.length - 1];
+    const mAte = T.ultimoMes(ano);
+    const res = T.resumoAno(ano, mAte);
+    const ls = res.linhas.slice(0, mAte);
+    const M3 = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    const ant = T.saldoAnterior(ano);
+    return `<div class="card">${head(ano)}
+      <div class="caixa-res"><div><span>Saldo anterior</span><b>${money(ant)}</b></div><div><span>Entradas</span><b class="up">${money(res.ent)}</b></div><div><span>Saídas</span><b class="down">${money(res.sai)}</b></div><div><span>Saldo em ${M3[mAte - 1]}</span><b class="${res.saldo < 0 ? 'down' : ''}">${money(res.saldo)}</b></div></div>
+      ${barras(ls.map(l => M3[l.mes - 1]), [{ nome: 'Entradas', cor: C1, vals: ls.map(l => l.ent) }, { nome: 'Saídas', cor: C2, vals: ls.map(l => l.sai) }], (v, ax) => ax ? moneyK(v) : money(v), { label: 'Entradas e saídas do caixa por mês' })}
+      <p class="small muted" style="margin:6px 0 0">Até ${M3[mAte - 1]}/${ano}: ${pct(res.tot.previstoRec ? res.tot.realRec / res.tot.previstoRec : 0)} da receita prevista e ${pct(res.tot.previstoDesp ? res.tot.realDesp / res.tot.previstoDesp : 0)} da despesa prevista. <a href="#/tesouraria/${ano}">Abrir a tesouraria</a></p>
+    </div>`;
+  }
   function telaPainel() {
     const igs = S.d.igrejas.filter(i => i.ativo !== false);
     const unica = S.user.igrejaId || null;
@@ -526,9 +544,7 @@
           ${anosEst.length ? barras(anosEst.map(a => String(a.ano)), [{ nome: 'Comungantes', cor: C1, vals: anosEst.map(a => a.com) }, { nome: 'Não comungantes', cor: C2, vals: anosEst.map(a => a.nc) }], (v) => num(v), { label: 'Membros por ano' }) : '<div class="list-empty">Sem relatórios estatísticos.</div>'}
           <p class="small muted">Igrejas com formulário de estatística: ${anosEst.map(a => a.ano + ': ' + a.igrejasEst).join(' · ')}.${anosFora.length ? ' Fora do gráfico por terem poucos relatórios: ' + anosFora.map(a => a.ano + ' (' + a.igrejasEst + ')').join(', ') + '.' : ''}</p>
         </div>
-        <div class="card"><div class="card-head"><h2>Receitas e despesas</h2><span class="muted small">movimento financeiro realizado</span></div>
-          ${anosEst.length ? barras(anosEst.map(a => String(a.ano)), [{ nome: 'Receitas', cor: C1, vals: anosEst.map(a => a.rec) }, { nome: 'Despesas', cor: C2, vals: anosEst.map(a => a.desp) }], (v, ax) => ax ? moneyK(v) : money(v), { label: 'Receitas e despesas por ano' }) : '<div class="list-empty">Sem dados financeiros.</div>'}
-        </div>
+        ${caixaPresbiterio(C1, C2)}
       </div>
       ${anoRef ? `<div class="grid g2" style="margin-top:16px">
         <div class="card"><div class="card-head"><h2>Comungantes por igreja</h2><span class="muted small">${anoRef}</span></div>${hbarras(porIgreja.filter(p => p.com != null).sort((a, b) => b.com - a.com).map(p => ({ nome: p.i.sigla || p.i.nome, v: p.com, extra: p.i.nome + (p.com0 != null ? ' · ' + (anoRef - 1) + ': ' + num(p.com0) : '') })), v => num(v), C1)}</div>
