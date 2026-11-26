@@ -1,6 +1,6 @@
 {
-  "name": "Sistema de Gestão PLRN · Presbitério Litorâneo do RN",
-  "short_name": "Gestão PLRN",
+  "name": "SISTEMA GESTÃO CONCÍLIOS IPB",
+  "short_name": "Concílios IPB",
   "description": "Relatórios das igrejas, indicadores e exame de atas.",
   "lang": "pt-BR",
   "start_url": "./index.html",

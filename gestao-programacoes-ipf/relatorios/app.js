@@ -269,7 +269,7 @@
         <div class="login-hero">
           <div class="lh-marca">
             <img class="lh-logo" src="img/logo-ipb-branco.png" alt="Igreja Presbiteriana do Brasil">
-            <div><h1 class="lh-sis">${esc(ORG.sistema)}</h1><div class="lh-org">${esc(ORG.nome)}${ORG.sinodo ? ' · ' + esc(ORG.sinodo) : ''}</div></div>
+            <div><h1 class="lh-sis">${esc(ORG.sistema)}</h1><div class="lh-org">${ORG.sigla ? '<b>' + esc(ORG.sigla) + '</b> · ' : ''}${esc(ORG.nome)}${ORG.sinodo ? ' · ' + esc(ORG.sinodo) : ''}</div></div>
             <hr class="lh-barra">
           </div>
           <div class="lh-corpo">
@@ -285,9 +285,10 @@
         <div class="login-form">
           <div class="card">
             <h2>Entrar</h2>
-            <p class="muted small" style="margin:4px 0 0">Escolha a igreja e informe seu usuário e senha.</p>
+            <p class="muted small" style="margin:4px 0 0">Escolha o concílio e ${ORG.unidade === 'igreja' ? 'a igreja' : 'o presbitério ou a igreja'} e informe seu usuário e senha.</p>
             <form id="fLogin">
-              <div class="field"><label for="lIg">Igreja</label>
+              ${campoConcilio()}
+              <div class="field"><label for="lIg">${esc(ORG.unidade === 'igreja' ? 'Igreja' : 'Presbitério ou igreja')}</label>
                 <select id="lIg"><option value="">${esc(ORG.tipo)} (comissões e administração)</option>${igs.map(i => `<option value="${esc(i.id)}">${esc(i.nome)}</option>`).join('')}</select></div>
               <div class="field"><label for="lUs">Usuário</label><input id="lUs" type="text" autocomplete="username" required></div>
               <div class="field"><label for="lPw">Senha</label><input id="lPw" type="password" autocomplete="current-password" required></div>
@@ -300,9 +301,10 @@
           </div>
         </div>
       </div>`;
+    ligarConcilio();
     $('#fLogin').onsubmit = async e => {
       e.preventDefault();
-      const btn = $('#fLogin button'); btn.disabled = true;
+      const btn = $('#fLogin button[type=submit]'); btn.disabled = true;
       let erro = $('#lErr');
       if (!erro) { erro = document.createElement('p'); erro.id = 'lErr'; erro.setAttribute('role', 'alert'); erro.style.cssText = 'color:#b3261e;font-weight:600;margin:.6rem 0 0'; btn.insertAdjacentElement('afterend', erro); }
       erro.textContent = 'Entrando… na primeira vez, os dados levam alguns segundos para abrir.';
@@ -319,6 +321,54 @@
       try { localStorage.setItem(TOKEN_KEY, r.token); } catch (err) { /* sem armazenamento */ }
       await acao(recarregar);
       render();
+    };
+  }
+  /* ---------- concílio (sínodo ou presbitério) em uso ---------- */
+  function listaConcilios() {
+    // [{ tipo, nome, sigla, sinodo }] na ordem: sínodo e, logo abaixo, os presbitérios dele
+    const out = [];
+    (window.IPB_CONCILIOS || []).forEach(s => {
+      out.push({ tipo: 'Sínodo', nome: s.n, sigla: s.s, sinodo: '' });
+      (s.p || []).forEach(p => out.push({ tipo: 'Presbitério', nome: p.n, sigla: p.s, sinodo: s.n }));
+    });
+    return out;
+  }
+  const mesmoConcilio = (c, o) => (c.sigla && o.sigla && c.sigla === o.sigla) || c.nome === o.nome;
+  function campoConcilio() {
+    const lista = listaConcilios();
+    if (!lista.length) return '';
+    if (!ORG.podeEscolher) return `<div class="field"><label>Concílio</label><div class="concilio-fixo"><b>${esc(ORG.sigla ? ORG.sigla + ' · ' : '')}${esc(ORG.nome)}</b></div></div>`;
+    const atual = lista.findIndex(c => mesmoConcilio(c, ORG));
+    const opt = (c, i) => `<option value="${i}" ${i === atual ? 'selected' : ''}>${esc(c.tipo === 'Sínodo' ? c.nome + ' (o sínodo)' : c.nome)}${(i === atual ? ORG.sigla || c.sigla : c.sigla) ? ' · ' + esc(i === atual ? ORG.sigla || c.sigla : c.sigla) : ''}</option>`;
+    let html = '', grupo = null;
+    lista.forEach((c, i) => {
+      if (c.tipo === 'Sínodo') { html += (grupo ? '</optgroup>' : '') + `<optgroup label="${esc(c.nome)}${c.sigla ? ' (' + esc(c.sigla) + ')' : ''}">`; grupo = c; }
+      html += opt(c, i);
+    });
+    html += grupo ? '</optgroup>' : '';
+    return `<div class="field"><label for="lCo">Concílio</label>
+      <select id="lCo">${atual < 0 ? `<option value="" selected>${esc(ORG.nome)}</option>` : ''}${html}</select>
+      ${ORG.sigla ? '' : `<div class="concilio-sigla"><label for="lCoS" class="small muted">Sigla do concílio (não consta da lista pública)</label><div class="row-sigla"><input id="lCoS" type="text" maxlength="12" placeholder="ex.: PXYZ" autocomplete="off"><button type="button" class="btn sm" id="bCoS">Salvar sigla</button></div></div>`}
+      <div class="small muted" style="margin-top:4px">${ORG.outro ? 'Os dados deste concílio ficam separados dos demais.' : 'Concílio padrão desta instalação.'} ${esc(lista.filter(c => c.tipo === 'Sínodo').length + ' sínodos e ' + lista.filter(c => c.tipo !== 'Sínodo').length + ' presbitérios da IPB')}.</div></div>`;
+  }
+  function ligarConcilio() {
+    const sel = $('#lCo');
+    if (!sel || !window.IPB_CONCILIO) return;
+    const lista = listaConcilios();
+    sel.onchange = () => {
+      const c = lista[Number(sel.value)];
+      if (!c) return;
+      window.IPB_CONCILIO.escolher(c);
+      try { localStorage.removeItem(TOKEN_KEY); } catch (e) { /* sem armazenamento */ }
+      location.hash = '';
+      location.reload();
+    };
+    const bs = $('#bCoS');
+    if (bs) bs.onclick = () => {
+      const s = $('#lCoS').value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+      if (!s) return;
+      window.IPB_CONCILIO.escolher({ tipo: ORG.tipo, nome: ORG.nome, sigla: s, sinodo: ORG.sinodo });
+      location.reload();
     };
   }
   function logo(sz, cor) {
@@ -357,7 +407,7 @@
       <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><a href="#/painel" style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:8px">${logo(30)}<b>${esc(ORG.sistema)}</b></a></div>
       <div class="app">
         <aside class="side" id="side">
-          <a class="brand" href="#/painel" title="Ir para a página inicial (Painel)">${logo(58)}<div><b>${esc(ORG.sistema)}</b><span>${esc(u.igrejaId ? (igreja(u.igrejaId) || {}).sigla || '' : ORG.tipo)}</span></div></a>
+          <a class="brand" href="#/painel" title="Ir para a página inicial (Painel)">${logo(58)}<div><b>${esc(ORG.sistema)}</b><span>${esc(u.igrejaId ? (igreja(u.igrejaId) || {}).sigla || '' : ORG.sigla ? ORG.tipo + ' · ' + ORG.sigla : ORG.tipo)}</span></div></a>
           <nav class="nav">
             ${nav('painel', 'Painel', '▦')}
             ${nav('indicadores', 'Indicadores', '↗')}
@@ -562,7 +612,7 @@
       </tbody></table></div><p class="small muted" style="margin:6px 0 0">✓ sim · ✗ não · – sem resposta no Relatório do Conselho de ${anoCon.ano}.</p></details>` : '';
 
     const nCong = igs.filter(ehCongregacao).length, nIgr = igs.length - nCong;
-    const contagem = ORG.unidades === 'igrejas' ? nIgr + (nIgr === 1 ? ' igreja' : ' igrejas') + (nCong ? ' e ' + nCong + (nCong === 1 ? ' congregação' : ' congregações') : '') : igs.length + ' ' + ORG.unidades;
+    const contagem = ORG.unidades === 'igrejas' ? nIgr + (nIgr === 1 ? ' igreja' : ' igrejas') + (nCong ? ' e ' + nCong + (nCong === 1 ? ' congregação' : ' congregações') : '') : igs.length + ' ' + (igs.length === 1 ? ORG.unidade : ORG.unidades);
     const base3 = x => ((x.diz || 0) + (x.ofe || 0)) * TAXA_PRESB();
     const html = head('Painel', esc(unica || igId ? igNome(unica || igId) : ORG.nome + ' · ' + contagem),
       unica ? '' : `<select id="fIg" aria-label="Filtrar igreja" style="min-width:240px"><option value="">${esc(ORG.sigla || ORG.tipo)} · todas as igrejas</option>${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>`) + `

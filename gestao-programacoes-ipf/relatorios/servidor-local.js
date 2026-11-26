@@ -6,7 +6,9 @@
  * quando o sistema está conectado ao Supabase.
  */
 (function () {
-  const KEY = 'ipb-relatorios-db-v1';
+  // outro concílio escolhido na tela de entrada: banco próprio e sem os dados cifrados do concílio padrão
+  const OUTRO = !!(window.IPB_ORG && window.IPB_ORG.outro);
+  const KEY = 'ipb-relatorios-db-v1' + (OUTRO ? '-' + window.IPB_ORG.chaveDados : '');
   const SALT = 'ipb::';
   const SESSION_DAYS = 7;
   const MAX_FAILS = 5;
@@ -36,7 +38,7 @@
   /* ---------------- anexos (IndexedDB) e pacote cifrado ---------------- */
   function idb() {
     return new Promise((res, rej) => {
-      const rq = indexedDB.open('ipb-anexos', 1);
+      const rq = indexedDB.open('ipb-anexos' + (OUTRO ? '-' + window.IPB_ORG.chaveDados : ''), 1);
       rq.onupgradeneeded = () => rq.result.createObjectStore('f');
       rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
     });
@@ -47,7 +49,7 @@
   }
   const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   const b64e = u => { let s = ''; u.forEach(b => { s += String.fromCharCode(b); }); return btoa(s); };
-  async function pacoteInfo() { try { const r = await fetch('dados/pacote.json', { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; } }
+  async function pacoteInfo() { if (OUTRO) return null; try { const r = await fetch('dados/pacote.json', { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; } }
   async function chavePacote(senha, p) {
     const base = await crypto.subtle.importKey('raw', enc.encode(senha), 'PBKDF2', false, ['deriveKey']);
     return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64d(p.salt), iterations: p.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
@@ -92,6 +94,7 @@
   let motivoReunioes = '';
   async function abrirReunioes(senha, u) {
     let p;
+    if (OUTRO) return 0;
     try { const r = await fetch('dados/reunioes.json', { cache: 'no-store' }); if (!r.ok) { motivoReunioes = 'o arquivo dos dados das reuniões não foi encontrado (erro ' + r.status + ')'; return 0; } p = await r.json(); } catch (e) { motivoReunioes = 'não consegui baixar os dados das reuniões (' + (e.message || e) + ')'; return 0; }
     let corpo;
     // aceita a senha digitada com espaços, traços diferentes ou letras em outra caixa
@@ -143,9 +146,9 @@
   async function seed() {
     const t = now();
     db = { igrejas: [], usuarios: [], modelos: [], comissoes: [], relatorios: [], atas: [], reuniao: [], sessoes: [], log: [] };
-    const H = window.IPB_HISTORICO || { igrejas: [], relatorios: [] };
+    const H = (!OUTRO && window.IPB_HISTORICO) || { igrejas: [], relatorios: [] };
     db.igrejas = clone(H.igrejas);
-    if (!db.igrejas.length) db.igrejas = [{ id: 'ig_filadelfia', nome: 'Igreja Presbiteriana Filadélfia', sigla: 'IPF', tipo: 'Igreja', cidade: 'Parnamirim', uf: 'RN', presbiterio: 'Presbitério Litorâneo do Rio Grande do Norte (PLRN)', sinodo: 'Sínodo do Rio Grande do Norte (SRN)', ativo: true }];
+    if (!db.igrejas.length) db.igrejas = [{ id: 'ig_filadelfia', nome: 'Igreja Presbiteriana Filadélfia', sigla: 'IPF', tipo: 'Igreja', cidade: 'Parnamirim', uf: 'RN', presbiterio: OUTRO ? window.IPB_ORG.nome + (window.IPB_ORG.sigla ? ' (' + window.IPB_ORG.sigla + ')' : '') : 'Presbitério Litorâneo do Rio Grande do Norte (PLRN)', sinodo: OUTRO ? window.IPB_ORG.sinodo || '' : 'Sínodo do Rio Grande do Norte (SRN)', ativo: true }];
     const u = (id, nome, username, igrejaId, role, senha, cargo) => ({ id, nome, username, igrejaId, role, ativo: true, email: '', cargo: cargo || '', createdAt: t, senha });
     const users = [
       u('us_admin', 'Administrador', 'admin', null, 'admin', 'admin123', 'Administrador do sistema'),
@@ -208,7 +211,7 @@
   /* ---------------- ações ---------------- */
   const A = {};
 
-  A.publico = async () => ({ igrejas: db.igrejas.filter(i => i.ativo).map(i => ({ id: i.id, nome: i.nome, sigla: i.sigla })), modo: 'local', pacoteAberto: !!db.pacote, pacoteFechado: !db.pacote && !!(await pacoteInfo()), reunioesFechadas: !db.pacoteReunioes && await fetch('dados/reunioes.json', { method: 'HEAD', cache: 'no-store' }).then(r => r.ok).catch(() => false) });
+  A.publico = async () => ({ igrejas: db.igrejas.filter(i => i.ativo).map(i => ({ id: i.id, nome: i.nome, sigla: i.sigla })), modo: 'local', pacoteAberto: !!db.pacote, pacoteFechado: !db.pacote && !!(await pacoteInfo()), reunioesFechadas: !OUTRO && !db.pacoteReunioes && await fetch('dados/reunioes.json', { method: 'HEAD', cache: 'no-store' }).then(r => r.ok).catch(() => false) });
 
   A.login = async ({ igrejaId, username, senha }) => {
     let aberto = 0;
@@ -221,7 +224,7 @@
     }
     let reunioes = 0; motivoReunioes = '';
     // abre o pacote das reuniões na primeira vez e de novo quando ele é atualizado
-    const versaoReunioes = !igrejaId && norm(username) === 'admin' && senha ? await fetch('dados/reunioes.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(p => p && p.salt).catch(() => null) : null;
+    const versaoReunioes = !OUTRO && !igrejaId && norm(username) === 'admin' && senha ? await fetch('dados/reunioes.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(p => p && p.salt).catch(() => null) : null;
     if (versaoReunioes && (!db.pacoteReunioes || db.pacoteReunioes.versao !== versaoReunioes)) {
       const ad = db.usuarios.find(x => x.id === 'us_admin') || db.usuarios.find(x => x.role === 'admin' && !x.igrejaId);
       if (!ad) motivoReunioes = 'não há administrador do Presbitério neste navegador';

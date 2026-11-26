@@ -65,7 +65,7 @@ Com `apiUrl` vazio, o site funciona em **modo local**: os dados ficam só no nav
 
 ---
 
-## Sistema de Gestão PLRN (pasta `relatorios/`)
+## SISTEMA GESTÃO CONCÍLIOS IPB (pasta `relatorios/`)
 
 Sistema separado para o Presbitério receber, registrar e analisar os relatórios das igrejas, no padrão da Igreja Presbiteriana do Brasil. Endereço: `/relatorios/` (por exemplo, https://gestao-programacoes-ipf.vercel.app/relatorios/).
 
@@ -143,6 +143,8 @@ Se os modelos ou os dados históricos mudarem, gere o SQL de novo com `node ferr
 ## Usar em outro concílio (presbitério ou sínodo)
 
 O sistema foi feito para ser replicado. Para outro presbitério ou para um sínodo:
+
+No modo demonstração, a tela de entrada tem o campo **Concílio**, com os sínodos e presbitérios da IPB (`relatorios/concilios-ipb.js`, montado a partir de fontes públicas de 2024). Ao escolher outro concílio, o sistema passa a usar o nome, a sigla e o tipo dele, e os dados ficam separados dos do concílio padrão. A maior parte das siglas não consta das fontes públicas: complete a lista com a relação oficial da Secretaria Executiva, ou informe a sigla na própria tela de entrada. Com o servidor (Supabase) configurado, cada instalação atende a um concílio, o de `config.js`:
 
 1. Em `relatorios/config.js`, troque os valores de `window.IPB_ORG`: nome do sistema, `tipo` (`Presbitério` ou `Sínodo`), nome, sigla, sínodo e `unidades` (`igrejas` num presbitério, `presbitérios` num sínodo). Telas, títulos, impressão e login passam a usar esses nomes.
 2. Em `relatorios/manifest.webmanifest` e no `<title>` de `relatorios/index.html`, troque o nome do aplicativo (é o nome que aparece ao instalar no celular).
