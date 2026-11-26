@@ -371,6 +371,14 @@
       location.reload();
     };
   }
+  // quebra um título em duas linhas de tamanho parecido (ex.: "SISTEMA GESTÃO / CONCÍLIOS IPB")
+  function duasLinhas(t) {
+    const w = String(t || '').split(/\s+/).filter(Boolean);
+    if (w.length < 3) return esc(t);
+    let melhor = 1, dif = Infinity;
+    for (let i = 1; i < w.length; i++) { const d = Math.abs(w.slice(0, i).join(' ').length - w.slice(i).join(' ').length); if (d < dif) { dif = d; melhor = i; } }
+    return esc(w.slice(0, melhor).join(' ')) + '<br>' + esc(w.slice(melhor).join(' '));
+  }
   function logo(sz, cor) {
     // logotipo oficial da IPB (img/); se a imagem não carregar, fica o símbolo desenhado
     if (cor !== false) return `<img class="logo-ipb" src="img/${cor ? 'logo-ipb.png' : 'logo-ipb-branco.png'}" alt="Igreja Presbiteriana do Brasil" style="height:${sz}px;width:auto" onerror="this.style.display='none'">`;
@@ -407,7 +415,7 @@
       <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><a href="#/painel" style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:8px">${logo(30)}<b>${esc(ORG.sistema)}</b></a></div>
       <div class="app">
         <aside class="side" id="side">
-          <a class="brand" href="#/painel" title="Ir para a página inicial (Painel)">${logo(58)}<div><b>${esc(ORG.sistema)}</b><span>${esc(u.igrejaId ? (igreja(u.igrejaId) || {}).sigla || '' : ORG.sigla ? ORG.tipo + ' · ' + ORG.sigla : ORG.tipo)}</span></div></a>
+          <a class="brand" href="#/painel" title="Ir para a página inicial (Painel)">${logo(62)}<div class="brand-txt"><b>${duasLinhas(ORG.sistema)}</b><span class="brand-org">${u.igrejaId ? esc((igreja(u.igrejaId) || {}).sigla || igNome(u.igrejaId)) : (ORG.sigla ? '<i>' + esc(ORG.sigla) + '</i>' : '') + esc(ORG.tipo)}</span></div></a>
           <nav class="nav">
             ${nav('painel', 'Painel', '▦')}
             ${nav('indicadores', 'Indicadores', '↗')}
