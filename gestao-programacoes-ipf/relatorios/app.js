@@ -643,6 +643,7 @@
         saldo: C ? C.V('fin_saldo_seguinte') : null, saldo0: C0 ? C0.V('fin_saldo_seguinte') : null, prof: C ? C.V('com_profissoes') : 0, pend };
     }).map((p, k) => Object.assign(p, { _k: k }))
       .sort((a, b) => (ehCongregacao(a.i) - ehCongregacao(b.i)) || (temFin(b) - temFin(a)) || (a._k - b._k));
+    function nomeTabela(n) { return String(n || '').replace(/^Igreja Presbiteriana (d[aoe]s? |em )?/i, 'IP ').replace(/^Congrega[çc][ãa]o Presbiterial (d[aoe]s? |em )?/i, 'CP ').replace(/^Congrega[çc][ãa]o /i, 'Congregação '); }
     function temFin(p) { return p.e && (p.rec != null || p.diz || p.ofe || p.verba || p.sc) ? 1 : 0; }
 
     // Conformidade do Relatório do Conselho (último ano)
@@ -686,15 +687,15 @@
       </div>` : ''}
       ${conf.length ? `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Relatório do Conselho: situação das igrejas</h2><span class="muted small">${anoCon.ano} · % dos relatórios que responderam "Sim"</span></div><div id="confBars">${hbarras(conf, (v) => pct(v), C1)}</div>${matriz}</div>` : ''}
       <div class="card" style="margin-top:16px"><div class="card-head"><h2>Igrejas em ${anoRef || '–'}</h2><button class="btn sm ghost no-print" id="bCsv">Baixar planilha (CSV)</button></div>
-        <div class="tbl-wrap"><table class="tab-fin"><thead><tr><th>Igreja</th><th class="num">Receitas</th><th class="num">Evolução</th><th class="num">Despesas</th><th class="num">Resultado</th><th class="num">Dízimo SC</th><th class="num">Verba presbiterial (${pct(TAXA_PRESB())} de dízimos e ofertas)</th><th class="num">Saldo para o ano seguinte</th></tr></thead><tbody>
-        ${porIgreja.map((p, k) => (porIgreja.some(x => ehCongregacao(x.i)) && (k === 0 || ehCongregacao(p.i) !== ehCongregacao(porIgreja[k - 1].i)) ? `<tr class="grp-row"><td colspan="20">${ehCongregacao(p.i) ? 'Congregações' : 'Igrejas'}</td></tr>` : '') + `<tr class="${p.e ? 'click' : ''}" ${p.e ? `data-go="relatorio/${esc(p.e.id)}"` : ''}><td>${esc(p.i.nome)}${p.i.tipo && p.i.tipo !== 'Igreja' ? ` <span class="tag gray">${esc(p.i.tipo)}</span>` : ''}</td>
+        <div class="tbl-wrap"><table class="tab-fin"><thead><tr><th>Igreja</th><th class="num">Receitas</th><th class="num">Evolução<span>sobre ${anoRef ? anoRef - 1 : 'ano anterior'}</span></th><th class="num">Despesas</th><th class="num">Resultado</th><th class="num">Dízimo SC<span>% dos dízimos</span></th><th class="num">Verba presbiterial<span>devida: ${pct(TAXA_PRESB())} de dízimos e ofertas</span></th><th class="num">Saldo final<span>para o ano seguinte</span></th></tr></thead><tbody>
+        ${porIgreja.map((p, k) => (porIgreja.some(x => ehCongregacao(x.i)) && (k === 0 || ehCongregacao(p.i) !== ehCongregacao(porIgreja[k - 1].i)) ? `<tr class="grp-row"><td colspan="20">${ehCongregacao(p.i) ? 'Congregações' : 'Igrejas'}</td></tr>` : '') + `<tr class="${p.e ? 'click' : ''}" ${p.e ? `data-go="relatorio/${esc(p.e.id)}"` : ''}><td class="nome" title="${esc(p.i.nome)}">${esc(nomeTabela(p.i.nome))}</td>
           <td class="num">${p.rec == null ? '–' : money(p.rec)}</td>
           <td class="num">${p.rec != null && p.rec0 ? `<span class="${p.rec >= p.rec0 ? 'up' : 'down'}">${p.rec >= p.rec0 ? '+' : '−'}${pct(Math.abs(p.rec - p.rec0) / p.rec0)}</span>` : '–'}</td>
           <td class="num">${p.desp == null ? '–' : money(p.desp)}</td>
           <td class="num">${p.rec == null ? '–' : `<span class="${p.rec - p.desp >= 0 ? '' : 'down'}">${money(p.rec - p.desp)}</span>`}</td>
           <td class="num">${p.e ? (p.sc ? money(p.sc) + ' <span class="muted small">(' + pct(p.diz ? p.sc / p.diz : 0) + ')</span>' : '<span class="down">não repassou</span>') : '–'}</td>
           <td class="num">${p.e ? (p.verba ? money(p.verba) : '<span class="down">não repassou</span>') + (base3(p) ? ` <div class="small ${p.verba >= base3(p) - 0.5 ? 'up' : 'down'}">${pct(p.verba / ((p.diz || 0) + (p.ofe || 0)))} · devido ${money(base3(p))}</div>` : '') : '–'}</td>
-          <td class="num">${p.saldo == null ? '–' : money(p.saldo) + (p.saldo0 != null ? ` <div class="small muted">${anoRef - 1}: ${money(p.saldo0)} (${p.saldo >= p.saldo0 ? '+' : '−'}${money(Math.abs(p.saldo - p.saldo0))})</div>` : '')}</td></tr>`).join('')}
+          <td class="num">${p.saldo == null ? '–' : money(p.saldo) + (p.saldo0 != null ? ` <div class="small muted">${anoRef - 1}: ${money(p.saldo0)}</div><div class="small ${p.saldo >= p.saldo0 ? 'up' : 'down'}">${p.saldo >= p.saldo0 ? '+' : '−'}${money(Math.abs(p.saldo - p.saldo0))}</div>` : '')}</td></tr>`).join('')}
         </tbody></table></div>
         <p class="small muted">Só informações financeiras, do formulário de estatística de ${anoRef || ''}. Evolução: receita comparada ao ano anterior. Verba presbiterial: a taxa devida é ${pct(TAXA_PRESB())} da receita de dízimos e ofertas. Saldo: a sobra de um ano para o outro é movimento normal do caixa e varia a cada ano. Linhas sem dados: a igreja não enviou o formulário (congregações enviam só o relatório do Conselho).</p>
       </div>`;
