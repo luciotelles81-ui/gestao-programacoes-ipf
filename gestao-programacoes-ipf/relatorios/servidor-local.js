@@ -671,7 +671,7 @@
     cfg: ['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'secretarios', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria'],
     reuniao: ['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta', 'legislatura', 'secretarias', 'tutores', 'representantes', 'campo'],
     delegado: ['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId'],
-    documento: ['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito'],
+    documento: ['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito', 'destino', 'dataProtocolo', 'despachadoEm'],
     parecer: ['reuniaoId', 'comissaoId', 'modelo', 'data', 'destino', 'cidade', 'docNumero', 'titulo', 'assunto', 'docsAnalisados', 'origens', 'documentoIds', 'campos', 'assinaturas'],
     estatistica: ['ano', 'igreja', 'valores', 'fonte'],
     financa: ['ano', 'valores', 'fonte'],

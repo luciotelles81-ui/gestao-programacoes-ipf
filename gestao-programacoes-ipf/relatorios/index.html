@@ -15,20 +15,21 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Gestão PLRN">
   <link rel="apple-touch-icon" href="icones/icone-180.png">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 110'%3E%3Cpath d='M20 98h32c24 0 36-18 36-48 0-22-10-32-36-36-20-4-32 2-36 6v72c0 4 2 6 4 6z' fill='%23006B3F'/%3E%3Cpath d='M50 26v18M50 56v28M32 50h12M56 50h14' stroke='%23fff' stroke-width='8.5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="alternate icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 110'%3E%3Cpath d='M20 98h32c24 0 36-18 36-48 0-22-10-32-36-36-20-4-32 2-36 6v72c0 4 2 6 4 6z' fill='%23006B3F'/%3E%3Cpath d='M50 26v18M50 56v28M32 50h12M56 50h14' stroke='%23fff' stroke-width='8.5' stroke-linecap='round'/%3E%3C/svg%3E">
   
   <style>
     :root {
       color-scheme: light;
       /* identidade visual da IPB (Programa de Identidade Visual): verde Pantone 350C e cinza K70;
          letra Zapf Humanist (Optima é o mesmo desenho) e Times New Roman nos demais textos.
-         Libertinus Sans (livre, Google Fonts) tem o mesmo traço humanista com hastes alargadas
-         e garante a mesma letra em qualquer aparelho. */
+         Onde houver Zapf Humanist ou Optima instalada (Mac, iPhone, iPad), ela é usada; nos demais
+         aparelhos entra a Libertinus Sans (livre, Google Fonts), do mesmo traço humanista. */
       --brand: #2c5234;          /* verde IPB, Pantone 350C */
       --brand-dark: #1e3b25;
       --brand-soft: #e6eee7;
       --ipb-cinza: #58595b;      /* cinza IPB, K70 */
-      --fonte-ipb: 'Libertinus Sans', 'Zapf Humanist 601 BT', 'Zapf Humanist', Optima, 'URW Classico', Candara, 'Segoe UI', sans-serif;
+      --fonte-ipb: 'Zapf Humanist 601 BT', 'Zapf Humanist', Optima, 'Libertinus Sans', 'URW Classico', Candara, 'Segoe UI', sans-serif;
       --fonte-texto: 'Times New Roman', Times, 'Liberation Serif', serif;
       --brand-contrast: #ffffff;
       --bg: #f3f6f4;
@@ -96,10 +97,11 @@
     /* ---------- layout ---------- */
     .app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
     .side { background: var(--side-bg); color: var(--side-text); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-    .brand { display: flex; gap: 10px; align-items: center; padding: 4px 8px 18px; }
+    .brand { display: flex; gap: 12px; align-items: center; padding: 6px 8px 18px; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,.12); color: inherit; text-decoration: none; border-radius: 8px; }
+    a.brand:hover { background: var(--side-hover); }
     .brand svg { flex: none; }
-    .brand b { display: block; font-size: 15px; }
-    .brand span { font-size: 12px; color: var(--side-muted); }
+    .brand b { display: block; font-size: 16px; line-height: 1.2; letter-spacing: .01em; }
+    .brand span { display: block; font-size: 12.5px; color: var(--side-muted); margin-top: 3px; }
     .nav-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--side-muted); padding: 14px 10px 4px; }
     .nav a { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: var(--side-text); text-decoration: none; font-size: 14px; font-weight: 500; }
     .nav a:hover { background: var(--side-hover); }
@@ -113,7 +115,10 @@
     .side-btn:hover { background: var(--side-hover); }
     .main { min-width: 0; padding: 24px 28px 60px; }
     .topbar { display: none; }
-    .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+    .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .page-head .ph-t { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+    .voltar { flex: none; width: 38px; height: 38px; margin-top: 2px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--brand); font-size: 20px; line-height: 1; cursor: pointer; display: grid; place-items: center; box-shadow: var(--shadow); }
+    .voltar:hover { background: var(--brand-soft); border-color: var(--brand); }
     .page-head p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .mode-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 9px; border-radius: 99px; background: var(--warn-soft); color: var(--warn); font-weight: 600; }
@@ -157,7 +162,10 @@
     input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--text-2); }
     input.invalid, select.invalid, textarea.invalid { border-color: var(--danger); background: var(--danger-soft); }
     .calc { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--brand-soft); color: var(--brand); font-weight: 700; font-variant-numeric: tabular-nums; }
-    .grid { display: grid; gap: 14px; }
+    .grid { display: grid; gap: 16px; }
+    /* espaçamento único entre os blocos de cada tela */
+    .main > .card, .main > .kpis, .main > .grid, .main > .escopo, .main > .alert, .main > .filters, .main > .fx-li { margin-top: 0; margin-bottom: 16px; }
+    .main > :last-child { margin-bottom: 0; }
     .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -182,7 +190,7 @@
     .inner-tbl td { padding: 5px 6px; }
     .inner-tbl input, .inner-tbl select { padding: 6px 8px; }
 
-    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 16px; }
     .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); text-decoration: none; color: inherit; display: block; }
     .kpi:hover { border-color: var(--border-strong); }
     .kpi .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
@@ -264,12 +272,23 @@
 
     /* login */
     .login { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; }
-    .login-hero { background: var(--side-bg); color: #fff; padding: 48px; display: flex; flex-direction: column; justify-content: space-between; }
-    .login-hero h1 { font-size: 30px; margin-top: 28px; max-width: 420px; }
-    .login-hero p { color: var(--side-muted); max-width: 420px; }
-    .login-hero ul { padding-left: 18px; color: #e3f1e9; font-size: 14px; }
+    .login-hero { background: var(--side-bg); color: #fff; padding: 56px 64px 40px; display: flex; flex-direction: column; gap: 40px; }
+    .lh-marca { display: flex; flex-direction: column; align-items: flex-start; gap: 22px; }
+    .lh-logo { height: 150px; width: auto; display: block; }
+    .lh-sis { font-size: 36px; font-weight: 700; line-height: 1.15; letter-spacing: .01em; margin: 0; }
+    .lh-org { font-size: 17px; color: var(--side-muted); margin-top: 6px; }
+    .lh-barra { width: 72px; height: 4px; border: 0; background: #fff; opacity: .85; margin: 0; }
+    .lh-corpo { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 22px; max-width: 520px; }
+    .lh-corpo h1 { font-size: 23px; font-weight: 400; line-height: 1.35; margin: 0; color: #f1f7f3; }
+    .lh-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+    .lh-lista li { border-left: 3px solid rgba(255,255,255,.55); padding: 2px 0 2px 14px; }
+    .lh-lista b { display: block; font-size: 15.5px; }
+    .lh-lista span { display: block; font-size: 14px; color: var(--side-muted); margin-top: 2px; line-height: 1.4; }
+    .login-hero .foot { font-size: 13px; color: var(--side-muted); }
+    .login-form h2 { font-size: 26px; margin: 0; }
+    .login-form .alert { font-size: 14px; line-height: 1.45; }
     .login-form { display: flex; align-items: center; justify-content: center; padding: 32px 20px; }
-    .login-form .card { width: 100%; max-width: 400px; padding: 28px; }
+    .login-form .card { width: 100%; max-width: 440px; padding: 32px; }
     .login-form form { display: grid; gap: 14px; margin-top: 18px; }
     .demo { margin-top: 16px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 12px; }
     .demo code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
@@ -543,12 +562,14 @@
 
     /* folha no layout do formulário físico (CSM-IPB) */
     .folha-wrap { overflow-x: auto; background: var(--surface-2); border-radius: var(--radius-sm); padding: 14px; }
-    .folha { --fl: #222; --fbar: #d9d9d9; --fhl: #eef6f1; background: #fff; color: #111; width: 100%; min-width: 760px; max-width: 980px; margin: 0 auto; padding: 22px 26px; box-shadow: 0 1px 4px rgba(0,0,0,.18); font: 12.5px/1.35 Arial, Helvetica, sans-serif; color-scheme: light; }
+    .folha { --fl: #222; --fbar: #d9d9d9; --fhl: #eef6f1; background: #fff; color: #111; width: 100%; min-width: 760px; max-width: 980px; margin: 0 auto; padding: 22px 26px; box-shadow: 0 1px 4px rgba(0,0,0,.18); font: 13px/1.35 var(--fonte-texto); color-scheme: light; }
+    .folha th, .f-tit .t1, .f-sec { font-family: var(--fonte-ipb); }
     .folha table { border-collapse: collapse; width: 100%; }
     .folha td, .folha th { border: 1px solid var(--fl); padding: 2px 5px; vertical-align: middle; background: #fff; color: #111; font-size: 12px; }
     .folha th { background: var(--fbar); font-weight: 700; text-align: center; font-size: 11.5px; }
-    .f-cab { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: center; border: 1.5px solid var(--fl); padding: 8px 10px; margin-bottom: 8px; }
+    .f-cab { display: grid; grid-template-columns: 130px 1fr; gap: 14px; align-items: center; border: 1.5px solid var(--fl); padding: 8px 10px; margin-bottom: 8px; }
     .f-logo { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 10px; line-height: 1.1; }
+    .f-logo img { width: 112px; height: auto; display: block; }
     .f-logo b { margin-top: 3px; } .f-logo span { font-size: 9px; letter-spacing: .5px; }
     .f-tit .t1 { text-align: center; font-weight: 700; font-size: 15px; margin-bottom: 6px; }
     .f-tit .t1 small { font-size: 12px; font-weight: 600; }
@@ -720,9 +741,12 @@
       .topbar button { background: transparent; border: 0; color: #fff; font-size: 22px; cursor: pointer; }
       .main { padding: 16px 16px 60px; }
       .login { grid-template-columns: 1fr; }
-      .login-hero { padding: 28px 20px; }
-      .login-hero h1 { font-size: 24px; margin-top: 16px; }
-      .login-hero ul, .login-hero .foot { display: none; }
+      .login-hero { padding: 28px 20px; gap: 18px; }
+      .lh-marca { flex-direction: row; align-items: center; gap: 16px; }
+      .lh-logo { height: 84px; }
+      .lh-sis { font-size: 24px; } .lh-org { font-size: 14px; } .lh-barra { display: none; }
+      .lh-corpo h1 { font-size: 18px; }
+      .lh-lista, .login-hero .foot { display: none; }
     }
     @media (max-width: 560px) {
       .g2, .g3, .g4 { grid-template-columns: 1fr; }

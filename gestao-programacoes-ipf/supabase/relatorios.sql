@@ -179,7 +179,7 @@ language sql immutable as $$
     when 'cfg' then array['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'secretarios', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria']
     when 'reuniao' then array['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta', 'legislatura', 'secretarias', 'tutores', 'representantes', 'campo']
     when 'delegado' then array['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId']
-    when 'documento' then array['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito']
+    when 'documento' then array['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito', 'destino', 'dataProtocolo', 'despachadoEm']
     when 'parecer' then array['reuniaoId', 'comissaoId', 'modelo', 'data', 'destino', 'cidade', 'docNumero', 'titulo', 'assunto', 'docsAnalisados', 'origens', 'documentoIds', 'campos', 'assinaturas']
     when 'estatistica' then array['ano', 'igreja', 'valores', 'fonte']
     when 'financa' then array['ano', 'valores', 'fonte']

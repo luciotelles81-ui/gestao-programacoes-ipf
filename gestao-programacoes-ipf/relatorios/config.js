@@ -23,5 +23,7 @@ window.IPB_ORG = {
   sigla: 'PLRN',
   sinodo: 'Sínodo do Rio Grande do Norte',
   unidade: 'igreja',
-  unidades: 'igrejas'
+  unidades: 'igrejas',
+  // relatórios de anos anteriores a este não aparecem nas telas, indicadores e gráficos
+  anoInicial: 2024
 };

@@ -80,7 +80,11 @@
     if (!r.ok || !j || j.erro) throw new Error((j && j.erro) || 'A IA não respondeu (' + r.status + ').');
     return j;
   }
-  async function recarregar() { S.d = await api({ action: 'dados' }); S.user = S.d.usuario; }
+  async function recarregar() {
+    S.d = await api({ action: 'dados' }); S.user = S.d.usuario;
+    // relatórios anteriores ao ano inicial do sistema (config.js) ficam fora de telas, indicadores e gráficos
+    if (ORG.anoInicial && Array.isArray(S.d.relatorios)) S.d.relatorios = S.d.relatorios.filter(r => !(Number(r.ano) < ORG.anoInicial));
+  }
   async function acao(fn, okMsg) {
     try { const r = await fn(); if (okMsg) toast(okMsg); return r; } catch (e) { toast(e.message || String(e), true); return null; }
   }
@@ -249,17 +253,20 @@
     root().innerHTML = `
       <div class="login">
         <div class="login-hero">
-          <div class="brand" style="padding:0">${logo(48)}<div><b>${esc(ORG.sistema)}</b><span>${esc(ORG.nome)}</span></div></div>
-          <div>
-            <h1>Relatórios das igrejas, do preenchimento ao parecer da comissão.</h1>
-            <p>Formulários oficiais, histórico dos anos anteriores, exame de atas pelo Manual Presbiteriano e assinatura eletrônica dos membros da comissão.</p>
-            <ul>
-              <li>Cada igreja entra com seu próprio usuário</li>
-              <li>A IA propõe uma análise inicial; o texto final é do relator</li>
-              <li>Pareceres assinados com código de verificação</li>
+          <div class="lh-marca">
+            <img class="lh-logo" src="img/logo-ipb-branco.png" alt="Igreja Presbiteriana do Brasil">
+            <div><h1 class="lh-sis">${esc(ORG.sistema)}</h1><div class="lh-org">${esc(ORG.nome)}${ORG.sinodo ? ' · ' + esc(ORG.sinodo) : ''}</div></div>
+            <hr class="lh-barra">
+          </div>
+          <div class="lh-corpo">
+            <h1>Relatórios das ${esc(ORG.unidades)}, reunião do concílio, acervo e tesouraria em um só lugar.</h1>
+            <ul class="lh-lista">
+              <li><b>Relatórios das ${esc(ORG.unidades)}</b><span>Cada ${esc(ORG.unidade)} preenche os formulários oficiais com o próprio usuário.</span></li>
+              <li><b>Reunião do concílio</b><span>Documentos protocolados e numerados, comissões, pareceres assinados e ata.</span></li>
+              <li><b>Acervo e tesouraria</b><span>Atas, convocações e o caixa do ${esc(ORG.tipoMin)}, ano a ano.</span></li>
             </ul>
           </div>
-          <div class="foot small" style="color:var(--side-muted)">Igreja Presbiteriana do Brasil</div>
+          <div class="foot">Igreja Presbiteriana do Brasil</div>
         </div>
         <div class="login-form">
           <div class="card">
@@ -273,7 +280,7 @@
               <button class="btn primary" type="submit">Entrar</button>
             </form>
             <p class="small" style="margin-top:14px"><a href="#/verificar">Verificar uma assinatura</a></p>
-            ${SERVER ? '' : S.publico && (S.publico.pacoteFechado || S.publico.reunioesFechadas) ? `<div class="alert info" style="margin-top:14px"><div><b>Dados do ${esc(ORG.tipo)}</b><br>Para carregar os relatórios de 2023 a 2025 com os PDFs originais e as reuniões do ${esc(ORG.tipoMin)} (acervo, membros das comissões e tesouraria), deixe "${esc(ORG.tipo)}" na igreja, use o usuário <code>admin</code> e a <b>senha dos dados</b> que você recebeu. Isso só é preciso uma vez neste navegador.</div></div>
+            ${SERVER ? '' : S.publico && (S.publico.pacoteFechado || S.publico.reunioesFechadas) ? `<div class="alert info" style="margin-top:14px"><div><b>Dados do ${esc(ORG.tipo)}</b><br>Para carregar os relatórios das igrejas com os PDFs originais e as reuniões do ${esc(ORG.tipoMin)} (acervo, membros das comissões e tesouraria), deixe "${esc(ORG.tipo)}" na igreja, use o usuário <code>admin</code> e a <b>senha dos dados</b> que você recebeu. Isso só é preciso uma vez neste navegador.</div></div>
               <div class="demo"><b>Modo demonstração</b> (dados só neste navegador). Para só testar, sem os dados reais: <code>admin</code>/<code>admin123</code>.</div>`
               : `<div class="demo"><b>Modo demonstração</b> (dados só neste navegador). ${esc(ORG.tipo)}: ${S.publico && S.publico.pacoteAberto ? '<code>admin</code> com a senha dos dados' : '<code>admin</code>/<code>admin123</code>'}, <code>relator</code>/<code>relator123</code>, <code>membro</code>/<code>membro123</code>. Igreja Filadélfia: <code>secretario</code>/<code>secretario123</code>.</div>`}
           </div>
@@ -333,10 +340,10 @@
     const u = S.user;
     const nav = (h, label, ic, n) => `<a href="#/${h}" class="${pagina === h.split('/')[0] || (h === 'admin/comissoes' && pagina === 'admin-comissoes') ? 'active' : ''}">${ic} ${label}${n ? `<span class="count">${n}</span>` : ''}</a>`;
     root().innerHTML = `
-      <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><b>${esc(ORG.sistema)}</b></div>
+      <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><a href="#/painel" style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:8px">${logo(30)}<b>${esc(ORG.sistema)}</b></a></div>
       <div class="app">
         <aside class="side" id="side">
-          <div class="brand">${logo(34)}<div><b>${esc(ORG.sistema)}</b><span>${esc(u.igrejaId ? (igreja(u.igrejaId) || {}).sigla || '' : ORG.tipo)}</span></div></div>
+          <a class="brand" href="#/painel" title="Ir para a página inicial (Painel)">${logo(58)}<div><b>${esc(ORG.sistema)}</b><span>${esc(u.igrejaId ? (igreja(u.igrejaId) || {}).sigla || '' : ORG.tipo)}</span></div></a>
           <nav class="nav">
             ${nav('painel', 'Painel', '▦')}
             ${nav('indicadores', 'Indicadores', '↗')}
@@ -377,8 +384,16 @@
     $$('#side a').forEach(a => a.addEventListener('click', () => $('#side').classList.remove('open')));
   }
   function head(titulo, sub, acoes) {
-    return `<div class="page-head"><div><h1>${titulo}</h1>${sub ? `<p>${sub}</p>` : ''}</div><div class="actions no-print">${acoes || ''}</div></div>`;
+    const inicio = /^#?\/?(painel)?$/.test(location.hash);
+    return `<div class="page-head"><div class="ph-t">${inicio ? '' : '<button type="button" class="voltar no-print" aria-label="Voltar para a página anterior" title="Voltar">←</button>'}<div><h1>${titulo}</h1>${sub ? `<p>${sub}</p>` : ''}</div></div><div class="actions no-print">${acoes || ''}</div></div>`;
   }
+  // volta para a tela anterior do sistema; se não houver, vai ao Painel
+  let navegacoes = 0;
+  window.addEventListener('hashchange', () => { navegacoes++; });
+  function voltar() {
+    if (navegacoes > 0) { navegacoes -= 2; history.back(); } else location.hash = '#/painel';
+  }
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.voltar')) voltar(); });
 
   /* ======================= modal ======================= */
   function modal(titulo, corpo, botoes, wide) {

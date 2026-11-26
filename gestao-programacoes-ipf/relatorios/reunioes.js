@@ -129,6 +129,15 @@
     if (m1 === m2 && y1 === y2) return `${String(d1).padStart(2, '0')} a ${String(d2).padStart(2, '0')} de ${MESES[m1 - 1]} de ${y1}`;
     return `${dataExtenso(r.dataInicio)} a ${dataExtenso(r.dataFim)}`;
   }
+  // protocolo do documento (carimbo da Secretaria Executiva): Doc nº NN/AA, destino, data e rubrica do Presidente
+  const DESTINOS_DOC = ['Arquivo', 'Plenário', 'Mesa', 'Comissão Executiva', 'Tesouraria', 'Sínodo', 'Supremo Concílio'];
+  function destinoDoc(d) { return d.comissaoId ? ((comissao(d.comissaoId) || {}).nome || '') : (d.destino || ''); }
+  function numProtocolo(d, r) { const n = numero(d.numero); return n ? n + '/' + String((r && r.ano) || '').slice(-2) : (d.numero || ''); }
+  function imprimirCarimbos(docs, r) {
+    const html = `<style>.carimbo{width:186mm;margin:8mm auto;break-inside:avoid}.carimbo .pf-cab{background:#fff}</style>` +
+      docs.map(d => `<div class="carimbo">${cabecalho(numProtocolo(d, r), destinoDoc(d), d.dataProtocolo || d.data, r)}<div style="font:11px 'Times New Roman',serif;color:#555;margin-top:3px">${A().esc(d.titulo || '')}${d.origem ? ' · ' + A().esc(d.origem) : ''}</div></div>`).join('');
+    imprimir('Carimbos de protocolo', html);
+  }
   function proximoNumeroDoc(reuId) {
     const r = reuniao(reuId);
     return r ? numeracao(r).proximo : 1;
@@ -868,7 +877,7 @@
   /* ======================= impressão e Word ======================= */
   const CSS_FOLHA = `
     .parecer-folha{background:#fff;color:#111;width:794px;max-width:100%;box-sizing:border-box;margin:0 auto;padding:46px 56px;font-family:'Times New Roman',Times,'Liberation Serif',serif;font-size:15px;line-height:1.5}
-    .parecer-folha h4,.pf-cab{font-family:'Libertinus Sans','Zapf Humanist 601 BT','Zapf Humanist',Optima,'URW Classico',Candara,'Segoe UI',sans-serif}
+    .parecer-folha h4,.pf-cab{font-family:'Zapf Humanist 601 BT','Zapf Humanist',Optima,'Libertinus Sans','URW Classico',Candara,'Segoe UI',sans-serif}
     .parecer-folha h4{text-align:center;font-size:16px;margin:18px 0 14px;font-weight:700;text-transform:uppercase}
     .pf-cab{display:grid;grid-template-columns:130px 1fr 210px;border:1px solid #444}
     .pf-cab>div{padding:8px;border-right:1px solid #444;display:flex;flex-direction:column;justify-content:center}
@@ -893,6 +902,7 @@
     const w = window.open('', '_blank');
     if (!w) return A().toast('Permita a abertura de janelas para imprimir.', true);
     const base = location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '');
+    if (LOGO_DATA) html = html.split('src="img/logo-ipb.png"').join('src="' + LOGO_DATA + '"');
     w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${A().esc(titulo)}</title><base href="${A().esc(base)}">
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libertinus+Sans:ital,wght@0,400;0,700;1,400&display=swap">
       <style>${CSS_FOLHA}body{margin:0;background:#fff}@page{size:A4;margin:0}.parecer-folha{page-break-after:always;width:auto;max-width:210mm;min-height:0}.parecer-folha:last-child{page-break-after:auto}tr,li,.pf-assin,.pf-cab{break-inside:avoid}</style></head>
@@ -900,6 +910,7 @@
     w.document.close();
   }
   let LOGO_DATA = null;
+  setTimeout(() => { logoData(); }, 1500);
   async function logoData() {
     if (LOGO_DATA) return LOGO_DATA;
     try { const b = await (await fetch('img/logo-ipb.png')).blob(); LOGO_DATA = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }); } catch (e) { LOGO_DATA = ''; }
@@ -907,7 +918,7 @@
   }
   async function baixarWord(html, filename) {
     const logo = await logoData();
-    const css = `body{font-family:'Times New Roman',serif;font-size:12pt} h4{font-family:'Libertinus Sans','Zapf Humanist 601 BT',Optima,Candara,sans-serif;text-align:center;text-transform:uppercase;font-size:13pt}
+    const css = `body{font-family:'Times New Roman',serif;font-size:12pt} h4{font-family:'Zapf Humanist 601 BT',Optima,'Libertinus Sans',Candara,sans-serif;text-align:center;text-transform:uppercase;font-size:13pt}
       p{text-align:justify;margin:6pt 0} .pf-sec{font-weight:bold} .pf-local{text-align:right}
       table{border-collapse:collapse;width:100%} td,th{border:1px solid #777;padding:3pt 5pt}`;
     const tmp = document.createElement('div'); tmp.innerHTML = html;
@@ -972,9 +983,9 @@
       <div class="field"><label for="fRe">Reunião</label><select id="fRe"><option value="">Selecionada no topo</option><option value="todas" ${F.reuniao === 'todas' ? 'selected' : ''}>Todas as reuniões</option></select></div>
       <div class="field"><label for="fCo">Comissão</label><select id="fCo"><option value="">Todas</option>${comissoes().map(c => `<option value="${esc(c.id)}" ${F.comissao === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></div>
       <div class="field" style="flex:1"><label for="fBu">Buscar</label><input type="search" id="fBu" value="${esc(F.busca)}" placeholder="número, título, igreja…"></div></div></div>
-      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Documento</th>${rid ? '' : '<th>Reunião</th>'}<th>Origem</th><th>Comissão</th><th>PDF</th></tr></thead><tbody>
+      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Documento</th>${rid ? '' : '<th>Reunião</th>'}<th>Origem</th><th>Destino</th><th>PDF</th></tr></thead><tbody>
       ${lista.map(d => `<tr class="${podeSecretaria() ? 'click' : ''}" data-ed="${esc(d.id)}"><td class="num">${esc(d.numero || '')}</td><td>${esc(d.titulo)}${d.resumo ? `<div class="small muted">${esc(d.resumo).slice(0, 180)}</div>` : ''}</td>${rid ? '' : `<td class="small">${esc((reuniao(d.reuniaoId) || {}).codigo || '')}</td>`}
-        <td class="small">${esc(d.origem || '')}</td><td class="small">${d.comissaoId ? `<a href="#/comissao/${encodeURIComponent(d.comissaoId)}">${esc((comissao(d.comissaoId) || {}).nome || '')}</a>` : ''}</td>
+        <td class="small">${esc(d.origem || '')}</td><td class="small">${d.comissaoId ? `<a href="#/comissao/${encodeURIComponent(d.comissaoId)}">${esc((comissao(d.comissaoId) || {}).nome || '')}</a>` : esc(d.destino || '')}</td>
         <td>${d.arquivo ? `<button class="btn sm" data-pdf="${esc(d.id)}">Abrir</button>` : '<span class="small muted">–</span>'}</td></tr>`).join('') || `<tr><td colspan="6" class="list-empty">Nenhum documento${F.busca || F.comissao ? ' com esse filtro' : ''}.</td></tr>`}
       </tbody></table></div><p class="small muted" style="margin:8px 0 0">${lista.length} documento(s).</p></div>`;
     shell('reuniao', html);
@@ -1012,6 +1023,7 @@
     if (!d) { const r0 = reuniao(); d = { reuniaoId: r0 ? r0.id : '', titulo: '', comissaoId: '', tipoDoc: '', origem: '', resumo: '' }; }
     d = Object.assign({}, d);
     if (novo && !d.numero && d.reuniaoId && !opts.semNumero && pastaAuto(d) === 'relatorio') d.numero = String(proximoNumeroDoc(d.reuniaoId));
+    if (novo && d.numero && !d.dataProtocolo) d.dataProtocolo = hoje();
     const anoAtual = new Date().getFullYear();
     const m = modal(novo ? 'Novo documento' : 'Documento ' + esc(d.numero || ''), `<div class="grid g3">
       <div class="field span2"><label for="dTit">Título</label><input type="text" id="dTit" value="${esc(d.titulo || '')}" placeholder="ex.: Relatório Atas - IP Marinas"></div>
@@ -1023,18 +1035,24 @@
       <div class="field"><label for="dDat">Data do documento</label><input type="date" id="dDat" value="${esc(d.data || '')}"></div>
       <div class="field"><label for="dTip">Tipo</label><input type="text" id="dTip" list="dlTip" value="${esc(d.tipoDoc || '')}" placeholder="ex.: Convocação, Ata, Relatório"><datalist id="dlTip">${['Convocação', 'Retificação', 'Ata', 'Relatório', 'Proposta', 'Ofício', 'Solicitação', 'Parecer', 'Estatuto', 'Regimento', 'Relatório financeiro', 'Composição'].map(x => `<option value="${x}">`).join('')}</datalist></div>
       <div class="field"><label for="dOri">Origem</label><input type="text" id="dOri" list="dlIg2" value="${esc(d.origem || '')}"><datalist id="dlIg2">${igrejasCfg().map(i => `<option value="${esc(i)}">`).join('')}</datalist></div>
-      <div class="field"><label for="dCom">Comissão que examina</label><select id="dCom"><option value="">(nenhuma)</option>${comissoes().map(c => `<option value="${esc(c.id)}" ${d.comissaoId === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></div>
+      <div class="field"><label for="dCom">Destino</label><select id="dCom"><option value="">(a definir)</option><optgroup label="Comissões">${comissoes().map(c => `<option value="c:${esc(c.id)}" ${d.comissaoId === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</optgroup><optgroup label="Outros">${DESTINOS_DOC.map(x => `<option value="${esc(x)}" ${!d.comissaoId && d.destino === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</optgroup></select></div>
+      <div class="field"><label for="dPro">Data do protocolo</label><input type="date" id="dPro" value="${esc(d.dataProtocolo || '')}"></div>
+      <div class="field span2"><label class="chk" style="margin-top:26px"><input type="checkbox" id="dDes" ${d.despachadoEm ? 'checked' : ''} ${isAdmin() ? '' : 'disabled'}> Despachado pelo Presidente${d.despachadoEm ? ' em ' + esc(dataBr(d.despachadoEm)) : ''}${isAdmin() ? '' : ' <span class="muted small">(só a Mesa marca)</span>'}</label></div>
       <div class="field span3"><label for="dRes">Resumo</label><textarea id="dRes" rows="3">${esc(d.resumo || '')}</textarea></div>
       <div class="field span3"><label class="chk"><input type="checkbox" id="dRst" ${d.restrito ? 'checked' : ''}> Acesso restrito à Mesa (dados pessoais sensíveis, como atestados, conforme a LGPD)</label></div>
       <div class="field span3"><label for="dArq">Arquivo (PDF, imagem, Word ou Excel, até 15 MB)</label>${d.arquivo ? `<p class="small" style="margin:0">Atual: ${esc(d.arquivo.nome)} (${esc(A().tamanho(d.arquivo.tamanho || 0))})</p>` : ''}<input type="file" id="dArq" accept="${ACEITOS}"></div></div>`,
-      `${!novo && isAdmin() ? '<button class="btn danger" id="dDel" style="margin-right:auto">Excluir</button>' : ''}<button class="btn" data-x>Cancelar</button><button class="btn primary" id="dOk">Salvar</button>`, true);
+      `${!novo && isAdmin() ? '<button class="btn danger" id="dDel" style="margin-right:auto">Excluir</button>' : ''}${!novo && d.numero && d.reuniaoId ? '<button class="btn" id="dCar">Imprimir carimbo</button>' : ''}<button class="btn" data-x>Cancelar</button><button class="btn primary" id="dOk">Salvar</button>`, true);
+    if ($('#dCar', m.el)) $('#dCar', m.el).onclick = () => imprimirCarimbos([d], reuniao(d.reuniaoId));
     const vis = () => { const temReu = !!$('#dReu', m.el).value; $('#wPas', m.el).hidden = !temReu; $('#wSec', m.el).hidden = temReu; $('#wAno', m.el).hidden = temReu || $('#dSec', m.el).value === 'institucional'; };
     $('#dReu', m.el).onchange = vis; $('#dSec', m.el).onchange = vis; vis();
     $('[data-x]', m.el).onclick = m.fechar;
     $('#dOk', m.el).onclick = async () => {
       const v = id => $('#' + id, m.el).value.trim();
       const rid = v('dReu');
-      const item = { id: d.id, reuniaoId: rid, numero: v('dNum'), titulo: v('dTit'), comissaoId: v('dCom'), origem: v('dOri'), tipoDoc: v('dTip'), resumo: v('dRes'), arquivoNome: d.arquivoNome || '',
+      const dest = v('dCom');
+      const desp = $('#dDes', m.el).checked;
+      const item = { id: d.id, reuniaoId: rid, numero: v('dNum'), titulo: v('dTit'), comissaoId: dest.startsWith('c:') ? dest.slice(2) : '', destino: dest.startsWith('c:') ? '' : dest, origem: v('dOri'), tipoDoc: v('dTip'), resumo: v('dRes'), arquivoNome: d.arquivoNome || '',
+        dataProtocolo: v('dPro'), despachadoEm: desp ? (d.despachadoEm || hoje()) : '',
         data: v('dDat'), restrito: $('#dRst', m.el).checked, pasta: rid ? v('dPas') : '', secao: rid ? '' : v('dSec'), ano: rid ? (reuniao(rid) || {}).ano || '' : (v('dSec') === 'institucional' ? '' : Number(v('dAno')) || '') };
       const res = await salvarItem('documento', item, 'Documento salvo.');
       if (!res) return;
@@ -1404,11 +1422,15 @@
     const descr = o => o.tipo === 'doc' ? `${esc(o.d.titulo)}${o.d.origem ? ` <span class="small muted">· ${esc(o.d.origem)}</span>` : ''}`
       : o.tipo === 'rel' ? `${esc(o.r.titulo || 'Relatório')} <span class="small muted">· ${esc((S().d.igrejas || []).find(i => i.id === o.r.igrejaId)?.nome || '')} · relatório da igreja</span>`
       : `${esc(o.p.assunto || '')} <span class="small muted">· número usado só no parecer</span>`;
-    const comDe = o => o.tipo === 'doc' && o.d.comissaoId ? esc((comissao(o.d.comissaoId) || {}).nome || '') : (o.tipo === 'doc' && pode ? '<span class="small muted">sem comissão</span>' : '');
+    const comDe = o => o.tipo === 'doc' && destinoDoc(o.d) ? esc(destinoDoc(o.d)) : (o.tipo === 'doc' && pode ? '<span class="small" style="color:var(--warn)">a definir</span>' : o.tipo === 'rel' ? '<span class="small muted">Exame de relatórios</span>' : '');
+    const numerados = N.docs.filter(d => d.numero);
+    const semDestino = numerados.filter(d => !destinoDoc(d));
+    const semDespacho = numerados.filter(d => !d.despachadoEm);
+    const despCel = o => o.tipo !== 'doc' ? '' : o.d.despachadoEm ? `<span class="tag" title="Despachado em ${esc(dataBr(o.d.despachadoEm))}">✓ ${esc(dataBr(o.d.despachadoEm).slice(0, 5))}</span>` : isAdmin() ? `<button class="btn sm" data-desp="${esc(o.d.id)}">Despachar</button>` : '<span class="small muted">pendente</span>';
     let corpo = `<div class="kpis">
       <div class="kpi"><div class="l">Próximo número</div><div class="v">${pad(N.proximo)}</div><div class="d muted">Doc nº ${pad(N.proximo)}/${esc(String(r.ano || ''))}</div></div>
       <div class="kpi"><div class="l">Números usados</div><div class="v">${N.ns.length}</div><div class="d muted">${N.docs.filter(d => d.numero).length} documentos · ${N.rels.length} relatórios das igrejas</div></div>
-      <div class="kpi"><div class="l">Sem número</div><div class="v">${N.semNumero.length}</div><div class="d muted">documentos da pasta Relatórios</div></div>
+      <div class="kpi"><div class="l">Aguardando despacho</div><div class="v">${semDespacho.length}</div><div class="d muted">${semDestino.length} sem destino · ${N.semNumero.length} sem número</div></div>
       <div class="kpi"><div class="l">Lacunas e repetidos</div><div class="v">${N.lacunas.length + N.repetidos.length}</div><div class="d muted">${N.lacunas.length} lacuna(s) · ${N.repetidos.length} repetido(s)</div></div>
     </div>`;
     if (N.repetidos.length) corpo += `<div class="alert warn" style="margin-bottom:12px"><b>Números repetidos:</b> ${N.repetidos.map(pad).join(', ')}. Cada documento precisa de um número próprio.</div>`;
@@ -1417,14 +1439,22 @@
         ${pode ? `<button class="btn primary sm" id="bNumTodos">Numerar todos a partir do ${pad(N.proximo)}</button>` : ''}</div>
       <div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th>Documento</th><th>Origem</th><th>Comissão</th>${pode ? '<th></th>' : ''}</tr></thead><tbody>${N.semNumero.map(d => `<tr><td>${esc(d.titulo)}</td><td class="small">${esc(d.origem || '')}</td><td class="small">${esc((comissao(d.comissaoId) || {}).nome || '')}</td>${pode ? `<td><button class="btn sm" data-num="${esc(d.id)}">Dar número</button></td>` : ''}</tr>`).join('')}</tbody></table></div></div>`;
     corpo += `<div class="card"><div class="section-title" style="margin-top:0">Registro de numeração</div>
-      <p class="small muted" style="margin-top:0">Inclui os documentos da reunião e os relatórios das igrejas com o número no formato Doc.NN/${esc(String(r.ano || ''))}.${pode ? ' Clique num documento para mudar o número, a origem ou a comissão.' : ''}</p>
-      ${N.ns.length ? `<div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Documento</th><th>Comissão</th><th>PDF</th></tr></thead><tbody>
-      ${N.ns.map(n => N.usos.get(n).map(o => `<tr class="${o.tipo === 'doc' && pode ? 'click' : ''} ${N.repetidos.includes(n) ? 'repetido' : ''}" ${o.tipo === 'doc' ? `data-ed="${esc(o.d.id)}"` : o.tipo === 'rel' ? `data-rl="${esc(o.r.id)}"` : `data-vp="${esc(o.p.id)}"`}><td class="num"><b>${pad(n)}</b></td><td>${descr(o)}</td><td class="small">${comDe(o)}</td>
+      <p class="small muted" style="margin-top:0">Cada documento recebido ganha o carimbo da Secretaria Executiva: <b>Doc nº</b> (NN/${esc(String(r.ano || '').slice(-2))}), <b>Destino</b> (a comissão que examina, Arquivo, Plenário…), <b>Data</b> do protocolo e a <b>rubrica do Presidente</b> (despacho). Os relatórios das igrejas entram com o número Doc.NN/${esc(String(r.ano || ''))}.${pode ? ' Clique num documento para mudar o número, o destino ou a data.' : ''}</p>
+      ${N.ns.length ? `<div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Documento</th><th>Destino</th><th>Protocolo</th><th>Despacho</th><th>PDF</th></tr></thead><tbody>
+      ${N.ns.map(n => N.usos.get(n).map(o => `<tr class="${o.tipo === 'doc' && pode ? 'click' : ''} ${N.repetidos.includes(n) ? 'repetido' : ''}" ${o.tipo === 'doc' ? `data-ed="${esc(o.d.id)}"` : o.tipo === 'rel' ? `data-rl="${esc(o.r.id)}"` : `data-vp="${esc(o.p.id)}"`}><td class="num"><b>${pad(n)}</b>${o.tipo === 'doc' ? `<div class="small muted">${esc(numProtocolo(o.d, r))}</div>` : ''}</td><td>${descr(o)}</td><td class="small">${comDe(o)}</td>
+        <td class="small">${o.tipo === 'doc' && (o.d.dataProtocolo || o.d.data) ? esc(dataBr(o.d.dataProtocolo || o.d.data)) : ''}</td><td>${despCel(o)}</td>
         <td>${o.tipo === 'doc' && o.d.arquivo ? `<button class="btn sm" data-pdf="${esc(o.d.id)}">Abrir</button>` : o.tipo === 'rel' && (o.r.anexos || []).length ? '<span class="small muted">no relatório</span>' : '<span class="small muted">–</span>'}</td></tr>`).join('')).join('')}
       </tbody></table></div>` : '<p class="muted" style="margin:0">Nenhum número usado nesta reunião.</p>'}</div>`;
     if (isAdmin()) corpo += `<div class="card"><div class="section-title" style="margin-top:0">Quem numera</div><p class="small muted" style="margin-top:0">${sec && sec.nome ? `2º Secretário desta reunião: <b>${esc(nomeMesa(sec))}</b>. ` : ''}A Mesa (administrador) sempre numera. Marque os usuários dos secretários para que eles também numerem e editem os documentos e a ata.</p>
       <p class="small" style="margin:0 0 8px">${(cfg().secretarios || []).map(id => (S().d.usuarios || []).find(u => u.id === id)).filter(Boolean).map(u => esc(u.nome)).join(', ') || '<span class="muted">Nenhum secretário marcado.</span>'}</p><button class="btn sm" id="bSecs">Escolher secretários</button></div>`;
-    telaRO('documentos', 'Numeração dos documentos', subReuniao(r) + ' · controle do 2º Secretário', '<a class="btn" href="#/documentos">← Documentos</a>' + seletorReuniao() + (pode ? `<button class="btn primary" id="bNovoNum">+ Registrar documento nº ${pad(N.proximo)}</button>` : ''), corpo, r, 'numeracao');
+    telaRO('documentos', 'Numeração dos documentos', subReuniao(r) + ' · controle do 2º Secretário', '<a class="btn" href="#/documentos">← Documentos</a>' + seletorReuniao() + (numerados.length ? '<button class="btn" id="bCarimbos">Imprimir carimbos</button>' : '') + (pode ? `<button class="btn primary" id="bNovoNum">+ Protocolar documento nº ${pad(N.proximo)}</button>` : ''), corpo, r, 'numeracao');
+    if ($('#bCarimbos')) $('#bCarimbos').onclick = () => imprimirCarimbos((semDespacho.length ? semDespacho : numerados).slice().sort((a, b) => numero(a.numero) - numero(b.numero)), r);
+    $$('[data-desp]').forEach(b => b.onclick = async e => {
+      e.stopPropagation();
+      const d = itens('documento').find(x => x.id === b.getAttribute('data-desp'));
+      if (!destinoDoc(d)) return A().toast('Defina o destino do documento antes do despacho.', true);
+      if (await salvarItem('documento', Object.assign({}, d, { despachadoEm: hoje() }), 'Documento ' + numProtocolo(d, r) + ' despachado para ' + destinoDoc(d) + '.')) telaNumeracao();
+    });
     ligarSeletor();
     $$('[data-pdf]').forEach(b => b.onclick = e => { e.stopPropagation(); abrirPdf(b.getAttribute('data-pdf')); });
     $$('[data-vp]').forEach(tr => tr.onclick = () => A().ir('parecer/' + tr.getAttribute('data-vp')));
@@ -1432,10 +1462,10 @@
     if ($('#bSecs')) $('#bSecs').onclick = escolherSecretarios;
     if (!pode) return;
     $$('tr[data-ed]').forEach(tr => tr.onclick = () => editarDocumento(itens('documento').find(d => d.id === tr.getAttribute('data-ed'))));
-    $('#bNovoNum').onclick = () => editarDocumento({ reuniaoId: r.id, numero: String(N.proximo), titulo: '', comissaoId: '', tipoDoc: '', origem: '', resumo: '', pasta: 'relatorio' });
+    $('#bNovoNum').onclick = () => editarDocumento({ reuniaoId: r.id, numero: String(N.proximo), titulo: '', comissaoId: '', tipoDoc: '', origem: '', resumo: '', pasta: 'relatorio', dataProtocolo: hoje() });
     const numerar = async lista => {
       let n = numeracao(reuniao(r.id)).proximo, ok = 0;
-      for (const d of lista) { if (await A().acao(() => A().api({ action: 'reuniao', op: 'salvar', tipo: 'documento', item: Object.assign({}, d, { numero: String(n) }) }))) { ok++; n++; } }
+      for (const d of lista) { if (await A().acao(() => A().api({ action: 'reuniao', op: 'salvar', tipo: 'documento', item: Object.assign({}, d, { numero: String(n), dataProtocolo: d.dataProtocolo || hoje() }) }))) { ok++; n++; } }
       await A().recarregar(); A().toast(ok + ' documento(s) numerado(s).'); telaNumeracao();
     };
     $$('[data-num]').forEach(b => b.onclick = () => numerar([N.semNumero.find(d => d.id === b.getAttribute('data-num'))]));

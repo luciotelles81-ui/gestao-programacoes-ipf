@@ -49,7 +49,8 @@
     return K;
   }
   function logo() {
-    return `<div class="f-logo"><svg viewBox="0 0 48 48" width="46" height="46" aria-hidden="true"><path d="M24 6c-7 8-13 13-13 21a13 13 0 0 0 26 0c0-8-6-13-13-21z" fill="#444"/><path d="M24 20v18M17 28h14" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg><b>IGREJA<br>PRESBITERIANA</b><span>DO BRASIL</span></div>`;
+    // marca oficial da IPB (Programa de Identidade Visual)
+    return `<div class="f-logo"><img src="img/logo-ipb.png" alt="Igreja Presbiteriana do Brasil"></div>`;
   }
   function cabecalho(titulo, r, ig) {
     return `<div class="f-cab">${logo()}<div class="f-tit"><div class="t1">${titulo}</div>
