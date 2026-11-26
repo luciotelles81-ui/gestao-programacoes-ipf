@@ -668,8 +668,26 @@
   function csvInd(nome, linhas) {
     baixar(nome, '﻿' + linhas.map(l => l.map(v => v == null ? '' : typeof v === 'number' ? String(v).replace('.', ',') : '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'), 'text/csv');
   }
+  // soma do presbitério: totais somados; percentuais refeitos a partir das somas (ou média das igrejas)
+  const PRESB = '__presb';
+  function somaPresbiterio(M, anos) {
+    const P = {};
+    anos.forEach(a => {
+      const ds = Object.keys(M).map(k => M[k][a]).filter(Boolean);
+      if (!ds.length) return;
+      const o = P[a] = { _est: ds.some(d => d._est), _con: ds.some(d => d._con), _n: ds.length };
+      const soma = id => { const v = ds.map(d => d[id]).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) : null; };
+      const media = id => { const v = ds.map(d => d[id]).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+      const razao = (n, d) => { const x = soma(n), y = soma(d); return x != null && y ? x / y : null; };
+      IND.forEach(i => { o[i.id] = i.fmt === 'pct' ? media(i.id) : soma(i.id); });
+      o.percap = razao('diz', 'com'); o.dizscPct = razao('dizsc', 'diz'); o.missPct = razao('miss', 'desp'); o.alunosPct = razao('alunos', 'rol');
+    });
+    return P;
+  }
   function telaIndicadores() {
     const { M, anos } = matrizInd();
+    if (!S.user.igrejaId) M[PRESB] = somaPresbiterio(M, anos);
+    const nomeEsc = id => id === PRESB ? (ORG.sigla ? ORG.sigla + ' · ' : '') + ORG.nome + ' (todas as igrejas)' : igNome(id);
     const igs = S.d.igrejas.filter(i => M[i.id]);
     const presb = isPresb();
     const modo = presb ? S.ind.modo : 'igreja';
@@ -681,7 +699,8 @@
       return;
     }
     if (modo === 'igreja') {
-      const igId = S.user.igrejaId || (M[S.ind.igreja] ? S.ind.igreja : igs[0].id);
+      const igId = S.user.igrejaId || (M[S.ind.igreja] ? S.ind.igreja : PRESB);
+      const ehPresb = igId === PRESB;
       const D = M[igId] || {};
       const anosIg = anos.filter(a => D[a]);
       const ult = anosIg[anosIg.length - 1], pen = anosIg[anosIg.length - 2];
@@ -698,17 +717,18 @@
         }).join('')}</div></div>`;
       }).join('');
       const linhas = IND.filter(i => anosIg.some(a => D[a][i.id] != null));
-      html = head('Indicadores', 'Evolução dos relatórios de uma igreja ao longo dos anos.', seg) + `
-        <div class="card"><div class="filters" style="margin:0">${S.user.igrejaId ? `<div><b>${esc(igNome(igId))}</b></div>` : `<div class="field" style="min-width:300px"><label for="iIg">Igreja</label><select id="iIg">${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select></div>`}
-          <p class="small muted" style="margin:0;align-self:end">Relatórios: ${anosIg.map(a => a + ' (' + [D[a]._est ? 'estatística' : '', D[a]._con ? 'Conselho' : ''].filter(Boolean).join(' e ') + ')').join(' · ')}</p></div></div>
+      html = head('Indicadores', ehPresb ? 'Evolução do ' + esc(ORG.tipoMin) + ' ao longo dos anos: soma das igrejas (percentuais pela soma ou pela média das igrejas).' : 'Evolução dos relatórios de uma igreja ao longo dos anos.', seg) + `
+        <div class="escopo ${ehPresb ? '' : 'igreja'}"><span>Dados de</span> <b>${esc(nomeEsc(igId))}</b></div>
+        <div class="card"><div class="filters" style="margin:0">${S.user.igrejaId ? `<div><b>${esc(igNome(igId))}</b></div>` : `<div class="field" style="min-width:300px"><label for="iIg">Igreja</label><select id="iIg"><option value="${PRESB}" ${ehPresb ? 'selected' : ''}>${esc(ORG.sigla || ORG.tipo)} · todas as igrejas</option>${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select></div>`}
+          <p class="small muted" style="margin:0;align-self:end">Relatórios: ${anosIg.map(a => a + ' (' + (D[a]._n ? D[a]._n + (D[a]._n === 1 ? ' igreja' : ' igrejas') : [D[a]._est ? 'estatística' : '', D[a]._con ? 'Conselho' : ''].filter(Boolean).join(' e ')) + ')').join(' · ')}${ehPresb ? '. Anos com menos igrejas somam valores menores.' : ''}</p></div></div>
         ${cards}
         <div class="card"><div class="card-head"><h2>Tabela de indicadores</h2><button class="btn sm ghost no-print" id="bCsvI">Baixar planilha (CSV)</button></div>
-          <div class="tbl-wrap"><table><thead><tr><th>Indicador</th>${anosIg.map(a => `<th class="num">${a}</th>`).join('')}<th class="num">Variação${pen ? ' ' + pen + '→' + ult : ''}</th>${presb ? `<th class="num">Média do Presbitério ${ult}</th>` : ''}</tr></thead><tbody>
-          ${grupos.map(g => { const ls = linhas.filter(i => i.grupo === g); return ls.length ? `<tr class="tot"><td colspan="${anosIg.length + (presb ? 3 : 2)}"><b>${esc(g)}</b></td></tr>` + ls.map(i => `<tr><td>${esc(i.nome)}</td>${anosIg.map(a => `<td class="num">${esc(fmtInd(D[a][i.id], i.fmt))}</td>`).join('')}<td class="num">${pen ? variacao(D[ult][i.id], D[pen][i.id], i.fmt) : '–'}</td>${presb ? `<td class="num muted">${esc(fmtInd(media(i.id), i.fmt))}</td>` : ''}</tr>`).join('') : ''; }).join('')}
+          <div class="tbl-wrap"><table><thead><tr><th>Indicador</th>${anosIg.map(a => `<th class="num">${a}</th>`).join('')}<th class="num">Variação${pen ? ' ' + pen + '→' + ult : ''}</th>${presb && !ehPresb ? `<th class="num">Média do Presbitério ${ult}</th>` : ''}</tr></thead><tbody>
+          ${grupos.map(g => { const ls = linhas.filter(i => i.grupo === g); return ls.length ? `<tr class="tot"><td colspan="${anosIg.length + (presb && !ehPresb ? 3 : 2)}"><b>${esc(g)}</b></td></tr>` + ls.map(i => `<tr><td>${esc(i.nome)}</td>${anosIg.map(a => `<td class="num">${esc(fmtInd(D[a][i.id], i.fmt))}</td>`).join('')}<td class="num">${pen ? variacao(D[ult][i.id], D[pen][i.id], i.fmt) : '–'}</td>${presb && !ehPresb ? `<td class="num muted">${esc(fmtInd(media(i.id), i.fmt))}</td>` : ''}</tr>`).join('') : ''; }).join('')}
           </tbody></table></div></div>`;
       shell('indicadores', html);
       const sel = $('#iIg'); if (sel) sel.onchange = () => { S.ind.igreja = sel.value; telaIndicadores(); };
-      $('#bCsvI').onclick = () => csvInd('indicadores-' + (igreja(igId) || {}).sigla + '.csv', [['Indicador'].concat(anosIg)].concat(linhas.map(i => [i.nome].concat(anosIg.map(a => D[a][i.id])))));
+      $('#bCsvI').onclick = () => csvInd('indicadores-' + (ehPresb ? (ORG.sigla || 'presbiterio') : (igreja(igId) || {}).sigla) + '.csv', [['Indicador'].concat(anosIg)].concat(linhas.map(i => [i.nome].concat(anosIg.map(a => D[a][i.id])))));
     } else {
       const ind = IND.find(i => i.id === S.ind.indicador) || IND[0];
       const anosInd = anos.filter(a => igs.filter(i => M[i.id][a] && M[i.id][a][ind.id] != null).length);
