@@ -170,7 +170,16 @@
     const decididos = pars.filter(p => PLENARIO.includes(p.status)).length;
     const minhas = rid ? minhasComissoes(rid) : [];
     let html = head('Reunião do concílio', subReuniao(r), seletorReuniao());
-    if (r) {
+    if (r && r.tipoReuniao === 'E') {
+      // extraordinária: trata só do assunto da convocação (CI/IPB art. 74), sem comissões
+      html += `<div class="kpis">
+        <div class="kpi"><div class="l">Tipo</div><div class="v" style="font-size:1.2rem">Extraordinária</div><div class="d muted">${r.dataConvocacao ? 'convocada em ' + esc(dataBr(r.dataConvocacao)) : 'sem comissões'}</div></div>
+        <a class="kpi" href="#/acervo/${esc(String(r.ano || ''))}/reuniao/${encodeURIComponent(rid)}"><div class="l">Documentos</div><div class="v">${docs.length}</div><div class="d muted">${docs.filter(d => d.arquivo).length} com PDF</div></a>
+      </div>`;
+      html += `<div class="card"><div class="section-title" style="margin-top:0">Assunto da convocação</div><p style="margin:0">${esc(r.materia || 'Não informado.')}</p>${r.convocadaPor ? `<p class="small muted" style="margin:6px 0 0">Convocada por ${esc(r.convocadaPor)}</p>` : ''}</div>`;
+      html += `<div class="card"><div class="section-title" style="margin-top:0">Documentos da reunião</div>${docs.length ? `<ul class="lista-docs" style="margin:0;padding-left:18px">${docs.map(d => `<li><a href="#/acervo/${esc(String(r.ano || ''))}/reuniao/${encodeURIComponent(rid)}">${esc([d.tipoDoc, d.titulo].filter(Boolean).join(' · ') || d.arquivoNome || 'Documento')}</a></li>`).join('')}</ul>` : '<p class="muted" style="margin:0">Nenhum documento ainda.</p>'}
+        <div class="row-wrap" style="margin-top:12px"><button class="btn" data-rel="documentos">Lista de documentos</button><a class="btn" href="#/ata">Ata da reunião</a></div></div>`;
+    } else if (r) {
       html += `<div class="kpis">
         <a class="kpi" href="#/comissoes"><div class="l">Comissões</div><div class="v">${cs.length}</div><div class="d muted">${cs.filter(c => delegadosDe(c.id, rid).length).length} com membros</div></a>
         <a class="kpi" href="#/delegados"><div class="l">Membros nas comissões</div><div class="v">${dels.length}</div><div class="d muted">${dels.filter(d => d.funcao === 'Relator').length} relatores</div></a>
@@ -188,7 +197,7 @@
           <button class="btn" data-rel="pareceres">Todos os pareceres concluídos</button>
         </div></div>`;
     }
-    html += comoFunciona();
+    if (!r || r.tipoReuniao !== 'E') html += comoFunciona();
     if (isAdmin()) html += painelConfig();
     shell('reuniao', html);
     ligarSeletor();
