@@ -465,13 +465,13 @@
     const anos = {};
     rels.forEach(r => {
       if (r.status === 'Rascunho') return;
-      const a = anos[r.ano] = anos[r.ano] || { ano: r.ano, com: 0, nc: 0, rec: 0, desp: 0, diz: 0, dizSC: 0, alunos: 0, prof: 0, igrejasEst: 0, igrejasCon: 0, cons: [] };
+      const a = anos[r.ano] = anos[r.ano] || { ano: r.ano, com: 0, nc: 0, rec: 0, desp: 0, diz: 0, dizSC: 0, verba: 0, alunos: 0, prof: 0, igrejasEst: 0, igrejasCon: 0, cons: [] };
       const C = ctx(r.modelo || modelo(r.modeloId), r.dados || {});
       if (r.modeloId === 'estatistico') {
         a.igrejasEst++;
         a.com += C.V('com_atual'); a.nc += C.V('nc_atual'); a.rec += C.V('fin_rec_total'); a.desp += C.V('fin_desp_total');
-        a.diz += C.V('fin_dizimos'); a.dizSC += C.V('fin_dizimo_sc'); a.alunos += C.V('est_alunos'); a.prof += C.V('com_profissoes');
-      } else if (r.modeloId === 'conselho') { a.igrejasCon++; a.cons.push(r.dados || {}); }
+        a.diz += C.V('fin_dizimos'); a.dizSC += C.V('fin_dizimo_sc'); a.verba += C.V('fin_verba_presb'); a.alunos += C.V('est_alunos'); a.prof += C.V('com_profissoes');
+      } else if (r.modeloId === 'conselho') { a.igrejasCon++; a.cons.push(Object.assign({ __igreja: r.igrejaId }, r.dados || {})); }
     });
     return Object.values(anos).sort((x, y) => x.ano - y.ano);
   }
@@ -481,8 +481,8 @@
     const igId = unica || S.filtroIgreja || '';
     const anos = indicadoresAno(igId);
     const ult = anos[anos.length - 1] || {}, pen = anos[anos.length - 2] || null;
-    const delta = (a, b, fmt) => b ? `<div class="d ${a >= b ? 'up' : 'down'}">${a >= b ? '▲' : '▼'} ${fmt(Math.abs(a - b))} desde ${pen.ano}</div>` : '';
-    const c = contagens();
+    // evolução em % sobre o ano anterior (verde se cresceu)
+    const delta = (a, b) => b ? `<div class="d ${a >= b ? 'up' : 'down'}">${a >= b ? '▲' : '▼'} ${pct(Math.abs(a - b) / b)} sobre ${pen.ano}</div>` : '<div class="d muted">sem ano anterior</div>';
     const C1 = 'var(--c1)', C2 = 'var(--c2)';
     const maxEst = Math.max(0, ...anos.map(a => a.igrejasEst));
     const anosEst = anos.filter(a => a.igrejasEst && a.igrejasEst >= maxEst / 2);
@@ -496,7 +496,7 @@
       const C = e ? ctx(e.modelo, e.dados) : null, C0 = e0 ? ctx(e0.modelo, e0.dados) : null;
       const pend = S.d.relatorios.filter(r => r.igrejaId === i.id && r.ano === anoRef).reduce((n, r) => n + verificar(r).filter(x => x.nivel === 'erro').length, 0);
       return { i, e, com: C ? C.V('com_atual') : null, com0: C0 ? C0.V('com_atual') : null, rec: C ? C.V('fin_rec_total') : null, desp: C ? C.V('fin_desp_total') : null,
-        diz: C ? C.V('fin_dizimos') : 0, sc: C ? C.V('fin_dizimo_sc') : 0, alunos: C ? C.V('est_alunos') : null, prof: C ? C.V('com_profissoes') : 0, pend };
+        diz: C ? C.V('fin_dizimos') : 0, sc: C ? C.V('fin_dizimo_sc') : 0, verba: C ? C.V('fin_verba_presb') : 0, rec0: C0 ? C0.V('fin_rec_total') : null, prof: C ? C.V('com_profissoes') : 0, pend };
     });
 
     // Conformidade do Relatório do Conselho (último ano)
@@ -505,18 +505,21 @@
       ['previdencia', 'Previdência do pastor'], ['plan_estrategico', 'Planejamento estratégico'], ['seguro', 'Seguro patrimonial'], ['alvara', 'Alvará'], ['avcb', 'Licença dos Bombeiros']];
     const conf = anoCon ? itensCon.map(([k, l]) => {
       const sim = anoCon.cons.filter(d => d[k] === 'sim').length;
-      return { nome: l, v: anoCon.cons.length ? sim / anoCon.cons.length : 0, extra: sim + ' de ' + anoCon.cons.length + ' relatórios' };
+      return { k, nome: l, v: anoCon.cons.length ? sim / anoCon.cons.length : 0, extra: sim + ' de ' + anoCon.cons.length + ' relatórios · clique para ver as igrejas' };
     }) : [];
+    const sigla = id => { const i = igreja(id) || {}; return i.sigla || i.nome || ''; };
+    const marca = v => v === 'sim' ? '<span class="up" title="Sim">✓</span>' : v === 'nao' || v === 'não' ? '<span class="down" title="Não">✗</span>' : '<span class="muted" title="Sem resposta">–</span>';
+    const matriz = anoCon ? `<details class="conf-det"><summary>Ver quais igrejas atendem a cada indicador</summary><div class="tbl-wrap" style="margin-top:10px"><table class="conf-tab"><thead><tr><th>Igreja</th>${itensCon.map(([, l]) => `<th class="c">${esc(l)}</th>`).join('')}</tr></thead><tbody>
+      ${anoCon.cons.slice().sort((a, b) => sigla(a.__igreja).localeCompare(sigla(b.__igreja), 'pt-BR')).map(d => `<tr><td>${esc((igreja(d.__igreja) || {}).nome || '')}</td>${itensCon.map(([k]) => `<td class="c">${marca(d[k])}</td>`).join('')}</tr>`).join('')}
+      </tbody></table></div><p class="small muted" style="margin:6px 0 0">✓ sim · ✗ não · – sem resposta no Relatório do Conselho de ${anoCon.ano}.</p></details>` : '';
 
     const html = head('Painel', esc(unica ? igNome(unica) : ORG.nome + ' · ' + igs.length + (ORG.unidades === 'igrejas' ? ' igrejas e congregações' : ' ' + ORG.unidades)),
       unica ? '' : `<select id="fIg" aria-label="Filtrar igreja" style="min-width:240px"><option value="">Todas as igrejas</option>${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>`) + `
-      <div class="kpis">
-        <div class="kpi"><div class="l">Membros comungantes ${ult.igrejasEst ? '(' + ult.ano + ')' : ''}</div><div class="v">${num(ult.com)}</div>${delta(ult.com, pen && pen.com, num)}</div>
-        <div class="kpi"><div class="l">Não comungantes</div><div class="v">${num(ult.nc)}</div>${delta(ult.nc, pen && pen.nc, num)}</div>
-        <div class="kpi"><div class="l">Receita do ano</div><div class="v">${moneyK(ult.rec)}</div>${delta(ult.rec, pen && pen.rec, moneyK)}</div>
-        <div class="kpi"><div class="l">Dízimo ao Supremo Concílio</div><div class="v">${moneyK(ult.dizSC)}</div><div class="d muted">${ult.diz ? pct(ult.dizSC / ult.diz) + ' dos dízimos' : ''}</div></div>
-        <a class="kpi" href="#/relatorios/analisar"><div class="l">Relatórios aguardando análise</div><div class="v">${c.analisar}</div><div class="d muted">${c.devolvidos} devolvido(s)</div></a>
-        <a class="kpi" href="#/atas"><div class="l">Atas a examinar</div><div class="v">${c.atas}</div></a>
+      <div class="kpis kpis-painel">
+        <div class="kpi"><div class="l">Total de membros${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${num((ult.com || 0) + (ult.nc || 0))}</div>${delta((ult.com || 0) + (ult.nc || 0), pen && (pen.com + pen.nc))}<div class="s">${num(ult.com)} comungantes · ${num(ult.nc)} não comungantes</div></div>
+        <div class="kpi"><div class="l">Receita do ano${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.rec)}</div>${delta(ult.rec, pen && pen.rec)}<div class="s">soma das igrejas</div></div>
+        <div class="kpi"><div class="l">Receita do ${esc(ORG.tipo)}${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.verba)}</div>${delta(ult.verba, pen && pen.verba)}<div class="s">verba presbiterial repassada pelas igrejas</div></div>
+        <div class="kpi"><div class="l">Dízimo ao Supremo Concílio${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.dizSC)}</div>${delta(ult.dizSC, pen && pen.dizSC)}<div class="s">${ult.diz ? pct(ult.dizSC / ult.diz) + ' dos dízimos recebidos' : '&nbsp;'}</div></div>
       </div>
       <div class="grid g2">
         <div class="card"><div class="card-head"><h2>Membros por ano</h2><span class="muted small">comungantes e não comungantes</span></div>
@@ -531,26 +534,35 @@
         <div class="card"><div class="card-head"><h2>Comungantes por igreja</h2><span class="muted small">${anoRef}</span></div>${hbarras(porIgreja.filter(p => p.com != null).sort((a, b) => b.com - a.com).map(p => ({ nome: p.i.sigla || p.i.nome, v: p.com, extra: p.i.nome + (p.com0 != null ? ' · ' + (anoRef - 1) + ': ' + num(p.com0) : '') })), v => num(v), C1)}</div>
         <div class="card"><div class="card-head"><h2>Novos membros por profissão de fé</h2><span class="muted small">${anoRef}</span></div>${hbarras(porIgreja.filter(p => p.e).sort((a, b) => b.prof - a.prof).map(p => ({ nome: p.i.sigla || p.i.nome, v: p.prof, extra: p.i.nome })), v => num(v), C1)}</div>
       </div>` : ''}
-      ${conf.length ? `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Relatório do Conselho: situação das igrejas</h2><span class="muted small">${anoCon.ano} · % dos relatórios que responderam "Sim"</span></div>${hbarras(conf, (v) => pct(v), C1)}</div>` : ''}
+      ${conf.length ? `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Relatório do Conselho: situação das igrejas</h2><span class="muted small">${anoCon.ano} · % dos relatórios que responderam "Sim"</span></div><div id="confBars">${hbarras(conf, (v) => pct(v), C1)}</div>${matriz}</div>` : ''}
       <div class="card" style="margin-top:16px"><div class="card-head"><h2>Igrejas em ${anoRef || '–'}</h2><button class="btn sm ghost no-print" id="bCsv">Baixar planilha (CSV)</button></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Igreja</th><th class="num">Comungantes</th><th class="num">Variação</th><th class="num">Receitas</th><th class="num">Despesas</th><th class="num">Dízimo SC</th><th class="num">Alunos ED</th><th class="num">Problemas</th></tr></thead><tbody>
+        <div class="tbl-wrap"><table class="tab-fin"><thead><tr><th>Igreja</th><th class="num">Receitas</th><th class="num">Evolução</th><th class="num">Despesas</th><th class="num">Resultado</th><th class="num">Dízimo SC</th><th class="num">Verba presbiterial</th></tr></thead><tbody>
         ${porIgreja.map(p => `<tr class="${p.e ? 'click' : ''}" ${p.e ? `data-go="relatorio/${esc(p.e.id)}"` : ''}><td>${esc(p.i.nome)}${p.i.tipo && p.i.tipo !== 'Igreja' ? ` <span class="tag gray">${esc(p.i.tipo)}</span>` : ''}</td>
-          <td class="num">${p.com == null ? '–' : num(p.com)}</td>
-          <td class="num">${p.com != null && p.com0 != null ? `<span class="${p.com >= p.com0 ? 'up' : 'down'}">${p.com >= p.com0 ? '+' : ''}${num(p.com - p.com0)}</span>` : '–'}</td>
-          <td class="num">${p.rec == null ? '–' : money(p.rec)}</td><td class="num">${p.desp == null ? '–' : money(p.desp)}</td>
+          <td class="num">${p.rec == null ? '–' : money(p.rec)}</td>
+          <td class="num">${p.rec != null && p.rec0 ? `<span class="${p.rec >= p.rec0 ? 'up' : 'down'}">${p.rec >= p.rec0 ? '+' : '−'}${pct(Math.abs(p.rec - p.rec0) / p.rec0)}</span>` : '–'}</td>
+          <td class="num">${p.desp == null ? '–' : money(p.desp)}</td>
+          <td class="num">${p.rec == null ? '–' : `<span class="${p.rec - p.desp >= 0 ? '' : 'down'}">${money(p.rec - p.desp)}</span>`}</td>
           <td class="num">${p.e ? (p.sc ? money(p.sc) + ' <span class="muted small">(' + pct(p.diz ? p.sc / p.diz : 0) + ')</span>' : '<span class="down">não repassou</span>') : '–'}</td>
-          <td class="num">${p.alunos == null ? '–' : num(p.alunos)}</td>
-          <td class="num">${p.pend ? `<span class="down">${p.pend}</span>` : (p.e ? '0' : '–')}</td></tr>`).join('')}
+          <td class="num">${p.e ? (p.verba ? money(p.verba) : '<span class="down">não repassou</span>') : '–'}</td></tr>`).join('')}
         </tbody></table></div>
-        <p class="small muted">Linhas sem dados: a igreja não enviou o formulário de estatística de ${anoRef || ''} (congregações enviam só o relatório do Conselho).</p>
+        <p class="small muted">Só informações financeiras, do formulário de estatística de ${anoRef || ''}. Evolução: receita comparada ao ano anterior. Linhas sem dados: a igreja não enviou o formulário (congregações enviam só o relatório do Conselho).</p>
       </div>`;
     shell('painel', html);
     const sel = $('#fIg'); if (sel) sel.onchange = () => { S.filtroIgreja = sel.value; render(); };
     $$('[data-go]').forEach(tr => tr.onclick = () => ir(tr.getAttribute('data-go')));
     ligarTips($('#main'));
+    // situação das igrejas: clicar num indicador mostra quais igrejas atendem e quais não
+    $$('#confBars .bar-row').forEach((row, i) => { row.classList.add('click'); row.onclick = () => {
+      const [k, l] = itensCon[i];
+      const grupo = f => anoCon.cons.filter(f).map(d => (igreja(d.__igreja) || {}).nome || '').sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      const sim = grupo(d => d[k] === 'sim'), nao = grupo(d => d[k] === 'nao' || d[k] === 'não'), sem = grupo(d => d[k] !== 'sim' && d[k] !== 'nao' && d[k] !== 'não');
+      const lista = (t, xs, cls) => `<div class="lbl" style="margin-top:10px">${t} <span class="muted">(${xs.length})</span></div>${xs.length ? `<ul class="${cls}" style="margin:4px 0 0;padding-left:18px">${xs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="muted small" style="margin:4px 0 0">Nenhuma.</p>'}`;
+      const m = modal(l + ' · ' + anoCon.ano, lista('Sim', sim, '') + lista('Não', nao, 'down') + lista('Sem resposta', sem, 'muted'), '<button class="btn" data-x>Fechar</button>');
+      $('[data-x]', m.el).onclick = m.fechar;
+    }; });
     $('#bCsv').onclick = () => {
-      const linhas = [['Igreja', 'Comungantes', 'Comungantes ano anterior', 'Receitas', 'Despesas', 'Dízimos', 'Dízimo SC', 'Alunos ED', 'Profissões de fé']]
-        .concat(porIgreja.map(p => [p.i.nome, p.com, p.com0, p.rec, p.desp, p.diz, p.sc, p.alunos, p.prof]));
+      const linhas = [['Igreja', 'Receitas', 'Receitas ano anterior', 'Despesas', 'Resultado', 'Dízimos', 'Dízimo SC', 'Verba presbiterial']]
+        .concat(porIgreja.map(p => [p.i.nome, p.rec, p.rec0, p.desp, p.rec == null ? null : p.rec - p.desp, p.diz, p.sc, p.verba]));
       baixar('igrejas-' + anoRef + '.csv', '﻿' + linhas.map(l => l.map(v => v == null ? '' : typeof v === 'number' ? String(v).replace('.', ',') : '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'), 'text/csv');
     };
   }
