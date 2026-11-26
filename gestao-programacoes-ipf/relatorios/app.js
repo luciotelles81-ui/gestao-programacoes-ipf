@@ -531,12 +531,13 @@
       ${anoCon.cons.slice().sort((a, b) => sigla(a.__igreja).localeCompare(sigla(b.__igreja), 'pt-BR')).map(d => `<tr><td>${esc((igreja(d.__igreja) || {}).nome || '')}</td>${itensCon.map(([k]) => `<td class="c">${marca(d[k])}</td>`).join('')}</tr>`).join('')}
       </tbody></table></div><p class="small muted" style="margin:6px 0 0">✓ sim · ✗ não · – sem resposta no Relatório do Conselho de ${anoCon.ano}.</p></details>` : '';
 
-    const html = head('Painel', esc(unica ? igNome(unica) : ORG.nome + ' · ' + igs.length + (ORG.unidades === 'igrejas' ? ' igrejas e congregações' : ' ' + ORG.unidades)),
-      unica ? '' : `<select id="fIg" aria-label="Filtrar igreja" style="min-width:240px"><option value="">Todas as igrejas</option>${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>`) + `
+    const html = head('Painel', esc(unica || igId ? igNome(unica || igId) : ORG.nome + ' · ' + igs.length + (ORG.unidades === 'igrejas' ? ' igrejas e congregações' : ' ' + ORG.unidades)),
+      unica ? '' : `<select id="fIg" aria-label="Filtrar igreja" style="min-width:240px"><option value="">${esc(ORG.sigla || ORG.tipo)} · todas as igrejas</option>${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>`) + `
+      <div class="escopo ${igId ? 'igreja' : ''}"><span>Dados de</span> <b>${esc(igId ? igNome(igId) : (ORG.sigla ? ORG.sigla + ' · ' : '') + ORG.nome + ' (todas as igrejas)')}</b>${igId && !unica ? ' <button class="btn sm ghost" id="bEscopo">Voltar para o ' + esc(ORG.sigla || ORG.tipo) + '</button>' : ''}</div>
       <div class="kpis kpis-painel">
         <div class="kpi"><div class="l">Total de membros${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${num((ult.com || 0) + (ult.nc || 0))}</div>${delta((ult.com || 0) + (ult.nc || 0), pen && (pen.com + pen.nc))}<div class="s">${num(ult.com)} comungantes · ${num(ult.nc)} não comungantes</div></div>
-        <div class="kpi"><div class="l">Receita do ano${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.rec)}</div>${delta(ult.rec, pen && pen.rec)}<div class="s">soma das igrejas</div></div>
-        <div class="kpi"><div class="l">Receita do ${esc(ORG.tipo)}${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.verba)}</div>${delta(ult.verba, pen && pen.verba)}<div class="s">verba presbiterial repassada pelas igrejas</div></div>
+        <div class="kpi"><div class="l">Receita do ano${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.rec)}</div>${delta(ult.rec, pen && pen.rec)}<div class="s">${igId ? 'da igreja selecionada' : 'soma das igrejas'}</div></div>
+        <div class="kpi"><div class="l">${igId ? 'Verba ao ' : 'Receita do '}${esc(ORG.tipo)}${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.verba)}</div>${delta(ult.verba, pen && pen.verba)}<div class="s">${igId ? 'verba presbiterial repassada por esta igreja' : 'verba presbiterial repassada pelas igrejas'}</div></div>
         <div class="kpi"><div class="l">Dízimo ao Supremo Concílio${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.dizSC)}</div>${delta(ult.dizSC, pen && pen.dizSC)}<div class="s">${ult.diz ? pct(ult.dizSC / ult.diz) + ' dos dízimos recebidos' : '&nbsp;'}</div></div>
       </div>
       <div class="grid g2">
@@ -544,7 +545,9 @@
           ${anosEst.length ? barras(anosEst.map(a => String(a.ano)), [{ nome: 'Comungantes', cor: C1, vals: anosEst.map(a => a.com) }, { nome: 'Não comungantes', cor: C2, vals: anosEst.map(a => a.nc) }], (v) => num(v), { label: 'Membros por ano' }) : '<div class="list-empty">Sem relatórios estatísticos.</div>'}
           <p class="small muted">Igrejas com formulário de estatística: ${anosEst.map(a => a.ano + ': ' + a.igrejasEst).join(' · ')}.${anosFora.length ? ' Fora do gráfico por terem poucos relatórios: ' + anosFora.map(a => a.ano + ' (' + a.igrejasEst + ')').join(', ') + '.' : ''}</p>
         </div>
-        ${caixaPresbiterio(C1, C2)}
+        ${igId ? `<div class="card"><div class="card-head"><h2>Receitas e despesas</h2><span class="muted small">${esc(igNome(igId))}</span></div>
+          ${anosEst.length ? barras(anosEst.map(a => String(a.ano)), [{ nome: 'Receitas', cor: C1, vals: anosEst.map(a => a.rec) }, { nome: 'Despesas', cor: C2, vals: anosEst.map(a => a.desp) }], (v, ax) => ax ? moneyK(v) : money(v), { label: 'Receitas e despesas por ano' }) : '<div class="list-empty">Sem dados financeiros desta igreja.</div>'}
+        </div>` : caixaPresbiterio(C1, C2)}
       </div>
       ${anoRef ? `<div class="grid g2" style="margin-top:16px">
         <div class="card"><div class="card-head"><h2>Comungantes por igreja</h2><span class="muted small">${anoRef}</span></div>${hbarras(porIgreja.filter(p => p.com != null).sort((a, b) => b.com - a.com).map(p => ({ nome: p.i.sigla || p.i.nome, v: p.com, extra: p.i.nome + (p.com0 != null ? ' · ' + (anoRef - 1) + ': ' + num(p.com0) : '') })), v => num(v), C1)}</div>
@@ -565,6 +568,7 @@
       </div>`;
     shell('painel', html);
     const sel = $('#fIg'); if (sel) sel.onchange = () => { S.filtroIgreja = sel.value; render(); };
+    if ($('#bEscopo')) $('#bEscopo').onclick = () => { S.filtroIgreja = ''; render(); };
     $$('[data-go]').forEach(tr => tr.onclick = () => ir(tr.getAttribute('data-go')));
     ligarTips($('#main'));
     // situação das igrejas: clicar num indicador mostra quais igrejas atendem e quais não

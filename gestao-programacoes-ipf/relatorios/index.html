@@ -199,6 +199,10 @@
     .caixa-res > div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
     .caixa-res span { font-size: 12px; color: var(--muted); } .caixa-res b { font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
     @media (max-width: 1200px) { .caixa-res { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .escopo { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin: -4px 0 14px; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--brand-soft); border-left: 4px solid var(--brand); }
+    .escopo span { color: var(--muted); font-size: 13px; } .escopo b { font-size: 15px; }
+    .escopo.igreja { background: color-mix(in srgb, #c9902b 16%, transparent); border-left-color: #c9902b; }
+    .escopo .btn { margin-left: auto; }
     .conf-det { margin-top: 12px; } .conf-det summary { cursor: pointer; color: var(--brand); font-weight: 600; }
     .conf-tab th.c, .conf-tab td.c { text-align: center; font-size: 12px; } .conf-tab th.c { min-width: 82px; white-space: normal; line-height: 1.25; }
     .conf-tab td.c span { font-size: 15px; font-weight: 700; }
