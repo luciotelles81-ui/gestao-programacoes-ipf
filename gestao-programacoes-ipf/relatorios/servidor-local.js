@@ -203,6 +203,7 @@
     return r;
   }
   async function conteudoHash(r) { return sha256(stable({ dados: r.dados || {}, final: r.analise.final || null })); }
+  async function hashEnvio(r) { return sha256(stable({ dados: r.dados || {} })); }
 
   /* ---------------- ações ---------------- */
   const A = {};
@@ -397,12 +398,20 @@
     const t = now();
     let acao = '';
     switch (op) {
-      case 'enviar':
+      case 'enviar': {
         if (!podeEditarDados(u, r)) fail('Este relatório não pode ser enviado por você agora.', 'FORBIDDEN');
+        // assinatura eletrônica de quem envia: senha + assinatura desenhada, ligada ao conteúdo por hash
+        if (!/^data:image\/png;base64,/.test(p.desenho || '')) fail('Faça a sua assinatura no quadro para enviar.');
+        if (u.senhaHash !== await sha256(SALT + (p.senha || ''))) fail('Senha incorreta. O relatório não foi enviado.');
+        const ch = await hashEnvio(r);
+        const hash = await sha256([r.id, u.id, u.nome, p.cargo || '', t, ch].join('|'));
+        const codigo = hash.slice(0, 12).toUpperCase().replace(/(.{4})(?=.)/g, '$1-');
+        r.assinaturaEnvio = { nome: u.nome, userId: u.id, cargo: String(p.cargo || '').slice(0, 80), em: t, tipo: 'Eletrônica (login, senha e assinatura desenhada)', desenho: p.desenho, conteudoHash: ch, hash, codigo };
         a.final = null; a.assinaturas = [];
         r.status = a.comissaoId ? 'Em análise' : 'Enviado';
-        r.enviadoEm = t; acao = 'Enviado para análise';
+        r.enviadoEm = t; acao = 'Assinado por ' + u.nome + (p.cargo ? ' (' + p.cargo + ')' : '') + ' e enviado para análise · ' + codigo;
         break;
+      }
       case 'atribuir': {
         if (!podeAnalisar(u, r)) fail('Você não pode analisar este relatório.', 'FORBIDDEN');
         const c = db.comissoes.find(x => x.id === p.comissaoId);
@@ -671,7 +680,7 @@
     cfg: ['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'secretarios', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria'],
     reuniao: ['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta', 'legislatura', 'secretarias', 'tutores', 'representantes', 'campo'],
     delegado: ['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId'],
-    documento: ['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito', 'destino', 'dataProtocolo', 'despachadoEm'],
+    documento: ['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito', 'destino', 'dataProtocolo', 'despachadoEm', 'responsavelId'],
     parecer: ['reuniaoId', 'comissaoId', 'modelo', 'data', 'destino', 'cidade', 'docNumero', 'titulo', 'assunto', 'docsAnalisados', 'origens', 'documentoIds', 'campos', 'assinaturas'],
     estatistica: ['ano', 'igreja', 'valores', 'fonte'],
     financa: ['ano', 'valores', 'fonte'],
@@ -799,6 +808,11 @@
   A.verificar = async ({ codigo }) => {
     const c = String(codigo || '').trim().toUpperCase();
     for (const r of db.relatorios) {
+      const e = r.assinaturaEnvio;
+      if (e && e.codigo === c) {
+        const ig = db.igrejas.find(i => i.id === r.igrejaId);
+        return { encontrado: true, integro: (await hashEnvio(r)) === e.conteudoHash, assinatura: { nome: e.nome, funcao: (e.cargo || '') + ' · envio do relatório', em: e.em, tipo: e.tipo, codigo: e.codigo }, relatorio: { titulo: r.titulo, ano: r.ano, status: r.status, igreja: ig ? ig.nome : '', comissao: '' } };
+      }
       const s = (r.analise.assinaturas || []).find(x => x.codigo === c);
       if (s) {
         const ig = db.igrejas.find(i => i.id === r.igrejaId);

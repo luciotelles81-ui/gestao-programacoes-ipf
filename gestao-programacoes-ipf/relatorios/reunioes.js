@@ -503,6 +503,7 @@
     const anteriores = pareceres().filter(p => p.comissaoId === c.id && p.reuniaoId !== r.id);
     const pode = podeParecer(c.id, r.id);
     const eu = ds.find(d => d.userId === usuario().id);
+    const podeDistribuir = isAdmin() || (eu && eu.funcao === 'Relator');
     let html = head(esc(c.nome), `${esc(c.grupo || '')} · ${subReuniao(r)}`,
       seletorReuniao() + (pode ? `<button class="btn primary" id="bNovo">+ Novo ${c.modelo === 'secretaria' ? 'relatório' : 'parecer'}</button>` : '')) + etapas('pareceres', r);
     html += `<div class="card com-amb"><div class="grid g2">
@@ -514,8 +515,10 @@
         ${isAdmin() ? `<a class="btn sm" href="#/delegados?c=${encodeURIComponent(c.id)}">Definir membros</a>` : ''}</div>
     </div></div>`;
     html += `<div class="card"><div class="section-title" style="margin-top:0">Documentos para análise <span class="muted small">(${docs.length})</span></div>
-      ${docs.length ? `<div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Documento</th><th>Origem</th><th>PDF</th><th></th></tr></thead><tbody>
+      <p class="small muted" style="margin-top:0">O relator da comissão (ou a Mesa) define o membro responsável pela análise de cada documento.</p>
+      ${docs.length ? `<div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Documento</th><th>Origem</th><th>Responsável pela análise</th><th>PDF</th><th></th></tr></thead><tbody>
       ${docs.map(d => `<tr><td class="num">${esc(d.numero || '')}</td><td>${esc(d.titulo)}${d.resumo ? `<div class="small muted">${esc(d.resumo).slice(0, 220)}</div>` : ''}</td><td class="small">${esc(d.origem || '')}</td>
+        <td class="small">${podeDistribuir ? `<select data-resp="${esc(d.id)}" aria-label="Responsável pelo documento ${esc(d.numero || '')}"><option value="">(a definir)</option>${ds.map(x => `<option value="${esc(x.id)}" ${d.responsavelId === x.id ? 'selected' : ''}>${esc(nomeDel(x))}${x.funcao === 'Relator' ? ' (relator)' : ''}</option>`).join('')}</select>` : esc((ds.find(x => x.id === d.responsavelId) && nomeDel(ds.find(x => x.id === d.responsavelId))) || '—')}</td>
         <td>${d.arquivo ? `<button class="btn sm" data-pdf="${esc(d.id)}">Abrir</button>` : '<span class="small muted">sem PDF</span>'}</td>
         <td>${pode ? `<button class="btn sm primary" data-par="${esc(d.id)}">Fazer parecer</button>` : ''}</td></tr>`).join('')}
       </tbody></table></div>` : '<p class="muted" style="margin:0">Nenhum documento encaminhado a esta comissão nesta reunião.</p>'}</div>`;
@@ -525,6 +528,10 @@
     ligarSeletor();
     if ($('#bNovo')) $('#bNovo').onclick = () => abrirEditor(null, c.id, null);
     $$('[data-par]').forEach(b => b.onclick = () => abrirEditor(null, c.id, b.getAttribute('data-par')));
+    $$('[data-resp]').forEach(sel => sel.onchange = async () => {
+      const d = itens('documento').find(x => x.id === sel.getAttribute('data-resp'));
+      if (d && await salvarItem('documento', Object.assign({}, d, { responsavelId: sel.value }), sel.value ? 'Responsável definido.' : 'Responsável removido.')) telaComissao(id);
+    });
     $$('[data-pdf]').forEach(b => b.onclick = () => abrirPdf(b.getAttribute('data-pdf')));
     $$('[data-vp]').forEach(tr => tr.onclick = () => A().ir('parecer/' + tr.getAttribute('data-vp')));
   }

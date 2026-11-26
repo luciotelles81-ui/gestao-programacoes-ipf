@@ -179,7 +179,7 @@ language sql immutable as $$
     when 'cfg' then array['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'secretarios', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria']
     when 'reuniao' then array['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta', 'legislatura', 'secretarias', 'tutores', 'representantes', 'campo']
     when 'delegado' then array['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId']
-    when 'documento' then array['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito', 'destino', 'dataProtocolo', 'despachadoEm']
+    when 'documento' then array['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito', 'destino', 'dataProtocolo', 'despachadoEm', 'responsavelId']
     when 'parecer' then array['reuniaoId', 'comissaoId', 'modelo', 'data', 'destino', 'cidade', 'docNumero', 'titulo', 'assunto', 'docsAnalisados', 'origens', 'documentoIds', 'campos', 'assinaturas']
     when 'estatistica' then array['ano', 'igreja', 'valores', 'fonte']
     when 'financa' then array['ano', 'valores', 'fonte']
@@ -321,6 +321,15 @@ begin
   if act = 'verificar' then
     v_cod := upper(trim(coalesce(req->>'codigo', '')));
     if v_cod = '' then return '{"encontrado":false}'; end if;
+    -- assinatura de envio da igreja
+    select rl.doc into r from ipb_relatorios rl where rl.doc->'assinaturaEnvio'->>'codigo' = v_cod limit 1;
+    if r is not null then
+      a := r->'assinaturaEnvio';
+      return jsonb_build_object('encontrado', true, 'integro', ipb_sha(jsonb_build_object('dados', coalesce(r->'dados', '{}'::jsonb))::text) = a->>'conteudoHash',
+        'assinatura', jsonb_build_object('nome', a->'nome', 'funcao', coalesce(a->>'cargo', '') || ' · envio do relatório', 'em', a->'em', 'tipo', a->'tipo', 'codigo', a->'codigo'),
+        'relatorio', jsonb_build_object('titulo', r->'titulo', 'ano', r->'ano', 'status', r->'status',
+          'igreja', (select doc->>'nome' from ipb_igrejas where id = r->>'igrejaId'), 'comissao', ''));
+    end if;
     select rl.doc, s.sig into r, a from ipb_relatorios rl, jsonb_array_elements(rl.doc->'analise'->'assinaturas') s(sig)
      where s.sig->>'codigo' = v_cod limit 1;
     if r is null then return '{"encontrado":false}'; end if;
@@ -506,9 +515,17 @@ begin
       perform ipb_fail('Você não pode analisar este relatório.', 'FORBIDDEN'); end if;
     if v_op = 'enviar' then
       if not (u.role in ('admin', 'editor') and r->>'status' in ('Rascunho', 'Devolvido')) then perform ipb_fail('Este relatório não pode ser enviado por você agora.', 'FORBIDDEN'); end if;
+      -- assinatura eletrônica de quem envia: senha + assinatura desenhada, ligada ao conteúdo por hash
+      if coalesce(req->>'desenho', '') not like 'data:image/png;base64,%' then perform ipb_fail('Faça a sua assinatura no quadro para enviar.'); end if;
+      if u.senha_hash <> crypt(coalesce(req->>'senha', ''), u.senha_hash) then perform ipb_fail('Senha incorreta. O relatório não foi enviado.'); end if;
+      v_ch := ipb_sha(jsonb_build_object('dados', coalesce(r->'dados', '{}'::jsonb))::text);
+      v_hash := ipb_sha(concat_ws('|', r->>'id', u.id, u.nome, coalesce(req->>'cargo', ''), t, v_ch));
+      v_cod := upper(substr(v_hash, 1, 4) || '-' || substr(v_hash, 5, 4) || '-' || substr(v_hash, 9, 4));
       a := a || '{"final":null,"assinaturas":[]}';
-      r := r || jsonb_build_object('status', case when a->>'comissaoId' is not null then 'Em análise' else 'Enviado' end, 'enviadoEm', t);
-      v_acao := 'Enviado para análise';
+      r := r || jsonb_build_object('status', case when a->>'comissaoId' is not null then 'Em análise' else 'Enviado' end, 'enviadoEm', t,
+        'assinaturaEnvio', jsonb_build_object('nome', u.nome, 'userId', u.id, 'cargo', left(coalesce(req->>'cargo', ''), 80), 'em', t,
+          'tipo', 'Eletrônica (login, senha e assinatura desenhada)', 'desenho', req->>'desenho', 'conteudoHash', v_ch, 'hash', v_hash, 'codigo', v_cod));
+      v_acao := 'Assinado por ' || u.nome || ' e enviado para análise · ' || v_cod;
     elsif v_op = 'atribuir' then
       select doc into m from ipb_comissoes where id = req->>'comissaoId';
       if m is null then perform ipb_fail('Escolha a comissão.'); end if;

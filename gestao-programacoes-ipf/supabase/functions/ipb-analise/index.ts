@@ -38,6 +38,7 @@ Estrutura do texto (texto corrido com títulos numerados simples, sem markdown c
 2. Síntese do relatório: os números e fatos principais, comparando com o ano anterior quando houver.
 3. Pontos que precisam de correção ou esclarecimento (inconsistências de preenchimento, totais que não conferem, campos em branco).
 4. Pontos de atenção e recomendações à igreja (por exemplo: repasse do dízimo ao Supremo Concílio, róis, exame de contas, patrimônio, previdência do pastor), sempre ligados ao que o relatório mostra.
+   Regras financeiras do presbitério: a verba presbiterial devida é 3% da receita de dízimos e ofertas; mostre o valor devido, o repassado e a diferença. A sobra de caixa de um ano para o outro (saldo para o ano seguinte) é movimento normal e varia a cada ano: não trate a variação como irregularidade; descreva a evolução com os valores dos dois anos.
 5. Recomendação sugerida: Aprovar, Aprovar com ressalvas ou Devolver para correção, com uma frase de justificativa.
 Tom: respeitoso, objetivo e pastoral, como um parecer de concílio. Até umas 600 palavras.`;
 

@@ -163,6 +163,17 @@
     input.invalid, select.invalid, textarea.invalid { border-color: var(--danger); background: var(--danger-soft); }
     .calc { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--brand-soft); color: var(--brand); font-weight: 700; font-variant-numeric: tabular-nums; }
     .grid { display: grid; gap: 16px; }
+    /* área da igreja */
+    .ig-forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .ig-form { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--surface-2); }
+    .ig-form-t { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; } .ig-form-t b { font-size: 15.5px; }
+    .ig-passos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; counter-reset: p; }
+    .ig-passos li { counter-increment: p; font-size: 12px; color: var(--muted); border-top: 4px solid var(--border); padding-top: 5px; }
+    .ig-passos li::before { content: counter(p) ". "; font-weight: 700; }
+    .ig-passos li.ok { border-color: var(--brand); color: var(--text); } .ig-passos li.at { border-color: #c9902b; color: var(--text); font-weight: 600; }
+    tr.ig-ano td { background: var(--surface-2); font-weight: 700; font-family: var(--fonte-ipb); }
+    .assin-envio-c { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .assin-envio-c img { width: 220px; max-width: 100%; height: auto; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
     /* espaçamento único entre os blocos de cada tela */
     .main > .card, .main > .kpis, .main > .grid, .main > .escopo, .main > .alert, .main > .filters, .main > .fx-li { margin-top: 0; margin-bottom: 16px; }
     .main > :last-child { margin-bottom: 0; }
