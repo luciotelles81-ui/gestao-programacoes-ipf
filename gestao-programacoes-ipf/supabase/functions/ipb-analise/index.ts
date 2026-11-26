@@ -76,6 +76,47 @@ const SCHEMA_ATA = {
   additionalProperties: false,
 };
 
+const SISTEMA_PARECER = `Você ajuda o relator de uma comissão de um Presbitério da Igreja Presbiteriana do Brasil (IPB) a preparar a PRÉVIA de um parecer.
+Você recebe o documento em análise (PDF, quando houver), os dados da comissão e do documento, uma lista de regras a conferir e um ÍNDICE do Manual Presbiteriano (edição 2025) com a página em que começa cada artigo de cada documento (CI/IPB = Constituição, CD/IPB = Código de Disciplina, PL/IPB = Princípios de Liturgia, Regulamento de Atas e os modelos de estatuto e regimento).
+Escreva em português do Brasil. Para cada ponto relevante, crie um item:
+- tipo: "nao_conforme" (há descumprimento visível), "observacao" (falha leve ou dado a esclarecer), "recomendacao", "determinacao" (o concílio manda corrigir) ou "conforme" (só para pontos importantes cumpridos).
+- texto: a crítica ou orientação, em uma ou duas frases, no tom de parecer de concílio.
+- evidencia: onde está no documento analisado (página do PDF, número da ata, data, trecho curto). Não invente: se não viu, diga que não foi possível verificar.
+- fundamentos: a base da crítica, com documento (use exatamente as siglas do índice), artigo, parágrafo, inciso e alínea quando houver. Para atas, cite sempre o artigo, o parágrafo e o inciso do Regulamento de Atas ou da CI/IPB. Use só artigos que você conhece com segurança e que existem no índice; deixe vazio o que não souber.
+Nas atas, confira as regras da lista uma a uma; não marque "conforme" sem evidência. Não invente números, nomes ou fatos.
+O "resumo" é uma proposta de conclusão em 1 a 3 parágrafos (por exemplo: aprovar sem ressalvas, aprovar com observações ou devolver para correção), para o relator ajustar.`;
+
+const SCHEMA_PARECER = {
+  type: "object",
+  properties: {
+    resumo: { type: "string" },
+    itens: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          tipo: { type: "string", enum: ["nao_conforme", "observacao", "recomendacao", "determinacao", "conforme"] },
+          texto: { type: "string" },
+          evidencia: { type: "string" },
+          fundamentos: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { documento: { type: "string" }, artigo: { type: "string" }, paragrafo: { type: "string" }, inciso: { type: "string" }, alinea: { type: "string" } },
+              required: ["documento", "artigo", "paragrafo", "inciso", "alinea"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["tipo", "texto", "evidencia", "fundamentos"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["resumo", "itens"],
+  additionalProperties: false,
+};
+
 function textoDe(msg: { content: Array<{ type: string; text?: string }> }) {
   return msg.content.filter((b) => b.type === "text").map((b) => b.text || "").join("").trim();
 }
@@ -134,6 +175,35 @@ Deno.serve(async (request) => {
       } as never);
       const msg = await stream.finalMessage();
       if (msg.stop_reason === "refusal") return json({ erro: "A IA não conseguiu analisar estas imagens. Faça a conferência manual." }, 422);
+      let resultado;
+      try { resultado = JSON.parse(textoDe(msg as never)); } catch { return json({ erro: "A resposta da IA veio incompleta. Tente de novo." }, 502); }
+      return json({ resultado, modelo: msg.model });
+    }
+    if (body.tipo === "parecer") {
+      const content: unknown[] = [];
+      if (typeof body.pdf === "string" && body.pdf.length > 100) {
+        content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: body.pdf }, title: String(body.pdfNome || "Documento em análise") });
+      }
+      content.push({
+        type: "text",
+        text: "Comissão: " + JSON.stringify(body.comissao ?? {}) + "\nReunião: " + JSON.stringify(body.reuniao ?? {}) +
+          "\nDocumentos (dados cadastrados): " + JSON.stringify(body.documentos ?? []) +
+          "\nParecer em redação: " + JSON.stringify(body.parecer ?? {}) +
+          (body.pdf ? "" : "\n(O PDF do documento não foi enviado: use só os dados acima e diga o que não pôde ser verificado.)") +
+          "\n\nRegras a conferir:\n" + (body.regras ?? []).map((g: { id: string; artigo: string; texto: string }) => `- ${g.id} [${g.artigo}]: ${g.texto}`).join("\n") +
+          "\n\nÍndice do Manual Presbiteriano (artigo→página):\n" + String(body.indice || ""),
+      });
+      const stream = client.beta.messages.stream({
+        model: MODEL,
+        max_tokens: 16000,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA_PARECER } },
+        system: SISTEMA_PARECER,
+        messages: [{ role: "user", content }],
+      } as never);
+      const msg = await stream.finalMessage();
+      if (msg.stop_reason === "refusal") return json({ erro: "A IA não conseguiu analisar este documento. Escreva o parecer manualmente." }, 422);
       let resultado;
       try { resultado = JSON.parse(textoDe(msg as never)); } catch { return json({ erro: "A resposta da IA veio incompleta. Tente de novo." }, 502); }
       return json({ resultado, modelo: msg.model });

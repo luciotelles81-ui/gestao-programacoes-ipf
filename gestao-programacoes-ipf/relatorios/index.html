@@ -374,12 +374,26 @@
     .fx-n small { display: inline-block; min-width: 18px; color: var(--muted); font-weight: 400; }
     .fx-seta { flex: 0 0 auto; align-self: flex-start; margin-top: 18px; font-size: 26px; line-height: 1; color: var(--border-strong); }
     .fx-dica { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); width: 260px; z-index: 30; background: var(--text); color: var(--bg); font-size: 12.5px; line-height: 1.5; text-align: left; padding: 10px 12px; border-radius: 10px; box-shadow: var(--shadow-lg); opacity: 0; visibility: hidden; transition: opacity .12s; pointer-events: none; }
+    .etapas { gap: 0; }
+    .fx-li { flex: 1 1 0; min-width: 0; display: flex; }
+    a.fx-passo { flex: 1 1 auto; color: inherit; text-decoration: none; cursor: pointer; }
+    a.fx-passo:hover { text-decoration: none; }
+    .etapas .fx-ic { width: 44px; height: 44px; }
+    .etapas .fx-seta { margin-top: 12px; }
+    .fx-st { font-size: 11.5px; line-height: 1.3; color: var(--muted); }
+    .fx-passo.ativa { background: var(--brand-soft); }
+    .fx-passo.ativa .fx-ic { background: var(--brand); color: #fff; }
+    .fx-passo.ativa .fx-n { color: var(--brand); }
+    .fx-passo .fx-dica { transition-delay: .35s; }
+    tr.repetido td { background: color-mix(in srgb, #d9534f 12%, transparent); }
+    tr.minha td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
     .fx-passo.ini .fx-dica { left: 0; transform: none; }
     .fx-passo.fim .fx-dica { left: auto; right: 0; transform: none; }
     .fx-passo:hover .fx-dica, .fx-passo:focus .fx-dica { opacity: 1; visibility: visible; }
     @media (max-width: 640px) {
       .fluxo { flex-wrap: wrap; row-gap: 10px; }
-      .fx-passo { flex: 1 1 30%; }
+      .fx-passo, .fx-li { flex: 1 1 30%; }
+      .fx-st { display: none; }
       .fx-seta { display: none; }
       .fx-dica { width: 220px; }
     }
@@ -688,6 +702,7 @@
   <script src="config.js"></script>
   <script src="modelos.js"></script>
   <script src="regras-atas.js"></script>
+  <script src="base-legal.js"></script>
   <script src="servidor-local.js"></script>
   <script src="folha.js"></script>
   <script src="reunioes.js"></script>

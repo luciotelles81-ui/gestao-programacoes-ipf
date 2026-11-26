@@ -130,8 +130,8 @@
     return `${dataExtenso(r.dataInicio)} a ${dataExtenso(r.dataFim)}`;
   }
   function proximoNumeroDoc(reuId) {
-    const ns = [...documentos(reuId).map(d => numero(d.numero)), ...pareceres(reuId).map(p => numero(p.docNumero))].filter(n => n > 0);
-    return ns.length ? Math.max(...ns) + 1 : 1;
+    const r = reuniao(reuId);
+    return r ? numeracao(r).proximo : 1;
   }
   async function salvarItem(tipo, item, okMsg) {
     const r = await A().acao(() => A().api({ action: 'reuniao', op: 'salvar', tipo, item }), okMsg);
@@ -159,35 +159,40 @@
 
   /* ======================= Reunião (painel) ======================= */
   function telaReuniao() {
-    const { esc, shell, head, $ } = A();
+    const { esc, shell, head } = A();
     const r = reuniao();
     const rid = r && r.id;
-    const cs = comissoes();
     const docs = rid ? documentos(rid) : [];
-    const pars = rid ? pareceres(rid) : [];
-    const dels = rid ? itens('delegado').filter(d => d.reuniaoId === rid) : [];
-    const prontos = pars.filter(p => p.status !== 'rascunho').length;
-    const decididos = pars.filter(p => PLENARIO.includes(p.status)).length;
     const minhas = rid ? minhasComissoes(rid) : [];
-    let html = head('Reunião do concílio', subReuniao(r), seletorReuniao());
-    if (r && r.tipoReuniao === 'E') {
+    const extra = r && r.tipoReuniao === 'E';
+    let html = head(r ? (extra ? 'Reunião extraordinária' : 'Reunião Ordinária (RO)') : 'Reunião do concílio', subReuniao(r), seletorReuniao());
+    if (r) html += etapas('', r);
+    if (extra) {
       // extraordinária: trata só do assunto da convocação (CI/IPB art. 74), sem comissões
-      html += `<div class="kpis">
-        <div class="kpi"><div class="l">Tipo</div><div class="v" style="font-size:1.2rem">Extraordinária</div><div class="d muted">${r.dataConvocacao ? 'convocada em ' + esc(dataBr(r.dataConvocacao)) : 'sem comissões'}</div></div>
-        <a class="kpi" href="#/acervo/${esc(String(r.ano || ''))}/reuniao/${encodeURIComponent(rid)}"><div class="l">Documentos</div><div class="v">${docs.length}</div><div class="d muted">${docs.filter(d => d.arquivo).length} com PDF</div></a>
-      </div>`;
-      html += `<div class="card"><div class="section-title" style="margin-top:0">Assunto da convocação</div><p style="margin:0">${esc(r.materia || 'Não informado.')}</p>${r.convocadaPor ? `<p class="small muted" style="margin:6px 0 0">Convocada por ${esc(r.convocadaPor)}</p>` : ''}</div>`;
-      html += `<div class="card"><div class="section-title" style="margin-top:0">Documentos da reunião</div>${docs.length ? `<ul class="lista-docs" style="margin:0;padding-left:18px">${docs.map(d => `<li><a href="#/acervo/${esc(String(r.ano || ''))}/reuniao/${encodeURIComponent(rid)}">${esc([d.tipoDoc, d.titulo].filter(Boolean).join(' · ') || d.arquivoNome || 'Documento')}</a></li>`).join('')}</ul>` : '<p class="muted" style="margin:0">Nenhum documento ainda.</p>'}
-        <div class="row-wrap" style="margin-top:12px"><button class="btn" data-rel="documentos">Lista de documentos</button><a class="btn" href="#/ata">Ata da reunião</a></div></div>`;
+      html += `<div class="card"><div class="section-title" style="margin-top:0">Assunto da convocação</div><p style="margin:0">${esc(r.materia || 'Não informado.')}</p>${r.convocadaPor ? `<p class="small muted" style="margin:6px 0 0">Convocada por ${esc(r.convocadaPor)}${r.dataConvocacao ? ' em ' + esc(dataBr(r.dataConvocacao)) : ''}</p>` : ''}</div>`;
+      html += `<div class="card"><div class="section-title" style="margin-top:0">Documentos da reunião</div>${docs.length ? `<ul class="lista-docs" style="margin:0;padding-left:18px">${docs.map(d => `<li><a href="#/acervo/${esc(String(r.ano || ''))}/reuniao/${encodeURIComponent(rid)}">${esc([d.numero ? 'Doc ' + d.numero : '', d.tipoDoc, d.titulo].filter(Boolean).join(' · ') || d.arquivoNome || 'Documento')}</a></li>`).join('')}</ul>` : '<p class="muted" style="margin:0">Nenhum documento ainda.</p>'}
+        <div class="row-wrap" style="margin-top:12px"><button class="btn" data-rel="documentos">Imprimir a lista de documentos</button></div></div>`;
     } else if (r) {
-      html += `<div class="kpis">
-        <a class="kpi" href="#/comissoes"><div class="l">Comissões</div><div class="v">${cs.length}</div><div class="d muted">${cs.filter(c => delegadosDe(c.id, rid).length).length} com membros</div></a>
-        <a class="kpi" href="#/delegados"><div class="l">Membros nas comissões</div><div class="v">${dels.length}</div><div class="d muted">${dels.filter(d => d.funcao === 'Relator').length} relatores</div></a>
-        <a class="kpi" href="#/documentos"><div class="l">Documentos</div><div class="v">${docs.length}</div><div class="d muted">${docs.filter(d => d.arquivo).length} com PDF</div></a>
-        <div class="kpi"><div class="l">Pareceres</div><div class="v">${pars.length}</div><div class="d muted">${prontos} prontos · ${decididos} decididos</div></div>
-      </div>`;
+      // o que falta, na ordem das etapas
+      const ps = passosReuniao(r);
+      const pars = pareceres(rid);
+      const falta = [];
+      if (!(r.mesa || []).some(m => m.nome)) falta.push(['mesa', 'Informar a Mesa eleita para o ano.']);
+      const semNum = docs.filter(d => !d.numero && pastaAuto(d) === 'relatorio').length;
+      if (semNum) falta.push(['documentos', `${semNum} documento(s) sem número.`]);
+      const rep = numeracao(r).repetidos;
+      if (rep.length) falta.push(['numeracao', `Número(s) de documento repetido(s): ${rep.join(', ')}.`]);
+      const semCom = docs.filter(d => d.numero && !d.comissaoId && pastaAuto(d) === 'relatorio').length;
+      if (semCom) falta.push(['documentos', `${semCom} documento(s) numerado(s) sem comissão.`]);
+      const semRel = comissoes().filter(c => !delegadosDe(c.id, rid).some(d => d.funcao === 'Relator')).length;
+      if (semRel) falta.push(['comissoes', `${semRel} comissão(ões) sem relator.`]);
+      const rasc = pars.filter(p => p.status === 'rascunho').length;
+      if (rasc) falta.push(['pareceres', `${rasc} parecer(es) em rascunho.`]);
+      const pauta = pars.filter(p => p.status === 'concluido').length;
+      if (pauta) falta.push(['plenario', `${pauta} parecer(es) aguardando o plenário.`]);
+      const lnk = k => k === 'numeracao' ? '#/numeracao' : (ps.find(p => p[0] === k) || [])[3] || '#/reuniao';
+      html += `<div class="card"><div class="section-title" style="margin-top:0">O que falta</div>${falta.length ? `<ul style="margin:0;padding-left:18px">${falta.map(([k, t]) => `<li><a href="${lnk(k)}">${esc(t)}</a></li>`).join('')}</ul>` : '<p class="muted" style="margin:0">Nada pendente nas etapas da reunião.</p>'}</div>`;
       if (minhas.length) html += `<div class="card"><div class="section-title" style="margin-top:0">Minhas comissões nesta reunião</div><div class="com-grid">${minhas.map(id => comissao(id)).filter(Boolean).map(c => cardComissao(c, rid)).join('')}</div></div>`;
-      html += `<div class="card"><div class="section-title" style="margin-top:0">Comissões</div>${cs.length ? `<div class="com-grid">${cs.map(c => cardComissao(c, rid)).join('')}</div>` : semComissoes()}</div>`;
       html += `<div class="card"><div class="section-title" style="margin-top:0">Relatórios da reunião</div>
         <p class="muted small" style="margin-top:0">Cada relatório sai no papel com o cabeçalho da Secretaria Executiva, o código e o período da reunião. Use Imprimir para salvar em PDF, ou baixe para o Word.</p>
         <div class="row-wrap">
@@ -197,13 +202,11 @@
           <button class="btn" data-rel="pareceres">Todos os pareceres concluídos</button>
         </div></div>`;
     }
-    if (!r || r.tipoReuniao !== 'E') html += comoFunciona();
     if (isAdmin()) html += painelConfig();
     shell('reuniao', html);
     ligarSeletor();
     A().$$('[data-rel]').forEach(b => b.onclick = () => relatorioReuniao(b.getAttribute('data-rel')));
     if (isAdmin()) ligarConfig();
-    void $;
   }
   function semComissoes() {
     return `<p class="muted" style="margin:0">Nenhuma comissão do concílio cadastrada. ${isAdmin() ? '<button class="btn sm" id="bPadrao2">Criar as comissões de costume</button>' : ''}</p>`;
@@ -231,29 +234,57 @@
       <span class="small muted">${nd} documento(s) · ${ps.length} parecer(es) ${st ? chip(st) : ''}</span>
     </a>`;
   }
-  /* como a reunião funciona: fluxo de etapas com ícones; a explicação aparece ao passar o mouse (ou tocar) */
+  /* etapas da reunião: a sequência de trabalho da RO, no alto de cada tela dela (a explicação aparece ao passar o mouse ou tocar) */
   const IC = {
     mesa: '<path d="M4 20h16M6 20v-6h12v6"/><circle cx="9" cy="7" r="2.5"/><circle cx="15" cy="7" r="2.5"/><path d="M5 14c0-2 2-3.5 4-3.5s3 1 3 1 1-1 3-1 4 1.5 4 3.5"/>',
     docs: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M9.5 12h6M9.5 15h6M9.5 18h4"/>',
     comissao: '<circle cx="7" cy="8" r="2.3"/><circle cx="17" cy="8" r="2.3"/><circle cx="12" cy="6" r="2.3"/><path d="M3 18c0-3 2-5 4-5M21 18c0-3-2-5-4-5M7.5 19c0-3.2 2-5.5 4.5-5.5s4.5 2.3 4.5 5.5"/>',
     relator: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/><path d="M4 20h16"/>',
     plenario: '<path d="M12 3l8 4H4z"/><path d="M6 9v8M10 9v8M14 9v8M18 9v8"/><path d="M3 20h18"/>',
-    graficos: '<path d="M4 20V4"/><path d="M4 20h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/>'
+    ata: '<path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/><path d="M9 8h5"/>'
   };
-  function comoFunciona() {
-    const ic = k => `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[k]}</svg>`;
-    const passos = [
-      ['mesa', 'Mesa', 'A Mesa (Presidente e Secretário Executivo, perfil administrador) cadastra a reunião e define os membros de cada comissão: um Relator e os Participantes. A ordinária acontece ao menos uma vez por ano; a extraordinária trata só do assunto da convocação (CI/IPB arts. 73 e 74).'],
-      ['docs', 'Documentos', 'A Secretaria Executiva numera os documentos recebidos (relatórios das igrejas, livros de atas, relatórios de ministros e secretarias) e encaminha cada um à comissão que vai examiná-lo, com o PDF anexado.'],
-      ['comissao', 'Comissões', 'Cada comissão trabalha no seu ambiente: lê os documentos e os membros redigem juntos o parecer no modelo de costume. O cabeçalho já vem pronto com o código da reunião, o período, o local, o Doc nº e a data.'],
-      ['relator', 'Relator', 'O Relator conclui o parecer e o envia ao plenário. Depois disso, só a Mesa altera.'],
-      ['plenario', 'Plenário', 'No plenário, a Mesa registra a decisão: aprovado, aprovado com emendas ou rejeitado. As sessões são públicas (art. 72); o quórum é de três ministros e dois presbíteros (art. 86).'],
-      ['graficos', 'Ata e gráficos', 'Ao final, a Secretaria imprime a ata e os relatórios da reunião, que ficam no acervo, e os números alimentam os gráficos do ' + ORG().tipoMin + '.']
+  function passosReuniao(r) {
+    const rid = r.id;
+    const docs = documentos(rid), pars = pareceres(rid), dels = itens('delegado').filter(d => d.reuniaoId === rid);
+    const ata = itens('ata').find(a => a.reuniaoId === rid);
+    const ataSt = ata ? (ata.situacao === 'aprovada' ? 'aprovada' : 'em redação') : 'a lavrar';
+    const semNum = docs.filter(d => !d.numero && pastaAuto(d) === 'relatorio').length;
+    const docsSt = `${docs.length} documento(s)${semNum ? ' · ' + semNum + ' sem nº' : ''}`;
+    if (r.tipoReuniao === 'E') return [
+      ['documentos', 'docs', 'Convocação e documentos', '#/documentos', docsSt, 'A reunião extraordinária trata só do assunto da convocação (CI/IPB art. 74). O 2º Secretário numera os documentos recebidos.'],
+      ['ata', 'ata', 'Ata', '#/ata-geral/' + encodeURIComponent(rid), ataSt, 'O 1º Secretário redige a ata da reunião, com a Mesa, os presentes e a decisão sobre o assunto da convocação.']
     ];
+    const mesaOk = CARGOS_MESA.filter(c => (r.mesa || []).some(m => m.cargo === c && m.nome)).length;
+    return [
+      ['mesa', 'mesa', 'Mesa', '#/mesa', `${mesaOk} de ${CARGOS_MESA.length} cargos`, 'Diretoria da Mesa eleita para o ano (Presidente, Vice, Secretário Executivo, 1º e 2º Secretários e Tesoureiro), secretarias de causa e designações.'],
+      ['documentos', 'docs', 'Documentos', '#/documentos', docsSt, 'O 2º Secretário recebe os relatórios das igrejas e os demais documentos, dá o número (Doc nº) e encaminha cada um à comissão que vai examiná-lo.'],
+      ['comissoes', 'comissao', 'Comissões', '#/comissoes', `${comissoes().length} comissões · ${dels.filter(d => d.funcao === 'Relator').length} relatores`, 'Definição das comissões da reunião, com o relator e os membros de cada uma.'],
+      ['pareceres', 'relator', 'Pareceres', '#/pareceres', `${pars.filter(p => p.status !== 'rascunho').length} de ${pars.length} prontos`, 'Cada comissão analisa os documentos e redige o parecer. A IA dá uma prévia com a base no Manual Presbiteriano (página, artigo, parágrafo e inciso); o relator revisa, conclui e envia ao plenário.'],
+      ['plenario', 'plenario', 'Plenário', '#/plenario', `${pars.filter(p => PLENARIO.includes(p.status)).length} decididos · ${pars.filter(p => p.status === 'concluido').length} na pauta`, 'O plenário aprecia os pareceres prontos e a Mesa registra a decisão: aprovado, aprovado com emendas ou rejeitado (quórum: CI/IPB art. 86).'],
+      ['ata', 'ata', 'Ata', '#/ata-geral/' + encodeURIComponent(rid), ataSt, 'O 1º Secretário redige a ata geral da reunião, que já traz a Mesa, os presentes e as decisões do plenário sobre os pareceres.']
+    ];
+  }
+  function etapas(ativa, r) {
+    r = r || reuniao();
+    if (!r) return '';
     const esc = A().esc;
-    return `<div class="card fluxo-card"><div class="section-title" style="margin-top:0">Como funciona a reunião</div>
-      <ol class="fluxo">${passos.map((p, i) => `${i ? '<li class="fx-seta" aria-hidden="true">›</li>' : ''}<li class="fx-passo${i === 0 ? ' ini' : i === passos.length - 1 ? ' fim' : ''}" tabindex="0" aria-label="${esc(p[1] + ': ' + p[2])}">
-        <span class="fx-ic">${ic(p[0])}</span><span class="fx-n"><small>${i + 1}</small> ${esc(p[1])}</span><span class="fx-dica" role="tooltip">${esc(p[2])}</span></li>`).join('')}</ol></div>`;
+    const ic = k => `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[k]}</svg>`;
+    const ps = passosReuniao(r);
+    return `<nav class="card fluxo-card no-print" aria-label="Etapas da reunião"><ol class="fluxo etapas">${ps.map((p, i) => `${i ? '<li class="fx-seta" aria-hidden="true">›</li>' : ''}<li class="fx-li"><a href="${p[3]}" class="fx-passo${p[0] === ativa ? ' ativa' : ''}${i === 0 ? ' ini' : i === ps.length - 1 ? ' fim' : ''}" ${p[0] === ativa ? 'aria-current="step"' : ''}>
+        <span class="fx-ic">${ic(p[1])}</span><span class="fx-n"><small>${i + 1}</small> ${esc(p[2])}</span><span class="fx-st">${esc(p[4])}</span><span class="fx-dica" role="tooltip">${esc(p[5])}</span></a></li>`).join('')}</ol></nav>`;
+  }
+  // as telas da reunião ficam todas sob o item "Reunião" do menu, com as etapas no alto
+  function telaRO(ativa, titulo, sub, acoes, corpo, r, pagina) {
+    const { shell, head } = A();
+    shell(pagina || 'reuniao', head(titulo, sub, acoes) + etapas(ativa, r) + corpo);
+  }
+  // quem numera e edita os documentos e a ata: a Mesa (admin) e os secretários marcados por ela (cfg.secretarios)
+  function podeSecretaria() {
+    const u = usuario();
+    if (!u) return false;
+    if (isAdmin()) return true;
+    const s = cfg().secretarios;
+    return u.role !== 'leitor' && Array.isArray(s) && s.includes(u.id);
   }
 
   /* ======================= Configuração (Mesa) ======================= */
@@ -283,7 +314,6 @@
     $('#bCfg').onclick = editarCfg;
     $('#bNovaReu').onclick = () => editarReuniao(null);
     $$('[data-reu]').forEach(tr => tr.onclick = () => editarReuniao(reuniao(tr.getAttribute('data-reu'))));
-    if ($('#bPadrao2')) $('#bPadrao2').onclick = criarPadrao;
     $('#fPac').onchange = e => importarPacote(e.target.files[0]);
     $('#fPdfs').onchange = e => enviarPdfs(Array.from(e.target.files || []));
     $('#bExp').onclick = exportarEstrutura;
@@ -437,17 +467,17 @@
   function telaComissoes() {
     const { shell, head } = A();
     const r = reuniao();
-    if (!r) return semReuniao('comissoes', 'Comissões');
+    if (!r) return semReuniao('reuniao', 'Comissões');
     const cs = comissoes();
     const minhas = new Set(minhasComissoes(r.id));
-    let html = head('Comissões', subReuniao(r), seletorReuniao());
+    let html = head('Comissões', subReuniao(r), seletorReuniao() + `<a class="btn${isAdmin() ? ' primary' : ''}" href="#/delegados">${isAdmin() ? 'Definir relatores e membros' : 'Relatores e membros'}</a>`) + etapas('comissoes', r);
     if (!cs.length) html += `<div class="card">${semComissoes()}</div>`;
     GRUPOS.concat(['']).forEach(g => {
       const lista = cs.filter(c => (c.grupo || '') === g);
       if (!lista.length) return;
       html += `<div class="section-title">${A().esc(g || 'Outras')}</div><div class="com-grid">${lista.map(c => cardComissao(c, r.id).replace('class="com-card"', `class="com-card${minhas.has(c.id) ? ' minha' : ''}"`)).join('')}</div>`;
     });
-    shell('comissoes', html);
+    shell('reuniao', html);
     ligarSeletor();
     const b = A().$('#bPadrao2'); if (b) b.onclick = criarPadrao;
   }
@@ -457,7 +487,7 @@
     const c = comissao(id);
     const r = reuniao();
     if (!c) { A().ir('comissoes'); return; }
-    if (!r) return semReuniao('comissoes', c.nome);
+    if (!r) return semReuniao('reuniao', c.nome);
     const ds = delegadosDe(c.id, r.id);
     const docs = documentos(r.id).filter(d => d.comissaoId === c.id);
     const pars = pareceres(r.id).filter(p => p.comissaoId === c.id);
@@ -465,7 +495,7 @@
     const pode = podeParecer(c.id, r.id);
     const eu = ds.find(d => d.userId === usuario().id);
     let html = head(esc(c.nome), `${esc(c.grupo || '')} · ${subReuniao(r)}`,
-      seletorReuniao() + (pode ? `<button class="btn primary" id="bNovo">+ Novo ${c.modelo === 'secretaria' ? 'relatório' : 'parecer'}</button>` : ''));
+      seletorReuniao() + (pode ? `<button class="btn primary" id="bNovo">+ Novo ${c.modelo === 'secretaria' ? 'relatório' : 'parecer'}</button>` : '')) + etapas('pareceres', r);
     html += `<div class="card com-amb"><div class="grid g2">
       <div><div class="lbl">Atribuição</div><p style="margin:4px 0">${esc(c.base || '—')}</p>
         <div class="lbl" style="margin-top:10px">Modelo do parecer</div><p style="margin:4px 0">${esc(MODELOS[c.modelo] || '')}</p>
@@ -482,7 +512,7 @@
       </tbody></table></div>` : '<p class="muted" style="margin:0">Nenhum documento encaminhado a esta comissão nesta reunião.</p>'}</div>`;
     html += `<div class="card"><div class="section-title" style="margin-top:0">Pareceres desta reunião</div>${tabelaPareceres(pars)}</div>`;
     if (anteriores.length) html += `<div class="card"><div class="section-title" style="margin-top:0">Pareceres de reuniões anteriores</div>${tabelaPareceres(anteriores, true)}</div>`;
-    shell('comissoes', html);
+    shell('reuniao', html);
     ligarSeletor();
     if ($('#bNovo')) $('#bNovo').onclick = () => abrirEditor(null, c.id, null);
     $$('[data-par]').forEach(b => b.onclick = () => abrirEditor(null, c.id, b.getAttribute('data-par')));
@@ -599,7 +629,8 @@
     const m = modal(`${novo ? 'Novo' : 'Editar'} ${modelo === 'secretaria' ? 'relatório' : 'parecer'} · ${esc(c.nome)}`, `
       <p class="small muted" style="margin:0 0 6px">${subReuniao(reu)}</p>
       <form id="fPar" class="parecer-form">
-        <div class="lbl sec-lbl" style="margin-top:0">Cabeçalho do documento</div>
+        ${caixaPrevia()}
+        <div class="lbl sec-lbl">Cabeçalho do documento</div>
         <div class="grid g3">
           <div class="field"><label for="pDocNumero">Doc nº <span class="help">número da Secretaria Executiva</span></label><input type="text" id="pDocNumero" value="${esc(p.docNumero || '')}" placeholder="ex.: ${proximoNumeroDoc(reu.id)}"></div>
           <div class="field"><label for="pData">Data</label><input type="date" id="pData" value="${esc(p.data || '')}"></div>
@@ -642,6 +673,93 @@
     };
     $('#bRasc', el).onclick = () => salvar('rascunho');
     if ($('#bConc', el)) $('#bConc', el).onclick = () => salvar('concluido');
+    ligarPrevia(el, () => coletar(), c, reu, modelo);
+  }
+
+  /* ======================= Prévia do parecer (IA) ======================= */
+  // A IA lê o documento (PDF) e aponta o que conferir, com a fonte no Manual Presbiteriano: documento, artigo,
+  // parágrafo, inciso e página. A página vem sempre do índice (base-legal.js), não da IA. O texto final é do relator.
+  const TIPOS_ITEM = { nao_conforme: 'Não conforme', observacao: 'Observação', recomendacao: 'Recomendação', determinacao: 'Determinação', conforme: 'Conforme', conferir: 'A conferir' };
+  function caixaPrevia() {
+    return `<div class="ia-box" id="iaBox"><div class="row-wrap" style="justify-content:space-between;align-items:flex-start">
+      <div style="flex:1;min-width:220px"><b>Prévia do parecer</b><div class="small muted">${A().SERVER ? 'A IA lê o documento e aponta o que está ou não conforme, com a base no Manual Presbiteriano (página, artigo, parágrafo e inciso). O relator revisa e decide.' : 'No modo demonstração (sem o servidor) a IA não está disponível: o sistema mostra o roteiro de conferência da comissão com a base legal e a página do Manual Presbiteriano.'}</div></div>
+      <button type="button" class="btn sm primary" id="bIA">${A().SERVER ? 'Gerar prévia com a IA' : 'Ver roteiro com a base legal'}</button></div><div id="iaRes"></div></div>`;
+  }
+  const B = () => window.IPB_BASE_LEGAL;
+  const blobB64 = blob => new Promise((ok, erro) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = erro; fr.readAsDataURL(blob); });
+  function docsDoEditor(p) {
+    return docsDoParecer(p, itens('documento').filter(d => d.reuniaoId === p.reuniaoId));
+  }
+  function fontesDaComissao(c, modelo) {
+    if (modelo === 'atas') return (window.IPB_REGRAS_ATAS || []).map(g => ({ id: g.id, grupo: g.grupo, texto: g.texto, fundamentos: B().partes(g.artigo), artigo: g.artigo }));
+    return B().partes(c.base).length ? [{ id: 'base', grupo: 'Atribuição da comissão', texto: c.base, fundamentos: B().partes(c.base), artigo: c.base }] : [];
+  }
+  function previaLocal(c, modelo) {
+    const fs = fontesDaComissao(c, modelo);
+    return {
+      local: true,
+      resumo: modelo === 'atas' ? 'Roteiro de conferência do livro de atas, item por item, com a fonte no Manual Presbiteriano. Leve ao parecer só o que não estiver conforme.' : 'Base legal da atribuição desta comissão. Use-a para fundamentar os apontamentos, recomendações e determinações.',
+      itens: fs.map(g => ({ tipo: 'conferir', grupo: g.grupo, texto: g.texto, evidencia: '', fundamentos: g.fundamentos }))
+    };
+  }
+  async function previaIA(p, c, reu, modelo) {
+    const docs = docsDoEditor(p);
+    let pdf = null, pdfNome = '';
+    const d = docs.find(x => x.arquivo);
+    if (d) {
+      const x = await A().api({ action: 'reuniao', op: 'arquivo', id: d.id });
+      const blob = x.blob || await (await fetch(x.dados)).blob();
+      if (blob.size <= 20e6 && /pdf/i.test(blob.type || x.tipo || '')) { pdf = await blobB64(blob); pdfNome = d.arquivo.nome || d.titulo; }
+    }
+    const fontes = fontesDaComissao(c, modelo);
+    const res = await A().ia({ tipo: 'parecer',
+      comissao: { nome: c.nome, atribuicao: c.base || '', modelo },
+      reuniao: { codigo: reu.codigo || '', ano: reu.ano },
+      parecer: { assunto: p.assunto, docNumero: p.docNumero, docsAnalisados: p.docsAnalisados, origens: p.origens, campos: p.campos },
+      documentos: docs.map(x => ({ numero: x.numero, titulo: x.titulo, origem: x.origem, tipo: x.tipoDoc, resumo: x.resumo })),
+      regras: fontes.map(g => ({ id: g.id, artigo: g.artigo, texto: g.texto })),
+      indice: B().indiceTexto(['CI/IPB', 'CD/IPB', 'PL/IPB', 'Regulamento de Atas', 'Modelo de Estatuto de Presbitério', 'Modelo de RI de Presbitério', 'Modelo de Estatuto de Igreja']),
+      pdf, pdfNome });
+    const r = res.resultado || {};
+    (r.itens || []).forEach(it => { it.fundamentos = (it.fundamentos || []).map(f => Object.assign({}, f, { documento: B().doc(f.documento) || f.documento, pagina: B().pagina(f.documento, f.artigo) })); });
+    r.semPdf = !pdf;
+    return r;
+  }
+  function htmlPrevia(r) {
+    const esc = A().esc;
+    const cit = it => (it.fundamentos || []).map(f => B().citar(f)).join('; ');
+    const ordem = ['nao_conforme', 'determinacao', 'recomendacao', 'observacao', 'conferir', 'conforme'];
+    const todos = r.itens || [];
+    const its = todos.slice().sort((a, b) => ordem.indexOf(a.tipo) - ordem.indexOf(b.tipo));
+    return `<div style="margin-top:10px">${r.semPdf && !r.local ? '<p class="small" style="margin:0 0 6px"><b>Atenção:</b> o documento não tem PDF anexado (ou passa de 20 MB); a IA usou só os dados cadastrados.</p>' : ''}
+      ${r.resumo ? `<p class="txt" style="margin:0 0 8px">${esc(r.resumo)}</p>` : ''}
+      <ol class="small" style="margin:0;padding-left:20px">${its.map(it => `<li style="margin-bottom:6px"><label class="chk" style="display:inline"><input type="checkbox" class="iaSel" data-i="${todos.indexOf(it)}" ${it.tipo === 'conforme' || it.tipo === 'conferir' ? '' : 'checked'}> <span class="tag ${it.tipo === 'nao_conforme' ? '' : 'gray'}">${esc(TIPOS_ITEM[it.tipo] || it.tipo)}</span></label> ${esc(it.texto)}
+        ${it.evidencia ? `<div class="ia-ev">${esc(it.evidencia)}</div>` : ''}${cit(it) ? `<div class="muted">Base: ${esc(cit(it))}</div>` : ''}</li>`).join('')}</ol>
+      ${its.length ? `<div class="row-wrap" style="margin-top:8px"><button type="button" class="btn sm" id="bIAUsar">Levar os itens marcados para o parecer</button><span class="small muted">Entram nos campos de observações, recomendações e determinações, com a fonte entre parênteses.</span></div>` : ''}</div>`;
+  }
+  function ligarPrevia(el, coletar, c, reu, modelo) {
+    const { $, $$ } = A();
+    const b = $('#bIA', el);
+    if (!b) return;
+    let ultimo = null;
+    b.onclick = async () => {
+      const p = coletar();
+      b.disabled = true; const t = b.textContent; b.textContent = A().SERVER ? 'A IA está lendo o documento…' : 'Montando…';
+      try { ultimo = A().SERVER ? await previaIA(p, c, reu, modelo) : previaLocal(c, modelo); $('#iaRes', el).innerHTML = htmlPrevia(ultimo); }
+      catch (e) { $('#iaRes', el).innerHTML = `<p class="small" style="margin:8px 0 0">${A().esc(e.message || String(e))}</p>`; }
+      finally { b.disabled = false; b.textContent = t; }
+      const u = $('#bIAUsar', el);
+      if (u) u.onclick = () => {
+        const sel = $$('.iaSel', el).filter(x => x.checked).map(x => ultimo.itens[Number(x.getAttribute('data-i'))]);
+        const linha = it => it.texto + ((it.fundamentos || []).length ? ' (' + it.fundamentos.map(f => B().citar(f)).join('; ') + ')' : '');
+        const add = (id, its) => { const f = $('#' + id, el); if (!f || !its.length) return; f.value = (f.value.trim() ? f.value.trim() + '\n' : '') + its.map(linha).join('\n'); };
+        const de = (...tipos) => sel.filter(it => tipos.includes(it.tipo));
+        if (modelo === 'atas') { add('aObs', de('nao_conforme', 'observacao', 'conferir')); add('aRec', de('recomendacao', 'determinacao')); }
+        else if (modelo === 'secretaria') add('sRec', sel.filter(it => it.tipo !== 'conforme'));
+        else { add('gApont', de('nao_conforme', 'observacao', 'conferir')); add('gRec', de('recomendacao')); add('gDet', de('determinacao')); }
+        A().toast(sel.length + ' item(ns) levados ao parecer. Revise o texto antes de salvar.');
+      };
+    };
   }
 
   /* ======================= Folha do parecer (modelo do PLRN) ======================= */
@@ -732,7 +850,7 @@
     </div>
     <div class="folha-wrap" style="margin-top:16px">${folhaParecer(p)}</div>
     ${(p.historico || []).length ? `<div class="card" style="margin-top:16px"><div class="section-title" style="margin-top:0">Histórico</div><ul class="small" style="margin:0;padding-left:18px">${p.historico.slice().reverse().map(h => `<li>${esc(A().dt(h.em, true))} · ${esc(h.por)} · ${esc(h.acao)}</li>`).join('')}</ul></div>` : ''}`;
-    shell('comissoes', html);
+    shell('reuniao', html.replace(/^<div class="page-head">[\s\S]*?<\/div><\/div>/, m => m + etapas(PLENARIO.includes(p.status) || p.status === 'concluido' ? 'plenario' : 'pareceres', reuniao(p.reuniaoId))));
     const nome = nomeArquivo(`${p.docNumero ? 'Doc ' + p.docNumero + ' - ' : ''}${p.assunto || c.nome}`);
     $('#bImp').onclick = () => imprimir(nome, folhaParecer(p));
     $('#bDoc').onclick = () => baixarWord(folhaParecer(p), nome + '.doc');
@@ -845,27 +963,27 @@
   function telaDocumentos() {
     const { esc, shell, head, $, $$ } = A();
     const r = reuniao();
-    if (!r && !isAdmin()) return semReuniao('documentos', 'Documentos');
+    if (!r && !isAdmin()) return semReuniao('reuniao', 'Documentos');
     const rid = F.reuniao === 'todas' ? '' : (r ? r.id : '');
     const q = F.busca.toLowerCase();
     const lista = documentos(rid).filter(d => (!F.comissao || d.comissaoId === F.comissao) && (!q || [d.numero, d.titulo, d.origem, d.resumo, d.tipoDoc].join(' ').toLowerCase().includes(q)));
-    let html = head('Documentos', `${subReuniao(r)}`, seletorReuniao() + (isAdmin() && r ? '<button class="btn primary" id="bNovoDoc">+ Documento</button>' : ''));
+    let html = head('Documentos', `${subReuniao(r)}`, seletorReuniao() + (r ? '<a class="btn" href="#/numeracao">Numeração (2º Secretário)</a>' : '') + (podeSecretaria() && r ? '<button class="btn primary" id="bNovoDoc">+ Documento</button>' : '')) + etapas('documentos', r);
     html += `<div class="filters card" style="padding:12px 14px"><div class="row-wrap">
       <div class="field"><label for="fRe">Reunião</label><select id="fRe"><option value="">Selecionada no topo</option><option value="todas" ${F.reuniao === 'todas' ? 'selected' : ''}>Todas as reuniões</option></select></div>
       <div class="field"><label for="fCo">Comissão</label><select id="fCo"><option value="">Todas</option>${comissoes().map(c => `<option value="${esc(c.id)}" ${F.comissao === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></div>
       <div class="field" style="flex:1"><label for="fBu">Buscar</label><input type="search" id="fBu" value="${esc(F.busca)}" placeholder="número, título, igreja…"></div></div></div>
       <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Documento</th>${rid ? '' : '<th>Reunião</th>'}<th>Origem</th><th>Comissão</th><th>PDF</th></tr></thead><tbody>
-      ${lista.map(d => `<tr class="${isAdmin() ? 'click' : ''}" data-ed="${esc(d.id)}"><td class="num">${esc(d.numero || '')}</td><td>${esc(d.titulo)}${d.resumo ? `<div class="small muted">${esc(d.resumo).slice(0, 180)}</div>` : ''}</td>${rid ? '' : `<td class="small">${esc((reuniao(d.reuniaoId) || {}).codigo || '')}</td>`}
+      ${lista.map(d => `<tr class="${podeSecretaria() ? 'click' : ''}" data-ed="${esc(d.id)}"><td class="num">${esc(d.numero || '')}</td><td>${esc(d.titulo)}${d.resumo ? `<div class="small muted">${esc(d.resumo).slice(0, 180)}</div>` : ''}</td>${rid ? '' : `<td class="small">${esc((reuniao(d.reuniaoId) || {}).codigo || '')}</td>`}
         <td class="small">${esc(d.origem || '')}</td><td class="small">${d.comissaoId ? `<a href="#/comissao/${encodeURIComponent(d.comissaoId)}">${esc((comissao(d.comissaoId) || {}).nome || '')}</a>` : ''}</td>
         <td>${d.arquivo ? `<button class="btn sm" data-pdf="${esc(d.id)}">Abrir</button>` : '<span class="small muted">–</span>'}</td></tr>`).join('') || `<tr><td colspan="6" class="list-empty">Nenhum documento${F.busca || F.comissao ? ' com esse filtro' : ''}.</td></tr>`}
       </tbody></table></div><p class="small muted" style="margin:8px 0 0">${lista.length} documento(s).</p></div>`;
-    shell('documentos', html);
+    shell('reuniao', html);
     ligarSeletor();
     $('#fRe').onchange = e => { F.reuniao = e.target.value; telaDocumentos(); };
     $('#fCo').onchange = e => { F.comissao = e.target.value; telaDocumentos(); };
     let t; $('#fBu').oninput = e => { clearTimeout(t); t = setTimeout(() => { F.busca = e.target.value; telaDocumentos(); const b = $('#fBu'); b.focus(); b.setSelectionRange(b.value.length, b.value.length); }, 250); };
     $$('[data-pdf]').forEach(b => b.onclick = e => { e.stopPropagation(); abrirPdf(b.getAttribute('data-pdf')); });
-    if (isAdmin()) {
+    if (podeSecretaria()) {
       if ($('#bNovoDoc')) $('#bNovoDoc').onclick = () => editarDocumento(null);
       $$('tr[data-ed]').forEach(tr => tr.onclick = () => editarDocumento(itens('documento').find(d => d.id === tr.getAttribute('data-ed'))));
     }
@@ -909,7 +1027,7 @@
       <div class="field span3"><label for="dRes">Resumo</label><textarea id="dRes" rows="3">${esc(d.resumo || '')}</textarea></div>
       <div class="field span3"><label class="chk"><input type="checkbox" id="dRst" ${d.restrito ? 'checked' : ''}> Acesso restrito à Mesa (dados pessoais sensíveis, como atestados, conforme a LGPD)</label></div>
       <div class="field span3"><label for="dArq">Arquivo (PDF, imagem, Word ou Excel, até 15 MB)</label>${d.arquivo ? `<p class="small" style="margin:0">Atual: ${esc(d.arquivo.nome)} (${esc(A().tamanho(d.arquivo.tamanho || 0))})</p>` : ''}<input type="file" id="dArq" accept="${ACEITOS}"></div></div>`,
-      `${!novo ? '<button class="btn danger" id="dDel" style="margin-right:auto">Excluir</button>' : ''}<button class="btn" data-x>Cancelar</button><button class="btn primary" id="dOk">Salvar</button>`, true);
+      `${!novo && isAdmin() ? '<button class="btn danger" id="dDel" style="margin-right:auto">Excluir</button>' : ''}<button class="btn" data-x>Cancelar</button><button class="btn primary" id="dOk">Salvar</button>`, true);
     const vis = () => { const temReu = !!$('#dReu', m.el).value; $('#wPas', m.el).hidden = !temReu; $('#wSec', m.el).hidden = temReu; $('#wAno', m.el).hidden = temReu || $('#dSec', m.el).value === 'institucional'; };
     $('#dReu', m.el).onchange = vis; $('#dSec', m.el).onchange = vis; vis();
     $('[data-x]', m.el).onclick = m.fechar;
@@ -941,22 +1059,20 @@
   function telaMesa() {
     const { esc, shell, head, $ } = A();
     const ords = reunioes().filter(r => r.tipoReuniao !== 'E');
-    const comMesa = ords.filter(r => (r.mesa || []).some(m => m.nome) || LISTAS_MESA.some(([k]) => (r[k] || []).length));
-    const sel = lsGet('ipb-mesa-reuniao');
-    const r = ords.find(x => x.id === sel) || comMesa[0] || ords[0];
-    if (!r) return shell('mesa', head('Mesa e secretarias', 'Nenhuma reunião ordinária cadastrada.') + '<div class="card muted">Cadastre a reunião ordinária em Reuniões e convocações.</div>');
+    const r = reuniao();
+    if (!r) return semReuniao('reuniao', 'Mesa');
     const pessoa = (c, n) => `<div class="mesa-pessoa ${n ? '' : 'vaga'}"><div class="c">${esc(c)}</div><b>${esc(n || 'vago')}</b></div>`;
     const mesa = CARGOS_MESA.map(c => { const m = (r.mesa || []).find(x => x.cargo === c) || {}; return pessoa(c, [m.tratamento, m.nome].filter(Boolean).join(' ')); }).join('');
-    let html = head('Mesa e secretarias', `Eleitos e designados na ${esc(r.codigo || r.nome || '')}${r.legislatura ? ' · ' + esc(r.legislatura) : ''}. Valem até a próxima reunião ordinária.`,
-      `<select id="mSel" aria-label="Reunião ordinária">${ords.map(x => `<option value="${esc(x.id)}" ${x.id === r.id ? 'selected' : ''}>${esc(x.codigo || x.nome || x.id)}</option>`).join('')}</select>${isAdmin() ? '<button class="btn" id="mMesa">Editar a Mesa</button><button class="btn primary" id="mEd">Editar secretarias e designações</button>' : ''}`);
+    void ords;
+    let html = head('Mesa e secretarias', `Diretoria eleita e designações na ${esc(r.codigo || r.nome || '')}${r.legislatura ? ' · ' + esc(r.legislatura) : ''}. Valem até a próxima reunião ordinária.`,
+      seletorReuniao() + (isAdmin() ? '<button class="btn" id="mMesa">Editar a Mesa</button><button class="btn primary" id="mEd">Editar secretarias e designações</button>' : '')) + etapas('mesa', r);
     html += `<div class="card"><div class="section-title" style="margin-top:0">Mesa Executiva eleita</div><div class="mesa-grid">${mesa}</div></div>`;
     LISTAS_MESA.forEach(([k, t]) => {
       const ls = r[k] || [];
       html += `<div class="card"><div class="section-title" style="margin-top:0">${esc(t)}</div>${ls.length ? `<div class="mesa-grid">${ls.map(x => pessoa(x.cargo, x.nome)).join('')}</div>` : '<p class="muted small" style="margin:0">Não informado.</p>'}</div>`;
     });
-    html += `<p class="small muted">As comissões de trabalho desta reunião, com relatores e membros, ficam em <a href="#/delegados">Membros das comissões</a>.</p>`;
-    shell('mesa', html);
-    $('#mSel').onchange = e => { lsSet('ipb-mesa-reuniao', e.target.value); telaMesa(); };
+    shell('reuniao', html);
+    ligarSeletor();
     if (!isAdmin()) return;
     $('#mMesa').onclick = () => editarReuniao(r);
     $('#mEd').onclick = () => {
@@ -979,10 +1095,10 @@
   function telaDelegados() {
     const { esc, shell, head, $, $$ } = A();
     const r = reuniao();
-    if (!r) return semReuniao('delegados', 'Membros das comissões');
+    if (!r) return semReuniao('reuniao', 'Membros das comissões');
     const foco = (location.hash.split('?c=')[1] || '').split('&')[0];
     const cs = comissoes();
-    let html = head('Membros das comissões', subReuniao(r), seletorReuniao() + (isAdmin() ? '<button class="btn" id="bCopiar">Copiar da reunião anterior</button><button class="btn primary" id="bNovoDel">+ Membro</button>' : ''));
+    let html = head('Relatores e membros das comissões', subReuniao(r), '<a class="btn" href="#/comissoes">← Comissões</a>' + seletorReuniao() + (isAdmin() ? '<button class="btn" id="bCopiar">Copiar da reunião anterior</button><button class="btn primary" id="bNovoDel">+ Membro</button>' : '')) + etapas('comissoes', r);
     if (isAdmin()) html += '<p class="muted small" style="margin-top:-6px">Cada comissão tem um Relator, que escreve e conclui o parecer, e quantos Participantes precisar. Vincule o membro a um usuário do sistema para ele entrar no ambiente da comissão e editar o parecer.</p>';
     html += cs.map(c => {
       const ds = delegadosDe(c.id, r.id);
@@ -991,7 +1107,7 @@
         ${ds.length ? `<div class="tbl-wrap"><table><thead><tr><th>Membro</th><th>Igreja</th><th>Função</th><th>Acesso</th></tr></thead><tbody>${ds.map(d => `<tr class="${isAdmin() ? 'click' : ''}" data-del="${esc(d.id)}"><td>${esc(nomeDel(d))}</td><td class="small">${esc(d.igreja || '')}</td><td><span class="tag ${d.funcao === 'Relator' ? '' : 'gray'}">${esc(d.funcao)}</span></td><td class="small">${d.userId ? 'Usuário vinculado' : '<span class="muted">sem usuário</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small" style="margin:6px 0 0">Nenhum membro.</p>'}
       </div>`;
     }).join('') || `<div class="card">${semComissoes()}</div>`;
-    shell('delegados', html);
+    shell('reuniao', html);
     ligarSeletor();
     if (foco && $('#dc-' + CSS.escape(foco))) $('#dc-' + CSS.escape(foco)).scrollIntoView({ block: 'start' });
     if (!isAdmin()) return;
@@ -1185,6 +1301,160 @@
     });
   }
 
+  /* ======================= Pareceres (etapa 4) ======================= */
+  const FP = { st: '' };
+  // números citados num texto ("031, 032 e 40") e documentos cobertos por um parecer
+  const numsDe = t => (String(t || '').match(/\d+/g) || []).map(Number);
+  function docsDoParecer(p, docs) {
+    const ids = new Set(p.documentoIds || []);
+    const ns = new Set([...numsDe(p.docNumero), ...numsDe(p.docsAnalisados)]);
+    return docs.filter(d => ids.has(d.id) || (d.numero && ns.has(numero(d.numero)) && d.comissaoId === p.comissaoId));
+  }
+  function telaPareceres() {
+    const { esc, $, $$ } = A();
+    const r = reuniao();
+    if (!r) return semReuniao('reuniao', 'Pareceres');
+    const docs = documentos(r.id), pars = pareceres(r.id);
+    const cobertos = new Set(); pars.forEach(p => docsDoParecer(p, docs).forEach(d => cobertos.add(d.id)));
+    const aguardando = docs.filter(d => d.comissaoId && !cobertos.has(d.id) && pastaAuto(d) === 'relatorio');
+    const minhas = new Set(minhasComissoes(r.id));
+    const lista = pars.filter(p => !FP.st || (FP.st === 'decididos' ? PLENARIO.includes(p.status) : p.status === FP.st));
+    const nomeCom = id => (comissao(id) || {}).nome || '';
+    let corpo = `<div class="card"><div class="section-title" style="margin-top:0">Documentos aguardando parecer <span class="muted small">(${aguardando.length})</span></div>
+      ${aguardando.length ? `<div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Documento</th><th>Comissão</th><th></th></tr></thead><tbody>${aguardando.map(d => `<tr class="${minhas.has(d.comissaoId) ? 'minha' : ''}"><td class="num">${esc(d.numero || '')}</td><td>${esc(d.titulo)}${d.origem ? ` <span class="small muted">· ${esc(d.origem)}</span>` : ''}</td><td class="small"><a href="#/comissao/${encodeURIComponent(d.comissaoId)}">${esc(nomeCom(d.comissaoId))}</a></td>
+        <td>${podeParecer(d.comissaoId, r.id) ? `<button class="btn sm primary" data-escr="${esc(d.id)}">Escrever parecer</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Todos os documentos encaminhados às comissões já têm parecer.</p>'}</div>`;
+    const filtro = [['', 'Todos'], ['rascunho', 'Rascunhos'], ['concluido', 'Prontos para o plenário'], ['decididos', 'Decididos']];
+    corpo += `<div class="card"><div class="row-wrap" style="justify-content:space-between"><div class="section-title" style="margin:0">Pareceres da reunião <span class="muted small">(${lista.length})</span></div>
+      <div class="row-wrap">${filtro.map(([k, l]) => `<button class="btn sm ${FP.st === k ? 'primary' : ''}" data-fst="${k}">${l}</button>`).join('')}</div></div>
+      ${lista.length ? `<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Doc nº</th><th>Assunto</th><th>Comissão</th><th>Atualizado</th><th>Situação</th></tr></thead><tbody>
+      ${lista.map(p => `<tr class="click" data-vp="${esc(p.id)}"><td class="num">${esc(p.docNumero || '–')}</td><td>${esc(p.assunto || '')}</td><td class="small">${esc(nomeCom(p.comissaoId))}</td><td class="small">${esc(A().dt(p.updatedAt))}</td><td>${chip(p.status)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin:10px 0 0">Nenhum parecer com esse filtro.</p>'}</div>`;
+    telaRO('pareceres', 'Pareceres', subReuniao(r), seletorReuniao(), corpo, r);
+    ligarSeletor();
+    $$('[data-fst]').forEach(b => b.onclick = () => { FP.st = b.getAttribute('data-fst'); telaPareceres(); });
+    $$('[data-vp]').forEach(tr => tr.onclick = () => A().ir('parecer/' + tr.getAttribute('data-vp')));
+    $$('[data-escr]').forEach(b => b.onclick = () => { const d = docs.find(x => x.id === b.getAttribute('data-escr')); abrirEditor(null, d.comissaoId, d.id); });
+    void $;
+  }
+
+  /* ======================= Plenário (etapa 5) ======================= */
+  function telaPlenario() {
+    const { esc, $$ } = A();
+    const r = reuniao();
+    if (!r) return semReuniao('reuniao', 'Plenário');
+    const pars = pareceres(r.id);
+    const pauta = pars.filter(p => p.status === 'concluido');
+    const decididos = pars.filter(p => PLENARIO.includes(p.status));
+    const nomeCom = id => (comissao(id) || {}).nome || '';
+    const linha = (p, dec) => `<tr><td class="num">${esc(p.docNumero || '–')}</td><td><a href="#/parecer/${encodeURIComponent(p.id)}">${esc(p.assunto || '')}</a><div class="small muted">${esc(nomeCom(p.comissaoId))}${p.emendas ? ' · ' + esc(p.emendas) : ''}</div></td>
+      <td>${chip(p.status)}</td>${dec && isAdmin() ? `<td class="row-wrap" style="gap:6px"><button class="btn sm primary" data-dec="aprovado" data-p="${esc(p.id)}">Aprovar</button><button class="btn sm" data-dec="emendas" data-p="${esc(p.id)}">Com emendas</button><button class="btn sm ghost" data-dec="rejeitado" data-p="${esc(p.id)}">Rejeitar</button></td>` : (dec ? '<td></td>' : '')}</tr>`;
+    let corpo = `<div class="card"><div class="section-title" style="margin-top:0">Pauta do plenário <span class="muted small">(${pauta.length} parecer(es) prontos)</span></div>
+      ${isAdmin() ? '' : '<p class="small muted" style="margin-top:0">A Mesa registra a decisão do plenário.</p>'}
+      ${pauta.length ? `<div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Parecer</th><th>Situação</th><th></th></tr></thead><tbody>${pauta.map(p => linha(p, true)).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nenhum parecer aguardando o plenário. Os pareceres aparecem aqui quando o relator conclui.</p>'}</div>`;
+    corpo += `<div class="card"><div class="section-title" style="margin-top:0">Decididos <span class="muted small">(${decididos.length})</span></div>
+      ${decididos.length ? `<div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Parecer</th><th>Decisão</th></tr></thead><tbody>${decididos.map(p => linha(p, false)).join('')}</tbody></table></div>` : '<p class="muted" style="margin:0">Nenhuma decisão registrada ainda.</p>'}
+      <p class="small muted" style="margin:10px 0 0">As decisões entram na ata da reunião (etapa 6).</p></div>`;
+    telaRO('plenario', 'Plenário', subReuniao(r), seletorReuniao() + '<button class="btn" data-rel="consolidado">Imprimir situação dos pareceres</button>', corpo, r);
+    ligarSeletor();
+    A().$$('[data-rel]').forEach(b => b.onclick = () => relatorioReuniao(b.getAttribute('data-rel')));
+    $$('[data-dec]').forEach(b => b.onclick = async () => {
+      const st = b.getAttribute('data-dec');
+      let emendas = '';
+      if (st !== 'aprovado') {
+        const m = A().modal(st === 'emendas' ? 'Aprovar com emendas' : 'Rejeitar o parecer', `<div class="field"><label for="plEm">${st === 'emendas' ? 'Emendas aprovadas pelo plenário' : 'Motivo ou encaminhamento'}</label><textarea id="plEm" rows="3"></textarea></div>`,
+          '<button class="btn" data-x>Cancelar</button><button class="btn primary" id="plOk">Registrar</button>');
+        A().$('[data-x]', m.el).onclick = m.fechar;
+        emendas = await new Promise(res => { A().$('#plOk', m.el).onclick = () => { const v = A().$('#plEm', m.el).value.trim(); m.fechar(); res(v); }; });
+        if (st === 'emendas' && !emendas) return A().toast('Escreva as emendas.', true);
+      }
+      const res = await A().acao(() => A().api({ action: 'reuniao', op: 'decidir', id: b.getAttribute('data-p'), status: st, emendas }), 'Decisão registrada.');
+      if (res) { await A().recarregar(); telaPlenario(); }
+    });
+  }
+
+  /* ======================= Numeração dos documentos (2º Secretário) ======================= */
+  // a numeração da reunião junta os documentos da reunião e os relatórios das igrejas com "Doc.NN/ano"
+  function numeracao(r) {
+    const docs = documentos(r.id);
+    const rels = (S().d.relatorios || []).map(x => { const m = /doc\.?\s*(?:n[ºo°.]*\s*)?(\d+)\s*(?:\/\s*(\d{4}))?/i.exec(x.documento || ''); return m && (!m[2] || Number(m[2]) === Number(r.ano)) ? { rel: x, n: Number(m[1]) } : null; }).filter(Boolean);
+    const usos = new Map();
+    const add = (n, o) => { if (!n) return; if (!usos.has(n)) usos.set(n, []); usos.get(n).push(o); };
+    docs.forEach(d => add(numero(d.numero), { tipo: 'doc', d }));
+    rels.forEach(x => add(x.n, { tipo: 'rel', r: x.rel }));
+    pareceres(r.id).forEach(p => { const n = numero(p.docNumero); if (n && !usos.has(n)) add(n, { tipo: 'par', p }); });
+    const ns = [...usos.keys()].sort((a, b) => a - b);
+    const max = ns.length ? ns[ns.length - 1] : 0;
+    const lacunas = []; for (let i = 1; i < max; i++) if (!usos.has(i)) lacunas.push(i);
+    const repetidos = ns.filter(n => usos.get(n).filter(o => o.tipo !== 'par').length > 1);
+    const semNumero = docs.filter(d => !d.numero && pastaAuto(d) === 'relatorio');
+    return { usos, ns, proximo: max + 1, lacunas, repetidos, semNumero, docs, rels };
+  }
+  function faixas(ns) {
+    const out = []; let i = 0;
+    while (i < ns.length) { let j = i; while (j + 1 < ns.length && ns[j + 1] === ns[j] + 1) j++; out.push(i === j ? String(ns[i]) : ns[i] + ' a ' + ns[j]); i = j + 1; }
+    return out.join(', ');
+  }
+  function telaNumeracao() {
+    const { esc, $, $$ } = A();
+    const r = reuniao();
+    if (!r) return semReuniao('reuniao', 'Numeração dos documentos');
+    const N = numeracao(r);
+    const pode = podeSecretaria();
+    const sec = (r.mesa || []).find(m => /segundo secret|2º secret/i.test(m.cargo || ''));
+    const pad = n => String(n).padStart(3, '0');
+    const descr = o => o.tipo === 'doc' ? `${esc(o.d.titulo)}${o.d.origem ? ` <span class="small muted">· ${esc(o.d.origem)}</span>` : ''}`
+      : o.tipo === 'rel' ? `${esc(o.r.titulo || 'Relatório')} <span class="small muted">· ${esc((S().d.igrejas || []).find(i => i.id === o.r.igrejaId)?.nome || '')} · relatório da igreja</span>`
+      : `${esc(o.p.assunto || '')} <span class="small muted">· número usado só no parecer</span>`;
+    const comDe = o => o.tipo === 'doc' && o.d.comissaoId ? esc((comissao(o.d.comissaoId) || {}).nome || '') : (o.tipo === 'doc' && pode ? '<span class="small muted">sem comissão</span>' : '');
+    let corpo = `<div class="kpis">
+      <div class="kpi"><div class="l">Próximo número</div><div class="v">${pad(N.proximo)}</div><div class="d muted">Doc nº ${pad(N.proximo)}/${esc(String(r.ano || ''))}</div></div>
+      <div class="kpi"><div class="l">Números usados</div><div class="v">${N.ns.length}</div><div class="d muted">${N.docs.filter(d => d.numero).length} documentos · ${N.rels.length} relatórios das igrejas</div></div>
+      <div class="kpi"><div class="l">Sem número</div><div class="v">${N.semNumero.length}</div><div class="d muted">documentos da pasta Relatórios</div></div>
+      <div class="kpi"><div class="l">Lacunas e repetidos</div><div class="v">${N.lacunas.length + N.repetidos.length}</div><div class="d muted">${N.lacunas.length} lacuna(s) · ${N.repetidos.length} repetido(s)</div></div>
+    </div>`;
+    if (N.repetidos.length) corpo += `<div class="alert warn" style="margin-bottom:12px"><b>Números repetidos:</b> ${N.repetidos.map(pad).join(', ')}. Cada documento precisa de um número próprio.</div>`;
+    if (N.lacunas.length) corpo += `<div class="alert" style="margin-bottom:12px"><b>Números ainda não usados:</b> ${esc(faixas(N.lacunas))}. Podem ser documentos que ainda não chegaram ou números pulados.</div>`;
+    if (N.semNumero.length) corpo += `<div class="card"><div class="row-wrap" style="justify-content:space-between"><div class="section-title" style="margin:0">Documentos sem número <span class="muted small">(${N.semNumero.length})</span></div>
+        ${pode ? `<button class="btn primary sm" id="bNumTodos">Numerar todos a partir do ${pad(N.proximo)}</button>` : ''}</div>
+      <div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th>Documento</th><th>Origem</th><th>Comissão</th>${pode ? '<th></th>' : ''}</tr></thead><tbody>${N.semNumero.map(d => `<tr><td>${esc(d.titulo)}</td><td class="small">${esc(d.origem || '')}</td><td class="small">${esc((comissao(d.comissaoId) || {}).nome || '')}</td>${pode ? `<td><button class="btn sm" data-num="${esc(d.id)}">Dar número</button></td>` : ''}</tr>`).join('')}</tbody></table></div></div>`;
+    corpo += `<div class="card"><div class="section-title" style="margin-top:0">Registro de numeração</div>
+      <p class="small muted" style="margin-top:0">Inclui os documentos da reunião e os relatórios das igrejas com o número no formato Doc.NN/${esc(String(r.ano || ''))}.${pode ? ' Clique num documento para mudar o número, a origem ou a comissão.' : ''}</p>
+      ${N.ns.length ? `<div class="tbl-wrap"><table><thead><tr><th>Doc nº</th><th>Documento</th><th>Comissão</th><th>PDF</th></tr></thead><tbody>
+      ${N.ns.map(n => N.usos.get(n).map(o => `<tr class="${o.tipo === 'doc' && pode ? 'click' : ''} ${N.repetidos.includes(n) ? 'repetido' : ''}" ${o.tipo === 'doc' ? `data-ed="${esc(o.d.id)}"` : o.tipo === 'rel' ? `data-rl="${esc(o.r.id)}"` : `data-vp="${esc(o.p.id)}"`}><td class="num"><b>${pad(n)}</b></td><td>${descr(o)}</td><td class="small">${comDe(o)}</td>
+        <td>${o.tipo === 'doc' && o.d.arquivo ? `<button class="btn sm" data-pdf="${esc(o.d.id)}">Abrir</button>` : o.tipo === 'rel' && (o.r.anexos || []).length ? '<span class="small muted">no relatório</span>' : '<span class="small muted">–</span>'}</td></tr>`).join('')).join('')}
+      </tbody></table></div>` : '<p class="muted" style="margin:0">Nenhum número usado nesta reunião.</p>'}</div>`;
+    if (isAdmin()) corpo += `<div class="card"><div class="section-title" style="margin-top:0">Quem numera</div><p class="small muted" style="margin-top:0">${sec && sec.nome ? `2º Secretário desta reunião: <b>${esc(nomeMesa(sec))}</b>. ` : ''}A Mesa (administrador) sempre numera. Marque os usuários dos secretários para que eles também numerem e editem os documentos e a ata.</p>
+      <p class="small" style="margin:0 0 8px">${(cfg().secretarios || []).map(id => (S().d.usuarios || []).find(u => u.id === id)).filter(Boolean).map(u => esc(u.nome)).join(', ') || '<span class="muted">Nenhum secretário marcado.</span>'}</p><button class="btn sm" id="bSecs">Escolher secretários</button></div>`;
+    telaRO('documentos', 'Numeração dos documentos', subReuniao(r) + ' · controle do 2º Secretário', '<a class="btn" href="#/documentos">← Documentos</a>' + seletorReuniao() + (pode ? `<button class="btn primary" id="bNovoNum">+ Registrar documento nº ${pad(N.proximo)}</button>` : ''), corpo, r, 'numeracao');
+    ligarSeletor();
+    $$('[data-pdf]').forEach(b => b.onclick = e => { e.stopPropagation(); abrirPdf(b.getAttribute('data-pdf')); });
+    $$('[data-vp]').forEach(tr => tr.onclick = () => A().ir('parecer/' + tr.getAttribute('data-vp')));
+    $$('[data-rl]').forEach(tr => tr.onclick = () => A().ir('relatorio/' + tr.getAttribute('data-rl')));
+    if ($('#bSecs')) $('#bSecs').onclick = escolherSecretarios;
+    if (!pode) return;
+    $$('tr[data-ed]').forEach(tr => tr.onclick = () => editarDocumento(itens('documento').find(d => d.id === tr.getAttribute('data-ed'))));
+    $('#bNovoNum').onclick = () => editarDocumento({ reuniaoId: r.id, numero: String(N.proximo), titulo: '', comissaoId: '', tipoDoc: '', origem: '', resumo: '', pasta: 'relatorio' });
+    const numerar = async lista => {
+      let n = numeracao(reuniao(r.id)).proximo, ok = 0;
+      for (const d of lista) { if (await A().acao(() => A().api({ action: 'reuniao', op: 'salvar', tipo: 'documento', item: Object.assign({}, d, { numero: String(n) }) }))) { ok++; n++; } }
+      await A().recarregar(); A().toast(ok + ' documento(s) numerado(s).'); telaNumeracao();
+    };
+    $$('[data-num]').forEach(b => b.onclick = () => numerar([N.semNumero.find(d => d.id === b.getAttribute('data-num'))]));
+    if ($('#bNumTodos')) $('#bNumTodos').onclick = async () => { if (await A().confirmar(`Dar números de ${pad(N.proximo)} a ${pad(N.proximo + N.semNumero.length - 1)} aos ${N.semNumero.length} documentos sem número, na ordem da lista?`, 'Numerar')) numerar(N.semNumero); };
+  }
+  function escolherSecretarios() {
+    const { esc, modal, $, $$ } = A();
+    const t = new Set(cfg().secretarios || []);
+    const us = (S().d.usuarios || []).filter(u => u.ativo !== false && u.role !== 'leitor' && u.role !== 'admin');
+    const m = modal('Secretários da Mesa', `<p class="small muted" style="margin-top:0">O administrador sempre pode. Marque quem mais numera e edita os documentos da reunião (2º Secretário) e redige a ata (1º Secretário).</p>
+      ${us.length ? us.map(u => `<label class="chk"><input type="checkbox" value="${esc(u.id)}" ${t.has(u.id) ? 'checked' : ''}> ${esc(u.nome)}${u.cargo ? ' <span class="muted small">· ' + esc(u.cargo) + '</span>' : ''}</label>`).join('') : '<p class="muted">Nenhum usuário com perfil de editor ou analista. Cadastre os secretários em Usuários.</p>'}`,
+      '<button class="btn" data-x>Cancelar</button><button class="btn primary" id="scOk">Salvar</button>');
+    $('[data-x]', m.el).onclick = m.fechar;
+    $('#scOk', m.el).onclick = async () => {
+      const ids = $$('input[type=checkbox]', m.el).filter(i => i.checked).map(i => i.value);
+      if (await salvarItem('cfg', { secretarios: ids }, 'Secretários salvos.')) { m.fechar(); A().render(); }
+    };
+  }
+
   /* ======================= Ata geral da reunião ======================= */
   const CAMPOS_ATA = ['numero', 'livro', 'folhas', 'data', 'horaInicio', 'horaFim', 'presentesMinistros', 'presentesPresbiteros', 'ausencias', 'devocional', 'expediente', 'registros', 'encerramento'];
   function ataPadrao(r) {
@@ -1226,25 +1496,26 @@
   function telaAtaGeral(rid) {
     const { esc, shell, head, $, $$ } = A();
     const r = reuniao(rid);
-    if (!r) return semReuniao('reunioes', 'Ata da reunião');
+    if (!r) return semReuniao('reuniao', 'Ata da reunião');
+    if (r.id !== reuniaoId()) lsSet(REU_KEY, r.id); // abrir a ata de uma reunião faz dela a reunião escolhida
     const ex = itens('ata').find(a => a.reuniaoId === r.id);
     const a = Object.assign(ataPadrao(r), ex || {});
-    const pode = isAdmin();
+    const pode = podeSecretaria();
     const campo = (id, l, tipo, extra) => `<div class="field ${extra || ''}"><label for="at_${id}">${l}</label>${tipo === 'area' ? `<textarea id="at_${id}" rows="${id.startsWith('presentes') ? 5 : 3}" ${pode ? '' : 'readonly'}>${esc(a[id] || '')}</textarea>` : `<input type="${tipo}" id="at_${id}" value="${esc(a[id] || '')}" ${pode ? '' : 'readonly'}>`}</div>`;
-    let html = head('Ata da reunião', subReuniao(r), `<a class="btn" href="#/reunioes">← Reuniões</a><button class="btn" id="bAtaImp">Imprimir / PDF</button><button class="btn" id="bAtaDoc">Baixar Word</button>`);
+    let html = head('Ata da reunião', subReuniao(r) + ' · redigida pelo 1º Secretário', `<button class="btn" id="bAtaImp">Imprimir / PDF</button><button class="btn" id="bAtaDoc">Baixar Word</button>`) + etapas('ata', r);
     if (!(r.mesa || []).some(x => x.nome)) html += `<div class="alert warn" style="margin-bottom:12px">A mesa diretora desta reunião ainda não foi informada. ${pode ? 'Use Editar reunião para incluir nomes, títulos e cargos.' : ''}</div>`;
     html += `<div class="ata-grid"><div class="card">
-      <div class="row-wrap" style="justify-content:space-between"><div class="section-title" style="margin:0">Dados da ata</div>${pode ? '<button class="btn sm" id="bMesa">Editar reunião e mesa</button>' : ''}</div>
+      <div class="row-wrap" style="justify-content:space-between"><div class="section-title" style="margin:0">Dados da ata</div>${isAdmin() ? '<button class="btn sm" id="bMesa">Editar reunião e mesa</button>' : ''}</div>
       <div class="grid g3">${campo('numero', 'Ata nº', 'text')}${campo('livro', 'Livro nº', 'text')}${campo('folhas', 'Folhas', 'text')}
       ${campo('data', 'Data', 'date')}${campo('horaInicio', 'Início', 'time')}${campo('horaFim', 'Encerramento', 'time')}</div>
       <div class="grid g2" style="margin-top:12px">${campo('presentesMinistros', 'Ministros presentes <span class="help">um por linha</span>', 'area')}${campo('presentesPresbiteros', 'Presbíteros presentes <span class="help">um por linha, com a igreja</span>', 'area')}</div>
       <div class="grid" style="margin-top:12px">${campo('ausencias', 'Ausências justificadas', 'area')}${campo('devocional', 'Devocional (dirigente, texto bíblico, hinos)', 'area')}${campo('expediente', 'Expediente (correspondências, comunicações)', 'area')}
       ${campo('registros', 'Outras deliberações e registros <span class="help">um por linha</span>', 'area')}${campo('encerramento', 'Encerramento (oração, bênção, próxima reunião)', 'area')}</div>
       <label style="display:block;margin-top:10px"><input type="checkbox" id="at_incluirPareceres" ${a.incluirPareceres !== false ? 'checked' : ''} ${pode ? '' : 'disabled'}> Incluir na ata os pareceres das comissões e a decisão do plenário</label>
-      ${pode ? '<div class="row-wrap" style="margin-top:12px"><button class="btn primary" id="bAtaSalvar">Salvar ata</button><span class="small muted" id="ataMsg"></span></div>' : ''}
+      ${pode ? `<div class="row-wrap" style="margin-top:12px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="at_aprovada" ${a.situacao === 'aprovada' ? 'checked' : ''}> Ata lida e aprovada</label><button class="btn primary" id="bAtaSalvar">Salvar ata</button><span class="small muted" id="ataMsg"></span></div>` : ''}
     </div><div><div class="folha-wrap" id="ataPrev">${folhaAta(r, a)}</div></div></div>`;
-    shell('reunioes', html);
-    const ler = () => { const o = Object.assign({}, a); CAMPOS_ATA.forEach(k => { const el = $('#at_' + k); if (el) o[k] = el.value; }); o.incluirPareceres = $('#at_incluirPareceres').checked; return o; };
+    shell('reuniao', html);
+    const ler = () => { const o = Object.assign({}, a); CAMPOS_ATA.forEach(k => { const el = $('#at_' + k); if (el) o[k] = el.value; }); o.incluirPareceres = $('#at_incluirPareceres').checked; if ($('#at_aprovada')) o.situacao = $('#at_aprovada').checked ? 'aprovada' : 'rascunho'; return o; };
     const atualizar = () => { $('#ataPrev').innerHTML = folhaAta(reuniao(r.id), ler()); };
     $$('[id^="at_"]').forEach(el => { el.addEventListener('input', atualizar); el.addEventListener('change', atualizar); });
     const nome = () => nomeArquivo('Ata ' + (r.codigo || ''));
@@ -1279,7 +1550,10 @@
       case 'mesa': return telaMesa();
       case 'parecer': return telaParecer(a[0]);
       case 'reunioes': return telaReunioes();
-      case 'ata-geral': return telaAtaGeral(a[0]);
+      case 'ata-geral': return telaAtaGeral(a[0] || reuniaoId());
+      case 'pareceres': return telaPareceres();
+      case 'plenario': return telaPlenario();
+      case 'numeracao': return telaNumeracao();
       default: return telaReuniao();
     }
   }

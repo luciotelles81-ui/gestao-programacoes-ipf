@@ -176,7 +176,7 @@ $$;
 create or replace function ipb_r_campos(tipo text) returns text[]
 language sql immutable as $$
   select case tipo
-    when 'cfg' then array['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria']
+    when 'cfg' then array['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'secretarios', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria']
     when 'reuniao' then array['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta', 'legislatura', 'secretarias', 'tutores', 'representantes', 'campo']
     when 'delegado' then array['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId']
     when 'documento' then array['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito']
@@ -203,6 +203,13 @@ create or replace function ipb_r_tesoureiro(u ipb_usuarios) returns boolean
 language sql stable as $$
   select u.role = 'admin' or (u.role <> 'leitor' and exists (
     select 1 from ipb_reuniao_itens where id = 'cfg' and jsonb_typeof(doc->'tesoureiros') = 'array' and doc->'tesoureiros' ? u.id))
+$$;
+
+-- os secretários da Mesa (cfg.secretarios) numeram e editam os documentos da reunião e redigem a ata
+create or replace function ipb_r_secretario(u ipb_usuarios) returns boolean
+language sql stable as $$
+  select u.role = 'admin' or (u.role <> 'leitor' and exists (
+    select 1 from ipb_reuniao_itens where id = 'cfg' and jsonb_typeof(doc->'secretarios') = 'array' and doc->'secretarios' ? u.id))
 $$;
 
 create or replace function ipb_r_relator(u ipb_usuarios, com text, reu text) returns boolean
@@ -699,7 +706,7 @@ begin
     end if;
 
     if v_op = 'enviar_arquivo' then
-      if u.role <> 'admin' then perform ipb_fail('Apenas a Mesa (administrador) envia documentos.', 'FORBIDDEN'); end if;
+      if not ipb_r_secretario(u) then perform ipb_fail('Apenas a Mesa e os secretários enviam documentos.', 'FORBIDDEN'); end if;
       select doc into r from ipb_reuniao_itens where id = req->>'id' and tipo = 'documento' for update;
       if r is null then perform ipb_fail('Documento não encontrado.', 'NOTFOUND'); end if;
       v_txt := req->>'dados';
@@ -788,6 +795,8 @@ begin
       if not ipb_r_tesoureiro(u) then perform ipb_fail('Apenas o tesoureiro e o administrador editam a tesouraria.', 'FORBIDDEN'); end if;
     elsif v_tipo = 'cfg' and u.role <> 'admin' and ipb_r_tesoureiro(u) then
       it := jsonb_build_object('id', 'cfg') || ipb_pick(it, array['tesouraria']);  -- o tesoureiro só muda o saldo anterior
+    elsif v_tipo in ('documento', 'ata') and ipb_r_secretario(u) then
+      null;  -- secretário da Mesa
     elsif v_tipo <> 'parecer' and u.role <> 'admin' then
       perform ipb_fail('Apenas a Mesa (administrador) pode fazer isso.', 'FORBIDDEN');
     end if;

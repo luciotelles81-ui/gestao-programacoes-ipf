@@ -344,8 +344,8 @@
             ${nav('atas', 'Exame de atas', '✎', u.role === 'analista' || isAdmin() ? c.atas : 0)}
             ${nav('verificar', 'Verificar assinatura', '✓')}
             <div class="nav-label">Reunião do concílio</div>
-            ${nav('reuniao', 'Reunião', '⚖')}${nav('reunioes', 'Reuniões e convocações', '◷')}${nav('mesa', 'Mesa e secretarias', '♜')}${nav('ata-geral', 'Ata da reunião', '✎')}${nav('comissoes', 'Comissões', '⚑', window.IPB_REUNIAO ? window.IPB_REUNIAO.pendentes() : 0)}
-            ${nav('acervo', 'Acervo de documentos', '▣')}${nav('tesouraria', 'Tesouraria do ' + ORG.tipoMin, '$')}${nav('documentos', 'Documentos da reunião', '▤')}${nav('delegados', 'Membros das comissões', '☺')}${nav('historico', 'Gráficos do presbitério', '◔')}
+            ${nav('reuniao', 'Reunião Ordinária (RO)', '⚖', window.IPB_REUNIAO ? window.IPB_REUNIAO.pendentes() : 0)}${nav('numeracao', 'Numeração de documentos', '#')}${nav('reunioes', 'Reuniões e convocações', '◷')}
+            ${nav('acervo', 'Acervo de documentos', '▣')}${nav('tesouraria', 'Tesouraria do ' + ORG.tipoMin, '$')}${nav('historico', 'Gráficos do ' + ORG.tipoMin, '◔')}
             ${isAdmin() ? `<div class="nav-label">Administração</div>
               ${nav('admin/igrejas', 'Igrejas', '⌂')}${nav('admin/usuarios', 'Usuários e acessos', '☺')}
               ${nav('admin/modelos', 'Modelos de relatório', '☰')}${nav('admin/comissoes', 'Comissões', '⚑')}${nav('admin/registro', 'Registro de ações', '≡')}` : ''}
@@ -1530,7 +1530,7 @@
       case 'admin': return telaAdmin(a[0]);
       case 'acervo': if (window.IPB_ACERVO) return window.IPB_ACERVO.render(a); return telaPainel();
       case 'tesouraria': if (window.IPB_TESOURARIA) return window.IPB_TESOURARIA.render(a); return telaPainel();
-      case 'reuniao': case 'reunioes': case 'ata-geral': case 'comissoes': case 'comissao': case 'documentos': case 'delegados': case 'historico': case 'parecer': case 'mesa':
+      case 'reuniao': case 'reunioes': case 'ata-geral': case 'comissoes': case 'comissao': case 'documentos': case 'delegados': case 'historico': case 'parecer': case 'mesa': case 'pareceres': case 'plenario': case 'numeracao':
         if (window.IPB_REUNIAO) return window.IPB_REUNIAO.render(p, a);
         return telaPainel();
       default: return telaPainel();
@@ -1543,7 +1543,7 @@
     render();
   }
   // funções do app usadas pelo módulo da reunião do concílio (reunioes.js)
-  window.IPB_APP = { ORG, S, api, esc, $, $$, shell, head, modal, confirmar, toast, acao, recarregar, render, ir, barras, hbarras, ligarTips, baixar, isAdmin, num, money, moneyK, pct, dt, lerArquivo, tamanho, logo, ctx, modelo };
+  window.IPB_APP = { ORG, SERVER, ia, S, api, esc, $, $$, shell, head, modal, confirmar, toast, acao, recarregar, render, ir, barras, hbarras, ligarTips, baixar, isAdmin, num, money, moneyK, pct, dt, lerArquivo, tamanho, logo, ctx, modelo };
   window.addEventListener('beforeunload', e => { if (S.edit && S.edit.sujo) { e.preventDefault(); e.returnValue = ''; } });
   iniciar();
 })();

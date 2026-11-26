@@ -634,6 +634,12 @@
     const c = rGet('cfg');
     return !!(c && Array.isArray(c.tesoureiros) && c.tesoureiros.includes(u.id) && u.role !== 'leitor');
   }
+  // os secretários da Mesa (cfg.secretarios) numeram e editam os documentos da reunião e redigem a ata
+  function ehSecretario(u) {
+    if (isAdmin(u)) return true;
+    const c = rGet('cfg');
+    return !!(c && Array.isArray(c.secretarios) && c.secretarios.includes(u.id) && u.role !== 'leitor');
+  }
   function souRelator(u, comissaoId, reuniaoId) {
     if (isAdmin(u)) return true;
     const ds = delegadosDe(comissaoId, reuniaoId);
@@ -662,7 +668,7 @@
     return n;
   }
   const R_CAMPOS = {
-    cfg: ['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria'],
+    cfg: ['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'secretarios', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria'],
     reuniao: ['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta', 'legislatura', 'secretarias', 'tutores', 'representantes', 'campo'],
     delegado: ['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId'],
     documento: ['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito'],
@@ -713,7 +719,7 @@
       return { blob: v, nome: d.arquivo.nome, tipo: d.arquivo.tipo };
     }
     if (op === 'enviar_arquivo') {
-      if (!isAdmin(u)) fail('Apenas a Mesa (administrador) envia documentos.', 'FORBIDDEN');
+      if (!ehSecretario(u)) fail('Apenas a Mesa e os secretários enviam documentos.', 'FORBIDDEN');
       const d = rGet(id);
       if (!d || d.tipo !== 'documento') fail('Documento não encontrado.', 'NOTFOUND');
       const m = /^data:([\w/.+-]+);base64,/.exec(dados || '');
@@ -765,6 +771,7 @@
     if (ex && ex.tipo !== tipo) fail('Registro de outro tipo.');
     if (tipo === 'tesouraria') { if (!ehTesoureiro(u)) fail('Apenas o tesoureiro e o administrador editam a tesouraria.', 'FORBIDDEN'); }
     else if (tipo === 'cfg' && !isAdmin(u) && ehTesoureiro(u)) { for (const k of Object.keys(it)) if (k !== 'id' && k !== 'tesouraria') delete it[k]; } // o tesoureiro só muda o saldo anterior
+    else if ((tipo === 'documento' || tipo === 'ata') && ehSecretario(u)) { /* secretário da Mesa */ }
     else if (tipo !== 'parecer' && !isAdmin(u)) fail('Apenas a Mesa (administrador) pode fazer isso.', 'FORBIDDEN');
     rValidar(tipo, Object.assign({}, ex || {}, it));
     let rec;
