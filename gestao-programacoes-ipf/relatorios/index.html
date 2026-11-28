@@ -521,6 +521,7 @@
     .parecer-folha table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
     .parecer-folha th, .parecer-folha td { border: 1px solid #777; padding: 4px 6px; text-align: left; background: #fff; color: #111; }
     .parecer-folha td.num { text-align: right; }
+    .pf-print-par { display: none; }
     .pf-ref{text-align:center!important;margin:-6px 0 16px!important;font-size:14px}
     .pf-minuta{border:2px dashed #b45309;color:#b45309;text-align:center;font-weight:700;font-size:13px;letter-spacing:.04em;padding:6px;margin-bottom:14px}
     .pf-part{list-style:none;margin:4px 0 0!important;padding:0!important}
@@ -742,6 +743,9 @@
       body.print-folha .fb.on i::after, body.print-folha .fck input:checked + i::after { font-size: 9px; line-height: 10px; inset: -1px 0 0 1px; }
       body.print-folha .folha tr { break-inside: avoid; }
       body.print-folha .folha .fi::placeholder { color: transparent; }
+      body.print-par .pf-print-par { display: block !important; break-after: page; page-break-after: always; }
+      body.print-par .pf-print-par .parecer-folha { width: auto !important; max-width: none !important; padding: 0 4mm !important; font-size: 13px; line-height: 1.42; }
+      body.print-par .pf-print-par .pf-minuta, body.print-par .pf-print-par .pf-a-img img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
     /* celular */
     .bottom-nav { display: none; }

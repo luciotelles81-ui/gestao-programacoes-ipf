@@ -1380,7 +1380,7 @@
       const falta = (a.membros || []).filter((m, i) => !assinou(i)).length;
       h += `<div class="card" id="cVersaoFinal"><div class="card-head"><h2>7. Versão final do parecer</h2><span class="small muted">no modelo do ${esc(ORG.sigla || '')}, com logo, cabeçalho, participantes e assinaturas</span></div>
         <p class="small ${falta ? 'down' : 'up'}" style="margin:0 0 10px">${falta ? `Faltam ${falta} assinatura(s). O documento sai marcado como MINUTA até todos assinarem.` : '✓ Todos os membros assinaram. Este é o documento final.'}</p>
-        <div class="actions no-print" style="margin-bottom:12px"><button class="btn primary" id="bVFpdf">Gerar PDF / Imprimir</button></div>
+        <div class="actions no-print" style="margin-bottom:12px"><button class="btn primary" id="bVFpdf" title="Só a folha do parecer, no modelo do concílio">Imprimir / PDF sem o formulário</button>${window.IPB_FOLHA && window.IPB_FOLHA.disponivel(r) ? '<button class="btn" id="bVFpdfF" title="Parecer e, em seguida, o formulário do relatório no layout diagramado (como no papel)">Imprimir / PDF com o formulário</button>' : ''}</div>
         <div class="folha-wrap">${folhaFinal(r)}</div></div>`;
     }
     return h;
@@ -1411,6 +1411,23 @@
     if ($('#bVFpdf')) $('#bVFpdf').onclick = () => {
       const nome = ('Parecer ' + (r.analise.comissaoNome || '') + ' - ' + igNome(r.igrejaId) + ' ' + r.ano).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
       window.IPB_REUNIAO.h.imprimir(nome, folhaFinal(r));
+    };
+    if ($('#bVFpdfF')) $('#bVFpdfF').onclick = () => {
+      // parecer + formulário no layout diagramado do relatório (mesmo padrão do botão "Imprimir formulário")
+      const antes = S.layout, tabAntes = S.tab;
+      S.layout = 'folha'; telaRelatorio(r.id, true);
+      const card = $('#tForm > .card:last-child');
+      if (card) card.insertAdjacentHTML('afterbegin', `<div class="pf-print-par">${folhaFinal(r)}</div>`);
+      document.body.classList.add('print-folha', 'print-par');
+      const tituloAntes = document.title;
+      document.title = ('Parecer e relatório - ' + igNome(r.igrejaId) + ' ' + r.ano).replace(/[\\/:*?"<>|]+/g, ' ');
+      const fim = () => {
+        document.body.classList.remove('print-folha', 'print-par'); document.title = tituloAntes;
+        window.removeEventListener('afterprint', fim);
+        S.layout = antes; S.tab = tabAntes; telaRelatorio(r.id, true);
+      };
+      window.addEventListener('afterprint', fim);
+      setTimeout(() => print(), 80);
     };
     if ($('#bAtrib')) $('#bAtrib').onclick = () => { const v = $('#aCom').value; if (!v) return toast('Escolha a comissão.', true); op('atribuir', { comissaoId: v }, 'Relatório encaminhado à comissão.'); };
     if ($('#bIA')) $('#bIA').onclick = async () => {
