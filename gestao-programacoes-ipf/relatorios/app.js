@@ -8,6 +8,8 @@
   ORG.tipoMin = ORG.tipo.toLowerCase();
   document.title = ORG.sistema;
   const TOKEN_KEY = 'ipb-relatorios-token';
+  const MENU_KEY = 'ipb-menu-recolhido';
+  const menuRecolhido = () => { try { return localStorage.getItem(MENU_KEY) === '1'; } catch (e) { return false; } };
   const THEME_KEY = 'ipb-relatorios-tema';
   const ROLE_NOMES = { admin: 'Administrador', editor: 'Editor (preenche relatórios)', analista: 'Analista (comissão)', leitor: 'Somente leitura' };
   const DECISOES = ['Aprovar', 'Aprovar com ressalvas', 'Devolver para correção'];
@@ -410,11 +412,12 @@
   function shell(pagina, html) {
     const c = contagens();
     const u = S.user;
-    const nav = (h, label, ic, n) => `<a href="#/${h}" class="${pagina === h.split('/')[0] || (h === 'admin/comissoes' && pagina === 'admin-comissoes') ? 'active' : ''}">${ic} ${label}${n ? `<span class="count">${n}</span>` : ''}</a>`;
+    const nav = (h, label, ic, n) => `<a href="#/${h}" class="${pagina === h.split('/')[0] || (h === 'admin/comissoes' && pagina === 'admin-comissoes') ? 'active' : ''}" title="${esc(label)}"><span class="ni" aria-hidden="true">${ic}</span><span class="nl">${label}</span>${n ? `<span class="count">${n}</span>` : ''}</a>`;
     root().innerHTML = `
       <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><a href="#/painel" style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:8px">${logo(30)}<b>${esc(ORG.sistema)}</b></a></div>
-      <div class="app">
+      <div class="app${menuRecolhido() ? ' menu-min' : ''}" id="app">
         <aside class="side" id="side">
+          <button class="side-recolher no-print" id="bRecolher" type="button" title="${menuRecolhido() ? 'Abrir o menu' : 'Recolher o menu'}" aria-label="${menuRecolhido() ? 'Abrir o menu' : 'Recolher o menu'}" aria-expanded="${!menuRecolhido()}">${menuRecolhido() ? '»' : '«'}</button>
           <a class="brand" href="#/painel" title="Ir para a página inicial (Painel)">${logo(72)}<div class="brand-txt"><b>${duasLinhas(ORG.sistema)}</b><span class="brand-org">${ORG.sigla ? '<i>' + esc(ORG.sigla) + '</i>' : ''}<em>${esc(u.igrejaId ? igNome(u.igrejaId) : ORG.nome)}</em></span></div></a>
           <nav class="nav">
             ${nav('painel', 'Painel', '▦')}
@@ -447,6 +450,13 @@
         <button type="button" id="bMais"><span class="i">☰</span>Mais</button>
       </nav>`;
     $('#mnu').onclick = () => $('#side').classList.toggle('open');
+    $('#bRecolher').onclick = () => {
+      const min = !menuRecolhido();
+      try { localStorage.setItem(MENU_KEY, min ? '1' : '0'); } catch (e) { /* sem armazenamento */ }
+      $('#app').classList.toggle('menu-min', min);
+      const b = $('#bRecolher'); b.textContent = min ? '»' : '«';
+      b.title = b.ariaLabel = min ? 'Abrir o menu' : 'Recolher o menu'; b.setAttribute('aria-expanded', String(!min));
+    };
     $('#bMais').onclick = () => $('#side').classList.toggle('open');
     if ($('#bInstalar')) $('#bInstalar').onclick = instalarApp;
     $('#bSair').onclick = () => sair();

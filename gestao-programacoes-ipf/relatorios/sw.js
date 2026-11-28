@@ -1,6 +1,6 @@
 /* Service worker: o app abre mesmo sem internet. Sempre tenta a rede primeiro,
  * para que as atualizações cheguem na hora; o cache é só reserva. */
-const CACHE = 'ipb-relatorios-v14';
+const CACHE = 'ipb-relatorios-v15';
 const BASE = ['./', './index.html', './app.js', './folha.js', './reunioes.js', './acervo.js', './tesouraria.js', './graficos.js', './img/logo-ipb.png', './img/logo-ipb-branco.png', './img/favicon.png', './modelos.js', './regras-atas.js', './base-legal.js', './servidor-local.js', './config.js', './concilios-ipb.js', './manifest.webmanifest', './icones/icone-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(BASE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
