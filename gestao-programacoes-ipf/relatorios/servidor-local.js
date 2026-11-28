@@ -552,7 +552,10 @@
   };
 
   /* ---------------- exame de atas ---------------- */
-  function resumoAta(x) { const { paginas, ...r } = x; return Object.assign(clone(r), { nPaginas: (paginas || []).length }); }
+  function resumoAta(x) { const { paginas, ...r } = x; return Object.assign(clone(r), { nPaginas: r.nPaginas != null ? r.nPaginas : (paginas || []).length }); }
+  // as páginas (imagens e PDFs) ficam no IndexedDB, que aguenta arquivos grandes; o banco guarda só os dados da ata
+  const okPagina = x => typeof x === 'string' && (x.startsWith('data:image/') || x.startsWith('data:application/pdf'));
+  async function paginasAta(x) { if (!x.paginasIdb) return x.paginas || []; return (await idbOp('readonly', st => st.get('ata_' + x.id)).catch(() => null)) || []; }
   function getAta(u, id) {
     const x = (db.atas || []).find(a => a.id === id);
     if (!x || !veIgreja(u, x.igrejaId)) fail('Ata não encontrada.', 'NOTFOUND');
@@ -566,7 +569,7 @@
     const u = session(token);
     db.atas = db.atas || [];
     const t = now();
-    if (op === 'abrir') return { item: clone(getAta(u, id)) };
+    if (op === 'abrir') { const x = getAta(u, id); return { item: Object.assign(clone(x), { paginas: await paginasAta(x) }) }; }
     if (op === 'salvar') {
       const it = p.item || {};
       const ex = it.id ? getAta(u, it.id) : null;
@@ -574,22 +577,26 @@
       const igrejaId = ex ? ex.igrejaId : (isAdmin(u) || !u.igrejaId ? it.igrejaId : u.igrejaId);
       if (!igrejaId || !db.igrejas.find(i => i.id === igrejaId)) fail('Escolha a igreja.');
       if (ex && ex.status === 'Analisada' && !isAdmin(u)) fail('Esta ata já foi analisada.', 'FORBIDDEN');
-      const paginas = Array.isArray(it.paginas) ? it.paginas.filter(x => typeof x === 'string' && x.startsWith('data:image/')) : (ex ? ex.paginas : []);
-      if (!paginas.length) fail('Anexe pelo menos uma imagem da ata.');
-      if (paginas.length > 20) fail('Envie no máximo 20 páginas por exame.');
+      const paginas = Array.isArray(it.paginas) ? it.paginas.filter(okPagina) : (ex ? await paginasAta(ex) : []);
+      if (!paginas.length) fail('Anexe o PDF ou pelo menos uma imagem da ata.');
+      if (paginas.length > 20) fail('Envie no máximo 20 arquivos por exame.');
       const rec = Object.assign(ex || { id: uid('at_'), status: 'Enviada', ia: null, conferencia: {}, final: null, criadoPor: u.id, criadoPorNome: u.nome, createdAt: t, historico: [] },
-        pick(it, ['livro', 'numeros', 'dataReuniao', 'tipoReuniao', 'formato', 'observacoes']), { igrejaId, paginas, updatedAt: t });
+        pick(it, ['livro', 'numeros', 'dataReuniao', 'tipoReuniao', 'formato', 'observacoes']), { igrejaId, updatedAt: t, nPaginas: paginas.length, paginasIdb: true });
+      delete rec.paginas;
+      await idbOp('readwrite', st => st.put(paginas, 'ata_' + rec.id));
       if (ex) { rec.ia = null; rec.final = null; }
-      rec.historico.push({ em: t, por: u.nome, acao: ex ? 'Imagens/dados da ata atualizados' : 'Ata enviada para exame (' + paginas.length + ' página(s))' });
+      const nPdf = paginas.filter(x => x.startsWith('data:application/pdf')).length;
+      rec.historico.push({ em: t, por: u.nome, acao: ex ? 'Arquivos/dados da ata atualizados' : 'Ata enviada para exame (' + (nPdf ? nPdf + ' PDF' + (paginas.length > nPdf ? ' e ' + (paginas.length - nPdf) + ' imagem(ns)' : '') : paginas.length + ' página(s)') + ')' });
       if (!ex) db.atas.push(rec);
       log(u, ex ? 'editar' : 'criar', 'Ata ' + (rec.numeros || '') + ' · livro ' + (rec.livro || ''), 'ata', rec.id); save();
-      return { item: clone(rec) };
+      return { item: Object.assign(clone(rec), { paginas }) };
     }
     const x = getAta(u, id);
     let acao = '';
     if (op === 'excluir') {
       if (!(isAdmin(u) || (x.criadoPor === u.id && x.status === 'Enviada'))) fail('Você não pode excluir esta ata.', 'FORBIDDEN');
       db.atas = db.atas.filter(a => a.id !== id);
+      await idbOp('readwrite', st => st.delete('ata_' + id)).catch(() => {});
       log(u, 'excluir', 'Ata ' + (x.numeros || ''), 'ata', id); save();
       return {};
     }
@@ -617,7 +624,7 @@
     x.updatedAt = t;
     x.historico.push({ em: t, por: u.nome, acao });
     log(u, 'ata_' + op, 'Ata ' + (x.numeros || '') + ' · ' + acao, 'ata', x.id); save();
-    return { item: clone(x) };
+    return { item: Object.assign(clone(x), { paginas: await paginasAta(x) }) };
   };
 
   /* ---------------- reunião do concílio: comissões, delegados, documentos, pareceres ---------------- */

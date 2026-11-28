@@ -1476,17 +1476,32 @@
   function telaAtas() {
     const atas = (S.d.atas || []).slice().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
     const podeEnviar = isAdmin() || S.user.role === 'editor' || S.user.role === 'analista';
-    shell('atas', head('Exame de atas', 'Anexe as imagens das atas. A IA confere cada página com o Regulamento para Confecção de Atas e a Constituição da IPB, e o relator escreve o parecer final.', podeEnviar ? '<button class="btn primary" id="bNovaAta">+ Enviar atas para exame</button>' : '') + `
-      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Igreja</th><th>Reunião</th><th>Livro / atas</th><th class="num">Páginas</th><th>Situação</th><th>Resultado</th><th>Atualizado</th></tr></thead><tbody>
+    shell('atas', head('Exame de atas', 'Anexe o PDF ou as fotos das atas. A IA confere cada página com o Regulamento para Confecção de Atas e a Constituição da IPB, e o relator escreve o parecer final.', podeEnviar ? '<button class="btn primary" id="bNovaAta">+ Enviar atas para exame</button>' : '') + `
+      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Igreja</th><th>Reunião</th><th>Livro / atas</th><th class="num">Arquivos</th><th>Situação</th><th>Resultado</th><th>Atualizado</th></tr></thead><tbody>
       ${atas.map(a => `<tr class="click" data-go="ata/${esc(a.id)}"><td>${esc(igNome(a.igrejaId))}</td><td>${esc(a.tipoReuniao || '')}${a.dataReuniao ? ' · ' + dt(a.dataReuniao) : ''}</td><td>${esc(a.livro ? 'Livro ' + a.livro : '')}${a.numeros ? ' · ' + esc(a.numeros) : ''}</td><td class="num">${a.nPaginas || 0}</td><td>${badge(a.status)}</td><td>${a.final ? esc(a.final.conclusao) : a.ia ? '<span class="muted">proposta da IA pronta</span>' : '–'}</td><td class="small muted">${dt(a.updatedAt)}</td></tr>`).join('') || '<tr><td colspan="7" class="list-empty">Nenhuma ata enviada para exame.</td></tr>'}
       </tbody></table></div></div>
       <div class="card"><h3>Como funciona</h3><ol class="small" style="margin:8px 0 0;padding-left:18px">
-        <li>A igreja (ou a comissão) fotografa ou digitaliza as páginas das atas e envia aqui.</li>
-        <li>A IA lê as imagens e confere ${(window.IPB_REGRAS_ATAS || []).length} regras do Manual Presbiteriano, marcando cada uma como conforme, não conforme ou não verificável, com a evidência encontrada.</li>
+        <li>A igreja (ou a comissão) envia o PDF do livro de atas (digitalizado ou gerado no computador) ou fotos das páginas.</li>
+        <li>A IA lê o PDF ou as imagens e confere ${(window.IPB_REGRAS_ATAS || []).length} regras do Manual Presbiteriano, marcando cada uma como conforme, não conforme ou não verificável, com a evidência encontrada.</li>
         <li>O relator revisa a conferência, ajusta o que for preciso e escreve o parecer final, que é o texto oficial do exame.</li></ol></div>`);
     $$('[data-go]').forEach(tr => tr.onclick = () => ir(tr.getAttribute('data-go')));
     if ($('#bNovaAta')) $('#bNovaAta').onclick = () => modalAta(null);
   }
+  // páginas da ata: imagens (data:image/...) ou PDFs (data:application/pdf;name=...;base64,...)
+  const ehPdf = p => /^data:application\/pdf[;,]/.test(p || '');
+  const nomePdf = p => { const m = /^data:application\/pdf;name=([^;]*);/.exec(p || ''); try { return m ? decodeURIComponent(m[1]) : 'Arquivo PDF'; } catch (e) { return 'Arquivo PDF'; } };
+  const MAX_PDF = 15 * 1024 * 1024;
+  async function lerPdf(file) {
+    if (file.size > MAX_PDF) throw new Error(file.name + ' tem ' + tamanho(file.size) + '. O limite é 15 MB por PDF: divida o arquivo ou reduza a resolução da digitalização.');
+    const url = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+    return String(url).replace(/^data:[^;,]*(;base64)?,/, 'data:application/pdf;name=' + encodeURIComponent(file.name.replace(/[;,]/g, ' ')) + ';base64,');
+  }
+  function blobDe(dataUrl) {
+    const i = dataUrl.indexOf(','), bin = atob(dataUrl.slice(i + 1)), u = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k);
+    return new Blob([u], { type: ehPdf(dataUrl) ? 'application/pdf' : 'image/jpeg' });
+  }
+  const pdfIcone = '<svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M6 2h9l5 5v15H6z" fill="#fff" stroke="currentColor" stroke-width="1.5"/><path d="M15 2v5h5" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="13" y="18" text-anchor="middle" font-size="6" font-weight="700" fill="#b3261e">PDF</text></svg>';
   async function reduzirImagem(file) {
     const url = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
     const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Não consegui abrir a imagem ' + file.name + '. Use JPG ou PNG.')); i.src = url; });
@@ -1509,18 +1524,21 @@
         <div class="field"><label>Ata(s)</label><input type="text" id="aNum" placeholder="Ex.: Ata 245 ou Atas 240 a 252" value="${esc(ata ? ata.numeros || '' : '')}"></div>
         <div class="field"><label>Data da reunião (se for uma só)</label><input type="date" id="aData" value="${esc(ata ? ata.dataReuniao || '' : '')}"></div>
       </div>
-      <div class="field"><label>Imagens das páginas (JPG ou PNG, até 20)</label><input type="file" id="aImgs" accept="image/*" multiple><span class="help">Fotografe cada página inteira, de frente e com boa luz. As imagens são reduzidas antes do envio.</span></div>
+      <div class="field"><label>PDF ou imagens das atas (até 20 arquivos)</label><input type="file" id="aImgs" accept="application/pdf,.pdf,image/*" multiple><span class="help">PDF do livro de atas (até 15 MB cada) ou fotos de cada página inteira, de frente e com boa luz. As fotos são reduzidas antes do envio.</span></div>
       <div class="thumbs" id="aThumbs"></div>
       <div class="field"><label>Observações (opcional)</label><textarea id="aObs">${esc(ata ? ata.observacoes || '' : '')}</textarea></div>`,
       '<button class="btn" data-x>Cancelar</button><button class="btn primary" id="aOk">Enviar</button>', true);
     const thumbs = () => {
-      $('#aThumbs', m.el).innerHTML = paginas.map((p, i) => `<figure><img src="${p}" alt="Página ${i + 1}"><figcaption>Pág. ${i + 1} <button type="button" class="btn ghost sm" data-rm="${i}" aria-label="Remover página ${i + 1}">×</button></figcaption></figure>`).join('');
+      $('#aThumbs', m.el).innerHTML = paginas.map((p, i) => `<figure>${ehPdf(p) ? `<div class="pdf-tile" title="${esc(nomePdf(p))}">${pdfIcone}<span>${esc(nomePdf(p))}</span></div>` : `<img src="${p}" alt="Página ${i + 1}">`}<figcaption>${ehPdf(p) ? 'PDF' : 'Pág.'} ${i + 1} <button type="button" class="btn ghost sm" data-rm="${i}" aria-label="Remover página ${i + 1}">×</button></figcaption></figure>`).join('');
       $$('[data-rm]', m.el).forEach(b => b.onclick = () => { paginas.splice(Number(b.getAttribute('data-rm')), 1); thumbs(); });
     };
     thumbs();
     $('#aImgs', m.el).onchange = async e => {
       const files = Array.from(e.target.files || []);
-      for (const f of files) { if (paginas.length >= 20) { toast('Máximo de 20 páginas.', true); break; } try { paginas.push(await reduzirImagem(f)); } catch (err) { toast(err.message, true); } }
+      for (const f of files) {
+        if (paginas.length >= 20) { toast('Máximo de 20 arquivos.', true); break; }
+        try { paginas.push(/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name) ? await lerPdf(f) : await reduzirImagem(f)); } catch (err) { toast(err.message, true); }
+      }
       e.target.value = ''; thumbs();
     };
     $('[data-x]', m.el).onclick = m.fechar;
@@ -1552,18 +1570,18 @@
     const grupos = [...new Set(regras.map(g => g.grupo))];
     const editarMeta = (isAdmin() || a.criadoPor === S.user.id) && a.status !== 'Analisada';
     shell('atas', head(`Exame de atas · ${esc(igNome(a.igrejaId))}`, `${esc(a.tipoReuniao || '')} · livro ${a.formato === 'manuscrito' ? 'manuscrito' : 'digital'}${a.livro ? ' nº ' + esc(a.livro) : ''}${a.numeros ? ' · ' + esc(a.numeros) : ''}${a.dataReuniao ? ' · ' + dt(a.dataReuniao) : ''} · ${badge(a.status)}`,
-      `${editarMeta ? '<button class="btn" id="bEdAta">Editar / trocar imagens</button>' : ''}<button class="btn" id="bPrintAta">Imprimir / PDF</button>${isAdmin() || (a.criadoPor === S.user.id && a.status === 'Enviada') ? '<button class="btn danger" id="bExAta">Excluir</button>' : ''}${a.status === 'Analisada' && (isAdmin() || (a.final && a.final.porId === S.user.id)) ? '<button class="btn ghost" id="bReAta">Reabrir</button>' : ''}`) + `
+      `${editarMeta ? '<button class="btn" id="bEdAta">Editar / trocar arquivos</button>' : ''}<button class="btn" id="bPrintAta">Imprimir / PDF</button>${isAdmin() || (a.criadoPor === S.user.id && a.status === 'Enviada') ? '<button class="btn danger" id="bExAta">Excluir</button>' : ''}${a.status === 'Analisada' && (isAdmin() || (a.final && a.final.porId === S.user.id)) ? '<button class="btn ghost" id="bReAta">Reabrir</button>' : ''}`) + `
       <div class="ata-grid">
         <div class="card ata-view no-print">
-          <div class="card-head"><h3>Página ${E.pag + 1} de ${(a.paginas || []).length}</h3><div class="actions"><button class="btn sm" id="pgAnt" ${E.pag ? '' : 'disabled'}>‹ Anterior</button><button class="btn sm" id="pgProx" ${E.pag < (a.paginas || []).length - 1 ? '' : 'disabled'}>Próxima ›</button></div></div>
-          <a href="${a.paginas[E.pag]}" target="_blank" rel="noopener"><img src="${a.paginas[E.pag]}" alt="Página ${E.pag + 1} da ata"></a>
-          <div class="thumbs small-th">${(a.paginas || []).map((p, i) => `<button type="button" data-pg="${i}" class="${i === E.pag ? 'on' : ''}"><img src="${p}" alt="Página ${i + 1}"></button>`).join('')}</div>
+          <div class="card-head"><h3>${ehPdf(a.paginas[E.pag]) ? esc(nomePdf(a.paginas[E.pag])) : 'Página'} ${(a.paginas || []).length > 1 ? `<span class="muted small">${E.pag + 1} de ${(a.paginas || []).length}</span>` : ''}</h3><div class="actions"><button class="btn sm" id="pgAnt" ${E.pag ? '' : 'disabled'}>‹ Anterior</button><button class="btn sm" id="pgProx" ${E.pag < (a.paginas || []).length - 1 ? '' : 'disabled'}>Próxima ›</button></div></div>
+          ${ehPdf(a.paginas[E.pag]) ? `<div class="pdf-view"><iframe id="pdfFrame" title="${esc(nomePdf(a.paginas[E.pag]))}"></iframe><p class="small" style="margin:6px 0 0"><a href="#" id="pdfAbrir">Abrir o PDF em outra aba</a></p></div>` : `<a href="${a.paginas[E.pag]}" target="_blank" rel="noopener"><img src="${a.paginas[E.pag]}" alt="Página ${E.pag + 1} da ata"></a>`}
+          ${(a.paginas || []).length > 1 ? `<div class="thumbs small-th">${(a.paginas || []).map((p, i) => `<button type="button" data-pg="${i}" class="${i === E.pag ? 'on' : ''}" title="${ehPdf(p) ? esc(nomePdf(p)) : 'Página ' + (i + 1)}">${ehPdf(p) ? `<span class="pdf-mini">${pdfIcone}</span>` : `<img src="${p}" alt="Página ${i + 1}">`}</button>`).join('')}</div>` : ''}
           ${a.observacoes ? `<p class="small muted">${esc(a.observacoes)}</p>` : ''}
         </div>
         <div>
           <div class="card"><div class="card-head"><h2>Proposta da IA</h2>${pode && SERVER ? `<button class="btn ${a.ia ? '' : 'primary'}" id="bIAata">${a.ia ? 'Analisar novamente' : 'Analisar com IA'}</button>` : ''}</div>
             ${a.ia ? `<div class="ia-box"><div class="small muted" style="margin-bottom:6px">Gerada em ${dt(a.ia.em, true)}${a.ia.modelo ? ' · ' + esc(a.ia.modelo) : ''}. Proposta inicial: o relator confere e decide.</div><div class="txt">${esc(a.ia.resultado.resumo || '')}</div>${(a.ia.resultado.transcricao_resumida ? `<details style="margin-top:8px"><summary class="small">O que a IA leu nas imagens</summary><div class="small" style="white-space:pre-wrap;margin-top:6px">${esc(a.ia.resultado.transcricao_resumida)}</div></details>` : '')}</div>`
-              : `<p class="muted" style="margin:0">${SERVER ? 'Clique em "Analisar com IA" para a conferência automática das páginas.' : 'A leitura das imagens pela IA precisa do sistema conectado ao servidor. No modo demonstração, faça a conferência manual abaixo.'}</p>`}
+              : `<p class="muted" style="margin:0">${SERVER ? 'Clique em "Analisar com IA": a IA lê o PDF ou as imagens e confere cada regra do Manual.' : 'A leitura do PDF ou das imagens pela IA precisa do sistema conectado ao servidor (Supabase com a chave da IA). No modo demonstração, faça a conferência manual abaixo.'}</p>`}
           </div>
           <div class="card"><div class="card-head"><h2>Conferência com o Manual Presbiteriano</h2><span class="small"><span class="sit sit-conforme">${cont.conforme} conformes</span> <span class="sit sit-nao_conforme">${cont.nao_conforme} não conformes</span> <span class="sit sit-nao_verificavel">${cont.nao_verificavel} não verificáveis</span></span></div>
             ${grupos.map(gr => `<h3 class="section-title">${esc(gr)}</h3>${regras.filter(g => g.grupo === gr).map(g => {
@@ -1583,6 +1601,12 @@
         </div>
       </div>`);
     $$('[data-pg]').forEach(b => b.onclick = () => { E.pag = Number(b.getAttribute('data-pg')); telaAta(id); });
+    if ($('#pdfFrame')) {
+      if (S.pdfUrl) URL.revokeObjectURL(S.pdfUrl);
+      S.pdfUrl = URL.createObjectURL(blobDe(a.paginas[E.pag]));
+      $('#pdfFrame').src = S.pdfUrl;
+      $('#pdfAbrir').onclick = e => { e.preventDefault(); window.open(S.pdfUrl, '_blank', 'noopener'); };
+    }
     if ($('#pgAnt')) $('#pgAnt').onclick = () => { E.pag--; telaAta(id); };
     if ($('#pgProx')) $('#pgProx').onclick = () => { E.pag++; telaAta(id); };
     $$('[data-sit]').forEach(s => s.onchange = () => { const k = s.getAttribute('data-sit'); E.conf[k] = Object.assign({}, E.conf[k], { situacao: s.value }); s.className = 'sit-sel sit-' + s.value; });
@@ -1590,7 +1614,7 @@
     const fim = async (req, msg) => { const r = await acao(() => api(Object.assign({ action: 'ata', id }, req)), msg); if (r) { await recarregar(); S.ataEdit = r.item ? { id, a: r.item, conf: JSON.parse(JSON.stringify(r.item.conferencia || {})), pag: E.pag } : null; return r; } return null; };
     if ($('#bConf')) $('#bConf').onclick = async () => { if (await fim({ op: 'conferencia', itens: E.conf }, 'Conferência salva.')) telaAta(id); };
     if ($('#bIAata')) $('#bIAata').onclick = async () => {
-      const b = $('#bIAata'); b.disabled = true; b.textContent = 'Lendo as páginas… (pode levar 1 a 2 minutos)';
+      const b = $('#bIAata'); b.disabled = true; b.textContent = 'Lendo as atas… (pode levar 1 a 3 minutos)';
       try {
         const res = await ia({ tipo: 'ata', ataId: id, regras: regras.map(g => ({ id: g.id, artigo: g.artigo, texto: g.texto })), meta: { igreja: igNome(a.igrejaId), tipoReuniao: a.tipoReuniao, formato: a.formato, livro: a.livro, numeros: a.numeros } });
         if (await fim({ op: 'ia', resultado: res.resultado, modelo: res.modelo || '' }, 'Análise da IA pronta. Confira cada item.')) { E.conf = {}; S.ataEdit.conf = JSON.parse(JSON.stringify(S.ataEdit.a.conferencia || {})); telaAta(id); }

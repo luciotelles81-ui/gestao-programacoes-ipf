@@ -658,12 +658,12 @@ begin
       if v_ig is null or not exists (select 1 from ipb_igrejas where id = v_ig) then perform ipb_fail('Escolha a igreja.'); end if;
       if ex is not null and ex->>'status' = 'Analisada' and u.role <> 'admin' then perform ipb_fail('Esta ata já foi analisada.', 'FORBIDDEN'); end if;
       if jsonb_typeof(it->'paginas') = 'array' then
-        pags := coalesce((select jsonb_agg(p) from jsonb_array_elements(it->'paginas') p where jsonb_typeof(p) = 'string' and p->>0 like 'data:image/%'), '[]');
+        pags := coalesce((select jsonb_agg(p) from jsonb_array_elements(it->'paginas') p where jsonb_typeof(p) = 'string' and (p->>0 like 'data:image/%' or p->>0 like 'data:application/pdf%')), '[]');
       end if;
       pags := coalesce(pags, '[]');
       v_n := jsonb_array_length(pags);
-      if v_n = 0 then perform ipb_fail('Anexe pelo menos uma imagem da ata.'); end if;
-      if v_n > 20 then perform ipb_fail('Envie no máximo 20 páginas por exame.'); end if;
+      if v_n = 0 then perform ipb_fail('Anexe o PDF ou pelo menos uma imagem da ata.'); end if;
+      if v_n > 20 then perform ipb_fail('Envie no máximo 20 arquivos por exame.'); end if;
       v_id := coalesce(ex->>'id', ipb_uid('at_'));
       r := coalesce(ex, jsonb_build_object('id', v_id, 'status', 'Enviada', 'ia', null, 'conferencia', '{}'::jsonb, 'final', null, 'criadoPor', u.id, 'criadoPorNome', u.nome, 'createdAt', t, 'historico', '[]'::jsonb))
         || (select coalesce(jsonb_object_agg(k, it->k), '{}') from unnest(array['livro','numeros','dataReuniao','tipoReuniao','formato','observacoes']) k where it ? k)

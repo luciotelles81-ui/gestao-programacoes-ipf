@@ -43,13 +43,13 @@ Estrutura do texto (texto corrido com títulos numerados simples, sem markdown c
 Tom: respeitoso, objetivo e pastoral, como um parecer de concílio. Até umas 600 palavras.`;
 
 const SISTEMA_ATA = `Você ajuda o relator de uma comissão de exame de livros de atas de um Presbitério da Igreja Presbiteriana do Brasil (IPB).
-Você recebe imagens de páginas de atas e uma lista de regras do Regulamento para Confecção de Atas dos Concílios da IPB e da Constituição da IPB.
-Para CADA regra da lista, decida, olhando somente as imagens:
+Você recebe as atas em PDF (digitalizado ou gerado no computador) e/ou imagens de páginas, e uma lista de regras do Regulamento para Confecção de Atas dos Concílios da IPB e da Constituição da IPB.
+Para CADA regra da lista, decida, olhando somente os PDFs e as imagens:
 - "conforme": a página mostra que a regra foi cumprida (cite onde);
 - "nao_conforme": a página mostra descumprimento (descreva o que viu);
-- "nao_verificavel": as imagens não permitem concluir (por exemplo, regras sobre o livro inteiro, capa, encadernação, ou trecho ilegível);
+- "nao_verificavel": o material não permite concluir (por exemplo, regras sobre o livro inteiro, capa, encadernação, ou trecho ilegível);
 - "nao_se_aplica": a regra não se aplica a esta ata (por exemplo, eleição que não houve).
-Seja criterioso: não marque "conforme" sem evidência visível. Em "evidencia", cite trechos curtos ou descreva o que se vê, com a página. Em "observacao", sugira a correção quando houver problema.
+Seja criterioso: não marque "conforme" sem evidência visível. Em "evidencia", cite trechos curtos ou descreva o que se vê, com a página (no PDF, informe o arquivo e a página do PDF; quando o livro tiver numeração própria, cite também a folha e o número da ata). Um PDF pode trazer várias atas: confira as regras em todas e aponte em qual ata está cada problema. Em "observacao", sugira a correção quando houver problema.
 Escreva em português do Brasil. O "resumo" é uma proposta inicial de parecer, em 1 a 3 parágrafos, para o relator ajustar. Em "transcricao_resumida", resuma o que foi lido em cada página (número da ata, data, presentes, assuntos, encerramento), indicando trechos ilegíveis.`;
 
 const SCHEMA_ATA = {
@@ -151,9 +151,17 @@ Deno.serve(async (request) => {
     if (body.tipo === "ata") {
       const { item } = await ipbApi({ action: "ata", op: "abrir", id: body.ataId, token: body.token });
       const paginas: string[] = item.paginas || [];
-      if (!paginas.length) return json({ erro: "A ata não tem imagens." }, 400);
+      if (!paginas.length) return json({ erro: "A ata não tem PDF nem imagens." }, 400);
       const content: unknown[] = [];
       paginas.forEach((p, i) => {
+        const pdf = /^data:application\/pdf(?:;name=([^;]*))?;base64,(.+)$/.exec(p);
+        if (pdf) {
+          let nome = "Ata em PDF";
+          try { nome = pdf[1] ? decodeURIComponent(pdf[1]) : nome; } catch { /* nome padrão */ }
+          content.push({ type: "text", text: `Arquivo ${i + 1} (PDF): ${nome}` });
+          content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf[2] }, title: nome });
+          return;
+        }
         const m = /^data:(image\/(?:jpeg|png|gif|webp));base64,(.+)$/.exec(p);
         if (!m) return;
         content.push({ type: "text", text: `Página ${i + 1}:` });
@@ -175,7 +183,7 @@ Deno.serve(async (request) => {
         messages: [{ role: "user", content }],
       } as never);
       const msg = await stream.finalMessage();
-      if (msg.stop_reason === "refusal") return json({ erro: "A IA não conseguiu analisar estas imagens. Faça a conferência manual." }, 422);
+      if (msg.stop_reason === "refusal") return json({ erro: "A IA não conseguiu analisar este material. Faça a conferência manual." }, 422);
       let resultado;
       try { resultado = JSON.parse(textoDe(msg as never)); } catch { return json({ erro: "A resposta da IA veio incompleta. Tente de novo." }, 502); }
       return json({ resultado, modelo: msg.model });
