@@ -123,6 +123,9 @@
     .side-recolher:hover { background: var(--side-hover); }
     .nav a .ni { width: 18px; text-align: center; flex: none; }
     @media (max-width: 820px) { .side-recolher { display: none; } }
+    .nav-etq { position: fixed; z-index: 60; transform: translateY(-50%) translateX(-4px); background: #1d2a23; color: #fff; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.22); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s, transform .12s; }
+    .nav-etq::before { content: ''; position: absolute; left: -5px; top: 50%; margin-top: -5px; border: 5px solid transparent; border-left: 0; border-right-color: #1d2a23; }
+    .nav-etq.on { opacity: 1; transform: translateY(-50%) translateX(0); }
     @media (min-width: 821px) {
       .app.menu-min { grid-template-columns: 68px 1fr; }
       .app.menu-min .side { padding: 48px 8px 12px; overflow-x: hidden; }

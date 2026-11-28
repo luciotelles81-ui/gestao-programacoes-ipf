@@ -412,12 +412,12 @@
   function shell(pagina, html) {
     const c = contagens();
     const u = S.user;
-    const nav = (h, label, ic, n) => `<a href="#/${h}" class="${pagina === h.split('/')[0] || (h === 'admin/comissoes' && pagina === 'admin-comissoes') ? 'active' : ''}" title="${esc(label)}"><span class="ni" aria-hidden="true">${ic}</span><span class="nl">${label}</span>${n ? `<span class="count">${n}</span>` : ''}</a>`;
+    const nav = (h, label, ic, n) => `<a href="#/${h}" class="${pagina === h.split('/')[0] || (h === 'admin/comissoes' && pagina === 'admin-comissoes') ? 'active' : ''}" aria-label="${esc(label)}" data-rotulo="${esc(label)}${n ? ' (' + n + ')' : ''}"><span class="ni" aria-hidden="true">${ic}</span><span class="nl">${label}</span>${n ? `<span class="count">${n}</span>` : ''}</a>`;
     root().innerHTML = `
       <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><a href="#/painel" style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:8px">${logo(30)}<b>${esc(ORG.sistema)}</b></a></div>
       <div class="app${menuRecolhido() ? ' menu-min' : ''}" id="app">
         <aside class="side" id="side">
-          <button class="side-recolher no-print" id="bRecolher" type="button" title="${menuRecolhido() ? 'Abrir o menu' : 'Recolher o menu'}" aria-label="${menuRecolhido() ? 'Abrir o menu' : 'Recolher o menu'}" aria-expanded="${!menuRecolhido()}">${menuRecolhido() ? '»' : '«'}</button>
+          <button class="side-recolher no-print" id="bRecolher" type="button" title="${menuRecolhido() ? 'Abrir o menu' : 'Recolher o menu'}" aria-label="${menuRecolhido() ? 'Abrir o menu' : 'Recolher o menu'}" aria-expanded="${!menuRecolhido()}" data-rotulo="${menuRecolhido() ? 'Abrir o menu' : 'Recolher o menu'}">${menuRecolhido() ? '»' : '«'}</button>
           <a class="brand" href="#/painel" title="Ir para a página inicial (Painel)">${logo(72)}<div class="brand-txt"><b>${duasLinhas(ORG.sistema)}</b><span class="brand-org">${ORG.sigla ? '<i>' + esc(ORG.sigla) + '</i>' : ''}<em>${esc(u.igrejaId ? igNome(u.igrejaId) : ORG.nome)}</em></span></div></a>
           <nav class="nav">
             ${nav('painel', 'Painel', '▦')}
@@ -426,7 +426,7 @@
             ${nav('verificar', 'Verificar assinatura', '✓')}
             <div class="nav-label">Reunião do concílio</div>
             ${u.igrejaId ? nav('atas', 'Exame de atas', '✎') + nav('reunioes', 'Reuniões e convocações', '◷') : `${nav('reuniao', 'Reunião Ordinária (RO)', '⚖', window.IPB_REUNIAO ? window.IPB_REUNIAO.pendentes() : 0)}${nav('atas', 'Exame de atas', '✎', u.role === 'analista' || isAdmin() ? c.atas : 0)}${nav('numeracao', 'Numeração de documentos', '#')}${nav('reunioes', 'Reuniões e convocações', '◷')}
-            ${nav('acervo', 'Acervo de documentos', '▣')}${nav('tesouraria', 'Tesouraria do ' + ORG.tipoMin, '$')}${nav('historico', 'Gráficos do ' + ORG.tipoMin, '◔')}`}
+            ${nav('acervo', 'Acervo de documentos', '▣')}${nav('tesouraria', 'Tesouraria do ' + ORG.tipoMin, '$')}${nav('historico', 'Gráficos do ' + ORG.tipoMin, '◑')}`}
             ${isAdmin() ? `<div class="nav-label">Administração</div>
               ${nav('admin/igrejas', 'Igrejas', '⌂')}${nav('admin/usuarios', 'Usuários e acessos', '☺')}
               ${nav('admin/modelos', 'Modelos de relatório', '☰')}${nav('admin/comissoes', 'Comissões', '⚑')}${nav('admin/registro', 'Registro de ações', '≡')}` : ''}
@@ -450,12 +450,31 @@
         <button type="button" id="bMais"><span class="i">☰</span>Mais</button>
       </nav>`;
     $('#mnu').onclick = () => $('#side').classList.toggle('open');
+    // menu recolhido: etiqueta com o nome da tela ao passar o mouse (ou focar com o teclado)
+    let etq = document.getElementById('navEtq');
+    if (!etq) { etq = document.createElement('div'); etq.id = 'navEtq'; etq.className = 'nav-etq'; etq.setAttribute('role', 'tooltip'); document.body.appendChild(etq); }
+    const mostrarEtq = el => {
+      if (!$('#app') || !$('#app').classList.contains('menu-min') || innerWidth <= 820) return;
+      const r = el.getBoundingClientRect();
+      etq.textContent = el.getAttribute('data-rotulo') || el.getAttribute('aria-label') || '';
+      etq.style.left = (r.right + 10) + 'px'; etq.style.top = (r.top + r.height / 2) + 'px';
+      etq.classList.add('on');
+    };
+    const esconderEtq = () => etq.classList.remove('on');
+    $$('#side .nav a, #side .brand, #bRecolher, #bSair').forEach(el => {
+      el.addEventListener('mouseenter', () => mostrarEtq(el)); el.addEventListener('focus', () => mostrarEtq(el));
+      el.addEventListener('mouseleave', esconderEtq); el.addEventListener('blur', esconderEtq);
+    });
+    $('#side').addEventListener('scroll', esconderEtq);
+    $('#side .brand').setAttribute('data-rotulo', 'Página inicial (Painel)');
+    $('#bSair').setAttribute('data-rotulo', 'Sair do sistema');
     $('#bRecolher').onclick = () => {
+      esconderEtq();
       const min = !menuRecolhido();
       try { localStorage.setItem(MENU_KEY, min ? '1' : '0'); } catch (e) { /* sem armazenamento */ }
       $('#app').classList.toggle('menu-min', min);
       const b = $('#bRecolher'); b.textContent = min ? '»' : '«';
-      b.title = b.ariaLabel = min ? 'Abrir o menu' : 'Recolher o menu'; b.setAttribute('aria-expanded', String(!min));
+      b.title = b.ariaLabel = min ? 'Abrir o menu' : 'Recolher o menu'; b.setAttribute('aria-expanded', String(!min)); b.setAttribute('data-rotulo', b.title);
     };
     $('#bMais').onclick = () => $('#side').classList.toggle('open');
     if ($('#bInstalar')) $('#bInstalar').onclick = instalarApp;
