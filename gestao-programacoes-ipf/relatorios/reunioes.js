@@ -842,6 +842,67 @@
       ${plen}
     </div>`;
   }
+  /* ======================= Versão final do parecer de um relatório (para assinatura e PDF) ======================= */
+  // r: relatório; o: { igreja, modelo, comissao, verificarUrl }
+  function reuniaoDoRelatorio(r) {
+    const rs = reunioes().filter(x => x.tipoReuniao !== 'E');
+    return rs.find(x => Number(x.ano) === Number(r.ano) + 1) || rs.find(x => Number(x.ano) === Number(r.ano)) || rs[0] || null;
+  }
+  function textoParagrafos(t) {
+    const esc = A().esc;
+    let h = '', lista = null;
+    const fecha = () => { if (lista) { h += `<${lista.t}>${lista.itens.map(x => `<li>${esc(x)}</li>`).join('')}</${lista.t}>`; lista = null; } };
+    String(t || '').split(/\r?\n/).forEach(l => {
+      const s = l.trim();
+      if (!s) { fecha(); return; }
+      const ul = s.match(/^[-•*]\s+(.*)$/), ol = s.match(/^\d+[.)]\s+(.*)$/);
+      if (ul || (ol && lista && lista.t === 'ol')) {
+        const t = ul ? 'ul' : 'ol';
+        if (!lista || lista.t !== t) { fecha(); lista = { t, itens: [] }; }
+        lista.itens.push((ul || ol)[1]); return;
+      }
+      fecha();
+      if (/^\d+(\.\d+)*[.)]?\s+\S/.test(s) && s.length < 90 && !/[.;:]$/.test(s)) h += `<p class="pf-sec">${esc(s)}</p>`;
+      else if (s === s.toUpperCase() && /[A-ZÁÉÍÓÚÂÊÔÃÕÇ]/.test(s) && s.length < 90) h += `<p class="pf-sec">${esc(s)}</p>`;
+      else h += `<p>${esc(s)}</p>`;
+    });
+    fecha();
+    return h;
+  }
+  function folhaRelatorio(r, o) {
+    const esc = A().esc, dt = A().dt;
+    o = o || {};
+    const a = r.analise || {}, fin = a.final || {};
+    const reu = reuniaoDoRelatorio(r);
+    const membros = a.membros || [];
+    const ass = i => (a.assinaturas || []).find(s => s.membroIdx === i);
+    const relIdx = membros.findIndex(m => /relator/i.test(m.funcao || ''));
+    const ordem = membros.map((m, i) => i).sort((x, y) => (x === relIdx ? -1 : y === relIdx ? 1 : x - y));
+    const faltam = membros.filter((m, i) => !ass(i)).length;
+    const data = (fin.em || '').slice(0, 10) || hoje();
+    const comNome = a.comissaoNome || (o.comissao && o.comissao.nome) || 'Comissão';
+    const ig = o.igreja || '';
+    const sg = esc(sigla());
+    const participantes = ordem.map(i => membros[i]).map(m => `${esc(m.nome)}${m.funcao ? ' (' + esc(m.funcao) + ')' : ''}`).join('; ');
+    const assin = ordem.map(i => {
+      const m = membros[i], s = ass(i);
+      return `<div class="pf-a${s ? '' : ' pend'}"><div class="pf-a-img">${s && s.desenho ? `<img src="${esc(s.desenho)}" alt="Assinatura de ${esc(m.nome)}">` : s ? '<span class="pf-a-el">Assinado eletronicamente</span>' : ''}</div>
+        <div class="pf-a-lin"><b>${esc(m.nome)}</b><br>${esc(m.funcao || 'Membro')}
+        <div class="pf-a-cod">${s ? `Assinado em ${esc(dt(s.em, true))} · ${esc(s.tipo || '')}<br>Código de verificação: <b>${esc(s.codigo)}</b>` : 'Assinatura pendente'}</div></div></div>`;
+    }).join('');
+    return `<div class="parecer-folha pf-rel">${faltam ? `<div class="pf-minuta">MINUTA · faltam ${faltam} assinatura(s) da comissão</div>` : ''}
+      ${cabecalho(o.docNumero || '', o.destino || 'Plenário', data, reu)}
+      <h4>Parecer da ${esc(comNome)}</h4>
+      <p class="pf-ref">${esc(o.modelo || r.titulo || 'Relatório')}${ig ? ' · ' + esc(ig) : ''} · Ano ${esc(r.ano)}</p>
+      <p>Quanto ao ${esc((o.modelo || 'relatório').replace(/^Relatório/, 'relatório'))}${ig ? ` da ${esc(ig)}` : ''}, referente ao ano de ${esc(r.ano)}${r.assinaturaEnvio ? `, assinado por ${esc(r.assinaturaEnvio.nome)}${r.assinaturaEnvio.cargo ? ' (' + esc(r.assinaturaEnvio.cargo) + ')' : ''} e enviado em ${esc(dataBr((r.assinaturaEnvio.em || r.enviadoEm || '').slice(0, 10)))}` : ''}, a ${esc(comNome)}, após o exame do documento, apresenta o seguinte parecer:</p>
+      <div class="pf-texto">${textoParagrafos(fin.texto)}</div>
+      <p>Diante do exposto, a comissão propõe ao ${sg}: <b>${esc(fin.decisao || '')}</b>.</p>
+      ${membros.length ? `<p><b>Participaram da análise:</b> ${participantes}.</p>` : ''}
+      <p class="pf-local">Sala de Sessões,<br>${esc((reu && reu.cidade) || cfg().cidade || '')}, ${esc(dataExtenso(data))}.</p>
+      <div class="pf-assin2">${assin}</div>
+      <p class="pf-rodape">Documento assinado eletronicamente nos termos da Lei nº 14.063/2020 (assinatura eletrônica simples). A autenticidade de cada assinatura pode ser conferida em ${esc(o.verificarUrl || 'Verificar assinatura')}, informando o código de verificação.</p>
+    </div>`;
+  }
   function folhaSimples(titulo, corpo, reu) {
     const esc = A().esc;
     return `<div class="parecer-folha">${cabecalho('', 'Arquivo', hoje(), reu)}<h4>${esc(titulo)}</h4>${corpo}
@@ -904,7 +965,19 @@
     .pf-plen{margin-top:14px;font-size:13px}
     .parecer-folha table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
     .parecer-folha th,.parecer-folha td{border:1px solid #777;padding:4px 6px;text-align:left}
-    .parecer-folha td.num{text-align:right}`;
+    .parecer-folha td.num{text-align:right}
+    .pf-ref{text-align:center!important;margin:-6px 0 16px!important;font-size:14px}
+    .pf-minuta{border:2px dashed #b45309;color:#b45309;text-align:center;font-weight:700;font-size:13px;letter-spacing:.04em;padding:6px;margin-bottom:14px}
+    .pf-part{list-style:none;margin:4px 0 0!important;padding:0!important}
+    .pf-assin2{display:grid;grid-template-columns:1fr 1fr;gap:26px 40px;margin-top:34px}
+    .pf-a{break-inside:avoid;text-align:center}
+    .pf-a-img{height:62px;display:flex;align-items:flex-end;justify-content:center}
+    .pf-a-img img{max-height:60px;max-width:100%}
+    .pf-a-el{font-size:11px;font-style:italic;color:#555}
+    .pf-a-lin{border-top:1px solid #222;padding-top:4px;font-size:13.5px;line-height:1.35}
+    .pf-a-cod{font-size:10.5px;color:#444;margin-top:3px}
+    .pf-a.pend .pf-a-cod{color:#b45309}
+    .pf-rodape{break-inside:avoid;margin-top:22px!important;padding-top:8px;border-top:1px solid #bbb;font-size:10.5px;color:#444;text-align:left!important}`;
   function imprimir(titulo, html) {
     const w = window.open('', '_blank');
     if (!w) return A().toast('Permita a abertura de janelas para imprimir.', true);
@@ -912,7 +985,7 @@
     if (LOGO_DATA) html = html.split('src="img/logo-ipb.png"').join('src="' + LOGO_DATA + '"');
     w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${A().esc(titulo)}</title><base href="${A().esc(base)}">
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libertinus+Sans:ital,wght@0,400;0,700;1,400&display=swap">
-      <style>${CSS_FOLHA}body{margin:0;background:#fff}@page{size:A4;margin:0}.parecer-folha{page-break-after:always;width:auto;max-width:210mm;min-height:0}.parecer-folha:last-child{page-break-after:auto}tr,li,.pf-assin,.pf-cab{break-inside:avoid}</style></head>
+      <style>${CSS_FOLHA}body{margin:0;background:#fff}@page{size:A4;margin:0}.parecer-folha{page-break-after:always;width:auto;max-width:210mm;min-height:0}.parecer-folha:last-child{page-break-after:auto}.parecer-folha{-webkit-box-decoration-break:clone;box-decoration-break:clone}.pf-rel{padding-top:32px;padding-bottom:28px}.pf-rel .pf-local{margin-top:14px!important}.pf-rel .pf-assin2{margin-top:14px}tr,li,.pf-assin,.pf-cab{break-inside:avoid}</style></head>
       <body>${html}<script>window.onload=function(){(document.fonts?document.fonts.ready:Promise.resolve()).then(function(){setTimeout(function(){window.print()},300)})}<\/script></body></html>`);
     w.document.close();
   }
@@ -1594,7 +1667,7 @@
       default: return telaReuniao();
     }
   }
-  window.IPB_REUNIAO = { render, pendentes, camposComissao, lerCamposComissao, criarPadrao, COMISSOES_PADRAO, folhaParecer,
+  window.IPB_REUNIAO = { render, pendentes, camposComissao, lerCamposComissao, criarPadrao, COMISSOES_PADRAO, folhaParecer, folhaRelatorio,
     // usados pelo acervo (acervo.js) e pela tesouraria (tesouraria.js)
     h: { chip, itens, cfg, sigla, nomePresb, reunioes, reuniao, comissoes, comissao, documentos, pareceres, abrirPdf, editarDocumento, enviarArquivoDoc, pastaAuto, salvarItem, dataBr, dataExtenso, periodo, tipoNome, nomeMesa, numero, lsGet, lsSet, isAdmin, pdfCache, MESES, PASTAS_DOC, SECOES_DOC, ACEITOS, imprimir, CSS_FOLHA, REU_KEY, editarEstatisticas, editarFinancas, numero, temValor, TOTAL, CAMPOS_EST, CAMPOS_FIN, igrejasCfg, CARGOS_MESA, TRATAMENTOS } };
 })();

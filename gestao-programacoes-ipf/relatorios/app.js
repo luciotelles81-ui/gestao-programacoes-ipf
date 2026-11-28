@@ -1375,7 +1375,19 @@
       }).join('') || '<p class="muted" style="margin:0">Designe a comissão para colher as assinaturas.</p>'}
       ${pode && a.final && (a.membros || []).length && (a.assinaturas || []).length === a.membros.length ? `<div class="actions no-print" style="margin-top:12px"><button class="btn primary" id="bConcluir">Concluir análise: ${esc(a.final.decisao)}</button></div>` : ''}
     </div>`;
+
+    if (a.final && window.IPB_REUNIAO && window.IPB_REUNIAO.folhaRelatorio) {
+      const falta = (a.membros || []).filter((m, i) => !assinou(i)).length;
+      h += `<div class="card" id="cVersaoFinal"><div class="card-head"><h2>7. Versão final do parecer</h2><span class="small muted">no modelo do ${esc(ORG.sigla || '')}, com logo, cabeçalho, participantes e assinaturas</span></div>
+        <p class="small ${falta ? 'down' : 'up'}" style="margin:0 0 10px">${falta ? `Faltam ${falta} assinatura(s). O documento sai marcado como MINUTA até todos assinarem.` : '✓ Todos os membros assinaram. Este é o documento final.'}</p>
+        <div class="actions no-print" style="margin-bottom:12px"><button class="btn primary" id="bVFpdf">Gerar PDF / Imprimir</button></div>
+        <div class="folha-wrap">${folhaFinal(r)}</div></div>`;
+    }
     return h;
+  }
+  function folhaFinal(r) {
+    const mod = r.modelo || {};
+    return window.IPB_REUNIAO.folhaRelatorio(r, { igreja: igNome(r.igrejaId), modelo: mod.nome || r.titulo, verificarUrl: location.href.replace(/[#?].*$/, '') + '#/verificar' });
   }
   function propostaLocal(r, verifs) {
     const comp = comparacao(r);
@@ -1396,6 +1408,10 @@
   }
   function ligarAnalise(r) {
     const op = async (o, p, msg) => { if (await acao(() => api(Object.assign({ action: 'relatorio', id: r.id, op: o }, p)), msg)) { await recarregar(); S.edit = null; S.tab = 'analise'; telaRelatorio(r.id); } };
+    if ($('#bVFpdf')) $('#bVFpdf').onclick = () => {
+      const nome = ('Parecer ' + (r.analise.comissaoNome || '') + ' - ' + igNome(r.igrejaId) + ' ' + r.ano).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+      window.IPB_REUNIAO.h.imprimir(nome, folhaFinal(r));
+    };
     if ($('#bAtrib')) $('#bAtrib').onclick = () => { const v = $('#aCom').value; if (!v) return toast('Escolha a comissão.', true); op('atribuir', { comissaoId: v }, 'Relatório encaminhado à comissão.'); };
     if ($('#bIA')) $('#bIA').onclick = async () => {
       const b = $('#bIA'); b.disabled = true; b.textContent = 'Gerando proposta…';
