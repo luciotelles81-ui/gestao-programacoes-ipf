@@ -1,9 +1,15 @@
-/* Relatórios IPB · aplicação (sem dependências externas) */
+/* Sistema de Gestão (concílios da IPB) · aplicação (sem dependências externas) */
 (function () {
   'use strict';
   const CFG = window.IPB_CONFIG || {};
   const SERVER = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
+  // identidade do concílio (config.js): nome do sistema, presbitério ou sínodo, sigla
+  const ORG = Object.assign({ sistema: 'Sistema de Gestão', tipo: 'Presbitério', nome: 'Presbitério', sigla: '', sinodo: '', unidade: 'igreja', unidades: 'igrejas' }, window.IPB_ORG || {});
+  ORG.tipoMin = ORG.tipo.toLowerCase();
+  document.title = ORG.sistema;
   const TOKEN_KEY = 'ipb-relatorios-token';
+  const MENU_KEY = 'ipb-menu-recolhido';
+  const menuRecolhido = () => { try { return localStorage.getItem(MENU_KEY) === '1'; } catch (e) { return false; } };
   const THEME_KEY = 'ipb-relatorios-tema';
   const ROLE_NOMES = { admin: 'Administrador', editor: 'Editor (preenche relatórios)', analista: 'Analista (comissão)', leitor: 'Somente leitura' };
   const DECISOES = ['Aprovar', 'Aprovar com ressalvas', 'Devolver para correção'];
@@ -40,9 +46,11 @@
     setTimeout(() => t.remove(), err ? 6000 : 3500);
   }
   const igreja = id => (S.d && S.d.igrejas.find(i => i.id === id)) || null;
-  const igNome = id => { const i = igreja(id); return i ? i.nome : 'Presbitério (todas as igrejas)'; };
+  const igNome = id => { const i = igreja(id); return i ? i.nome : ORG.tipo + ' (todas as ' + ORG.unidades + ')'; };
   const isAdmin = () => S.user && S.user.role === 'admin';
   const isPresb = () => S.user && !S.user.igrejaId;
+  const ehCongregacao = i => /congrega/i.test((i && i.tipo) || '') || /^congrega/i.test((i && i.nome) || '');
+  const TAXA_PRESB = () => (ORG.taxaPresbiterio == null ? 0.03 : ORG.taxaPresbiterio);
   const podeEditar = r => (isAdmin() || S.user.role === 'editor') && ['Rascunho', 'Devolvido'].includes(r.status);
   const podeAnalisar = r => (isAdmin() || S.user.role === 'analista') && ['Enviado', 'Em análise'].includes(r.status);
   const modelo = id => S.d.modelos.find(m => m.id === id);
@@ -76,7 +84,11 @@
     if (!r.ok || !j || j.erro) throw new Error((j && j.erro) || 'A IA não respondeu (' + r.status + ').');
     return j;
   }
-  async function recarregar() { S.d = await api({ action: 'dados' }); S.user = S.d.usuario; }
+  async function recarregar() {
+    S.d = await api({ action: 'dados' }); S.user = S.d.usuario;
+    // relatórios anteriores ao ano inicial do sistema (config.js) ficam fora de telas, indicadores e gráficos
+    if (ORG.anoInicial && Array.isArray(S.d.relatorios)) S.d.relatorios = S.d.relatorios.filter(r => !(Number(r.ano) < ORG.anoInicial));
+  }
   async function acao(fn, okMsg) {
     try { const r = await fn(); if (okMsg) toast(okMsg); return r; } catch (e) { toast(e.message || String(e), true); return null; }
   }
@@ -171,6 +183,15 @@
     }));
     (mod.verificacoes || []).forEach(v => { if (C.eval(v.se) === true) out.push({ nivel: v.nivel || 'alerta', msg: v.msg }); });
     const ant = anterior(r);
+    if (r.modeloId === 'estatistico') {
+      // taxa devida ao concílio: 3% da receita de dízimos e ofertas
+      const base = (Number(C.V('fin_dizimos')) || 0) + (Number(C.V('fin_ofertas')) || 0);
+      const verba = Number(C.V('fin_verba_presb')) || 0, devido = base * TAXA_PRESB();
+      if (base > 0 && verba < devido - 0.5) out.push({ nivel: 'alerta', msg: `Verba presbiterial de ${money(verba)} (${pct(verba / base)} de dízimos e ofertas). A taxa devida ao ${ORG.tipoMin} é ${pct(TAXA_PRESB())} de dízimos e ofertas: ${money(devido)} (faltam ${money(devido - verba)}).` });
+      // sobras de caixa: movimento normal; só registra a evolução e os valores
+      const sf = Number(C.V('fin_saldo_seguinte')), si = Number(C.V('fin_saldo_ant'));
+      if (isFinite(sf) && isFinite(si) && (sf || si)) out.push({ nivel: 'info', msg: `Caixa: começou o ano com ${money(si)} e terminou com ${money(sf)} (${sf >= si ? '+' : '−'}${money(Math.abs(sf - si))}${si ? ', ' + (sf >= si ? '+' : '−') + pct(Math.abs(sf - si) / Math.abs(si)) : ''}). A sobra de um ano para o outro é movimento normal do caixa e varia a cada ano.` });
+    }
     if (ant && (mod.continuidade || []).length) {
       const CA = ctx(ant.modelo || mod, ant.dados || {});
       mod.continuidade.forEach(k => {
@@ -197,10 +218,13 @@
     return { ant, rows };
   }
   function alertasHTML(list) {
-    if (!list.length) return '<div class="alert ok">✓ Nenhuma inconsistência encontrada nas verificações automáticas.</div>';
+    const inf = list.filter(x => x.nivel === 'info');
+    const infHTML = inf.length ? `<div class="alert info" style="margin-top:8px"><div><b>Informações</b><ul>${inf.map(x => '<li>' + esc(x.msg) + '</li>').join('')}</ul></div></div>` : '';
+    list = list.filter(x => x.nivel !== 'info');
+    if (!list.length) return '<div class="alert ok">✓ Nenhuma inconsistência encontrada nas verificações automáticas.</div>' + infHTML;
     const er = list.filter(x => x.nivel === 'erro'), al = list.filter(x => x.nivel !== 'erro');
     return (er.length ? `<div class="alert err"><div><b>${er.length} problema(s)</b><ul>${er.map(x => '<li>' + esc(x.msg) + '</li>').join('')}</ul></div></div>` : '') +
-      (al.length ? `<div class="alert warn"><div><b>${al.length} ponto(s) de atenção</b><ul>${al.map(x => '<li>' + esc(x.msg) + '</li>').join('')}</ul></div></div>` : '');
+      (al.length ? `<div class="alert warn"><div><b>${al.length} ponto(s) de atenção</b><ul>${al.map(x => '<li>' + esc(x.msg) + '</li>').join('')}</ul></div></div>` : '') + infHTML;
   }
 
   /* ======================= tema e rotas ======================= */
@@ -229,7 +253,7 @@
   }
   function telaPrimeiroAcesso() {
     root().innerHTML = `<div class="login-form" style="min-height:100vh"><div class="card"><h2>Primeiro acesso</h2>
-      <p class="muted small" style="margin:4px 0 0">O sistema ainda não tem usuários. Crie o administrador do Presbitério. Ele cadastra os demais usuários e as comissões.</p>
+      <p class="muted small" style="margin:4px 0 0">O sistema ainda não tem usuários. Crie o administrador do ${esc(ORG.tipo)}. Ele cadastra os demais usuários e as comissões.</p>
       <form id="fPA"><div class="field"><label>Nome completo</label><input type="text" id="paN" required></div>
       <div class="field"><label>Usuário</label><input type="text" id="paU" value="admin" required autocomplete="username"></div>
       <div class="field"><label>Senha (mínimo 8 caracteres)</label><input type="password" id="paS" required autocomplete="new-password"></div>
@@ -245,43 +269,55 @@
     root().innerHTML = `
       <div class="login">
         <div class="login-hero">
-          <div class="brand" style="padding:0">${logo(40)}<div><b>Relatórios IPB</b><span>Presbitério Litorâneo do RN</span></div></div>
-          <div>
-            <h1>Relatórios das igrejas, do preenchimento ao parecer da comissão.</h1>
-            <p>Formulários oficiais, histórico dos anos anteriores, exame de atas pelo Manual Presbiteriano e assinatura eletrônica dos membros da comissão.</p>
-            <ul>
-              <li>Cada igreja entra com seu próprio usuário</li>
-              <li>A IA propõe uma análise inicial; o texto final é do relator</li>
-              <li>Pareceres assinados com código de verificação</li>
+          <div class="lh-marca">
+            <img class="lh-logo" src="img/logo-ipb-branco.png" alt="Igreja Presbiteriana do Brasil">
+            <div><h1 class="lh-sis">${esc(ORG.sistema)}</h1><div class="lh-org">${ORG.sigla ? '<b>' + esc(ORG.sigla) + '</b> · ' : ''}${esc(ORG.nome)}${ORG.sinodo ? ' · ' + esc(ORG.sinodo) : ''}</div></div>
+            <hr class="lh-barra">
+          </div>
+          <div class="lh-corpo">
+            <h1>Relatórios das ${esc(ORG.unidades)}, reunião do concílio, acervo e tesouraria em um só lugar.</h1>
+            <ul class="lh-lista">
+              <li><b>Relatórios das ${esc(ORG.unidades)}</b><span>Cada ${esc(ORG.unidade)} preenche os formulários oficiais com o próprio usuário.</span></li>
+              <li><b>Reunião do concílio</b><span>Documentos protocolados e numerados, comissões, pareceres assinados e ata.</span></li>
+              <li><b>Acervo e tesouraria</b><span>Atas, convocações e o caixa do ${esc(ORG.tipoMin)}, ano a ano.</span></li>
             </ul>
           </div>
-          <div class="foot small" style="color:var(--side-muted)">Igreja Presbiteriana do Brasil</div>
+          <div class="foot">Igreja Presbiteriana do Brasil</div>
         </div>
         <div class="login-form">
           <div class="card">
             <h2>Entrar</h2>
-            <p class="muted small" style="margin:4px 0 0">Escolha a igreja e informe seu usuário e senha.</p>
+            <p class="muted small" style="margin:4px 0 0">Escolha o concílio e ${ORG.unidade === 'igreja' ? 'a igreja' : 'o presbitério ou a igreja'} e informe seu usuário e senha.</p>
             <form id="fLogin">
-              <div class="field"><label for="lIg">Igreja</label>
-                <select id="lIg"><option value="">Presbitério (comissões e administração)</option>${igs.map(i => `<option value="${esc(i.id)}">${esc(i.nome)}</option>`).join('')}</select></div>
+              ${campoConcilio()}
+              <div class="field"><label for="lIg">${esc(ORG.unidade === 'igreja' ? 'Igreja' : 'Presbitério ou igreja')}</label>
+                <select id="lIg"><option value="">${esc(ORG.tipo)} (comissões e administração)</option>${igs.map(i => `<option value="${esc(i.id)}">${esc(i.nome)}</option>`).join('')}</select></div>
               <div class="field"><label for="lUs">Usuário</label><input id="lUs" type="text" autocomplete="username" required></div>
               <div class="field"><label for="lPw">Senha</label><input id="lPw" type="password" autocomplete="current-password" required></div>
               <button class="btn primary" type="submit">Entrar</button>
             </form>
             <p class="small" style="margin-top:14px"><a href="#/verificar">Verificar uma assinatura</a></p>
-            ${SERVER ? '' : S.publico && S.publico.pacoteFechado ? `<div class="alert info" style="margin-top:14px"><div><b>Dados do Presbitério</b><br>Para carregar os relatórios de 2023 a 2025 com os PDFs originais, deixe "Presbitério" na igreja, use o usuário <code>admin</code> e a <b>senha dos dados</b> que você recebeu. Isso só é preciso uma vez neste navegador.</div></div>
+            ${SERVER ? '' : S.publico && (S.publico.pacoteFechado || S.publico.reunioesFechadas) ? `<div class="alert info" style="margin-top:14px"><div><b>Dados do ${esc(ORG.tipo)}</b><br>Para carregar os relatórios das igrejas com os PDFs originais e as reuniões do ${esc(ORG.tipoMin)} (acervo, membros das comissões e tesouraria), deixe "${esc(ORG.tipo)}" na igreja, use o usuário <code>admin</code> e a <b>senha dos dados</b> que você recebeu. Isso só é preciso uma vez neste navegador.</div></div>
               <div class="demo"><b>Modo demonstração</b> (dados só neste navegador). Para só testar, sem os dados reais: <code>admin</code>/<code>admin123</code>.</div>`
-              : `<div class="demo"><b>Modo demonstração</b> (dados só neste navegador). Presbitério: ${S.publico && S.publico.pacoteAberto ? '<code>admin</code> com a senha dos dados' : '<code>admin</code>/<code>admin123</code>'}, <code>relator</code>/<code>relator123</code>, <code>membro</code>/<code>membro123</code>. Igreja Filadélfia: <code>secretario</code>/<code>secretario123</code>.</div>`}
+              : `<div class="demo"><b>Modo demonstração</b> (dados só neste navegador). ${esc(ORG.tipo)}: ${S.publico && S.publico.pacoteAberto ? '<code>admin</code> com a senha dos dados' : '<code>admin</code>/<code>admin123</code>'}, <code>relator</code>/<code>relator123</code>, <code>membro</code>/<code>membro123</code>. Igreja Filadélfia: <code>secretario</code>/<code>secretario123</code>.</div>`}
           </div>
         </div>
       </div>`;
+    ligarConcilio();
     $('#fLogin').onsubmit = async e => {
       e.preventDefault();
-      const btn = $('#fLogin button'); btn.disabled = true;
-      const r = await acao(() => api({ action: 'login', igrejaId: $('#lIg').value || null, username: $('#lUs').value.trim(), senha: $('#lPw').value }));
+      const btn = $('#fLogin button[type=submit]'); btn.disabled = true;
+      let erro = $('#lErr');
+      if (!erro) { erro = document.createElement('p'); erro.id = 'lErr'; erro.setAttribute('role', 'alert'); erro.style.cssText = 'color:#b3261e;font-weight:600;margin:.6rem 0 0'; btn.insertAdjacentElement('afterend', erro); }
+      erro.textContent = 'Entrando… na primeira vez, os dados levam alguns segundos para abrir.';
+      erro.style.color = 'inherit';
+      let r = null;
+      try { r = await api({ action: 'login', igrejaId: $('#lIg').value || null, username: $('#lUs').value.trim(), senha: $('#lPw').value.trim() }); erro.textContent = ''; }
+      catch (err) { erro.style.color = '#b3261e'; erro.textContent = err.message || String(err); }
       btn.disabled = false;
       if (!r) return;
-      if (r.pacoteAberto) toast('Dados do Presbitério carregados: ' + r.pacoteAberto + ' relatórios com os originais anexados.');
+      if (r.pacoteAberto) toast('Dados do ' + ORG.tipo + ' carregados: ' + r.pacoteAberto + ' relatórios com os originais anexados.');
+      if (r.reunioesAbertas) setTimeout(() => toast('Dados do ' + ORG.tipoMin + ' carregados: reuniões, acervo, relatórios das igrejas, membros das comissões e tesouraria (' + r.reunioesAbertas + ' itens).'), r.pacoteAberto ? 3500 : 0);
       S.publico = null;
       S.token = r.token;
       try { localStorage.setItem(TOKEN_KEY, r.token); } catch (err) { /* sem armazenamento */ }
@@ -289,8 +325,66 @@
       render();
     };
   }
-  function logo(sz) {
-    return `<svg width="${sz}" height="${sz}" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="12" fill="#fff"/><path d="M24 9c-6 7-11 11-11 18a11 11 0 0 0 22 0c0-7-5-11-11-18z" fill="#006b3f"/><path d="M24 21v15M18 28h12" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>`;
+  /* ---------- concílio (sínodo ou presbitério) em uso ---------- */
+  function listaConcilios() {
+    // [{ tipo, nome, sigla, sinodo }] na ordem: sínodo e, logo abaixo, os presbitérios dele
+    const out = [];
+    (window.IPB_CONCILIOS || []).forEach(s => {
+      out.push({ tipo: 'Sínodo', nome: s.n, sigla: s.s, sinodo: '' });
+      (s.p || []).forEach(p => out.push({ tipo: 'Presbitério', nome: p.n, sigla: p.s, sinodo: s.n }));
+    });
+    return out;
+  }
+  const mesmoConcilio = (c, o) => (c.sigla && o.sigla && c.sigla === o.sigla) || c.nome === o.nome;
+  function campoConcilio() {
+    const lista = listaConcilios();
+    if (!lista.length) return '';
+    if (!ORG.podeEscolher) return `<div class="field"><label>Concílio</label><div class="concilio-fixo"><b>${esc(ORG.sigla ? ORG.sigla + ' · ' : '')}${esc(ORG.nome)}</b></div></div>`;
+    const atual = lista.findIndex(c => mesmoConcilio(c, ORG));
+    const opt = (c, i) => `<option value="${i}" ${i === atual ? 'selected' : ''}>${esc(c.tipo === 'Sínodo' ? c.nome + ' (o sínodo)' : c.nome)}${(i === atual ? ORG.sigla || c.sigla : c.sigla) ? ' · ' + esc(i === atual ? ORG.sigla || c.sigla : c.sigla) : ''}</option>`;
+    let html = '', grupo = null;
+    lista.forEach((c, i) => {
+      if (c.tipo === 'Sínodo') { html += (grupo ? '</optgroup>' : '') + `<optgroup label="${esc(c.nome)}${c.sigla ? ' (' + esc(c.sigla) + ')' : ''}">`; grupo = c; }
+      html += opt(c, i);
+    });
+    html += grupo ? '</optgroup>' : '';
+    return `<div class="field"><label for="lCo">Concílio</label>
+      <select id="lCo">${atual < 0 ? `<option value="" selected>${esc(ORG.nome)}</option>` : ''}${html}</select>
+      ${ORG.sigla ? '' : `<div class="concilio-sigla"><label for="lCoS" class="small muted">Sigla do concílio (não consta da lista pública)</label><div class="row-sigla"><input id="lCoS" type="text" maxlength="12" placeholder="ex.: PXYZ" autocomplete="off"><button type="button" class="btn sm" id="bCoS">Salvar sigla</button></div></div>`}
+      <div class="small muted" style="margin-top:4px">${ORG.outro ? 'Os dados deste concílio ficam separados dos demais.' : 'Concílio padrão desta instalação.'} ${esc(lista.filter(c => c.tipo === 'Sínodo').length + ' sínodos e ' + lista.filter(c => c.tipo !== 'Sínodo').length + ' presbitérios da IPB')}.</div></div>`;
+  }
+  function ligarConcilio() {
+    const sel = $('#lCo');
+    if (!sel || !window.IPB_CONCILIO) return;
+    const lista = listaConcilios();
+    sel.onchange = () => {
+      const c = lista[Number(sel.value)];
+      if (!c) return;
+      window.IPB_CONCILIO.escolher(c);
+      try { localStorage.removeItem(TOKEN_KEY); } catch (e) { /* sem armazenamento */ }
+      location.hash = '';
+      location.reload();
+    };
+    const bs = $('#bCoS');
+    if (bs) bs.onclick = () => {
+      const s = $('#lCoS').value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+      if (!s) return;
+      window.IPB_CONCILIO.escolher({ tipo: ORG.tipo, nome: ORG.nome, sigla: s, sinodo: ORG.sinodo });
+      location.reload();
+    };
+  }
+  // quebra um título em duas linhas de tamanho parecido (ex.: "SISTEMA GESTÃO / CONCÍLIOS IPB")
+  function duasLinhas(t) {
+    const w = String(t || '').split(/\s+/).filter(Boolean);
+    if (w.length < 3) return esc(t);
+    let melhor = 1, dif = Infinity;
+    for (let i = 1; i < w.length; i++) { const d = Math.abs(w.slice(0, i).join(' ').length - w.slice(i).join(' ').length); if (d < dif) { dif = d; melhor = i; } }
+    return esc(w.slice(0, melhor).join(' ')) + '<br>' + esc(w.slice(melhor).join(' '));
+  }
+  function logo(sz, cor) {
+    // logotipo oficial da IPB (img/); se a imagem não carregar, fica o símbolo desenhado
+    if (cor !== false) return `<img class="logo-ipb" src="img/${cor ? 'logo-ipb.png' : 'logo-ipb-branco.png'}" alt="Igreja Presbiteriana do Brasil" style="height:${sz}px;width:auto" onerror="this.style.display='none'">`;
+    return `<svg width="${sz}" height="${sz}" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="12" fill="#fff"/><path d="M24 9c-6 7-11 11-11 18a11 11 0 0 0 22 0c0-7-5-11-11-18z" fill="#2c5234"/><path d="M24 21v15M18 28h12" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>`;
   }
 
   /* ======================= app no celular ======================= */
@@ -318,24 +412,27 @@
   function shell(pagina, html) {
     const c = contagens();
     const u = S.user;
-    const nav = (h, label, ic, n) => `<a href="#/${h}" class="${pagina === h.split('/')[0] ? 'active' : ''}">${ic} ${label}${n ? `<span class="count">${n}</span>` : ''}</a>`;
+    const nav = (h, label, ic, n) => `<a href="#/${h}" class="${pagina === h.split('/')[0] || (h === 'admin/comissoes' && pagina === 'admin-comissoes') ? 'active' : ''}" aria-label="${esc(label)}" data-rotulo="${esc(label)}${n ? ' (' + n + ')' : ''}"><span class="ni" aria-hidden="true">${ic}</span><span class="nl">${label}</span>${n ? `<span class="count">${n}</span>` : ''}</a>`;
     root().innerHTML = `
-      <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><b>Relatórios IPB</b></div>
-      <div class="app">
+      <div class="topbar no-print"><button id="mnu" aria-label="Abrir menu">☰</button><a href="#/painel" style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:8px">${logo(30)}<b>${esc(ORG.sistema)}</b></a></div>
+      <div class="app${menuRecolhido() ? ' menu-min' : ''}" id="app">
         <aside class="side" id="side">
-          <div class="brand">${logo(34)}<div><b>Relatórios IPB</b><span>${esc(u.igrejaId ? (igreja(u.igrejaId) || {}).sigla || '' : 'Presbitério')}</span></div></div>
+          <button class="side-recolher no-print" id="bRecolher" type="button" title="${menuRecolhido() ? 'Abrir o menu' : 'Recolher o menu'}" aria-label="${menuRecolhido() ? 'Abrir o menu' : 'Recolher o menu'}" aria-expanded="${!menuRecolhido()}" data-rotulo="${menuRecolhido() ? 'Abrir o menu' : 'Recolher o menu'}">${menuRecolhido() ? '»' : '«'}</button>
+          <a class="brand" href="#/painel" title="Ir para a página inicial (Painel)">${logo(72)}<div class="brand-txt"><b>${duasLinhas(ORG.sistema)}</b><span class="brand-org">${ORG.sigla ? '<i>' + esc(ORG.sigla) + '</i>' : ''}<em>${esc(u.igrejaId ? igNome(u.igrejaId) : ORG.nome)}</em></span></div></a>
           <nav class="nav">
             ${nav('painel', 'Painel', '▦')}
             ${nav('indicadores', 'Indicadores', '↗')}
             ${nav('relatorios', 'Relatórios', '▤', u.role === 'analista' || isAdmin() ? c.analisar : c.devolvidos)}
-            ${nav('atas', 'Exame de atas', '✎', u.role === 'analista' || isAdmin() ? c.atas : 0)}
             ${nav('verificar', 'Verificar assinatura', '✓')}
+            <div class="nav-label">Reunião do concílio</div>
+            ${u.igrejaId ? nav('atas', 'Exame de atas', '✎') + nav('reunioes', 'Reuniões e convocações', '◷') : `${nav('reuniao', 'Reunião Ordinária (RO)', '⚖', window.IPB_REUNIAO ? window.IPB_REUNIAO.pendentes() : 0)}${nav('atas', 'Exame de atas', '✎', u.role === 'analista' || isAdmin() ? c.atas : 0)}${nav('numeracao', 'Numeração de documentos', '#')}${nav('reunioes', 'Reuniões e convocações', '◷')}
+            ${nav('acervo', 'Acervo de documentos', '▣')}${nav('tesouraria', 'Tesouraria do ' + ORG.tipoMin, '$')}${nav('historico', 'Gráficos do ' + ORG.tipoMin, '◑')}`}
             ${isAdmin() ? `<div class="nav-label">Administração</div>
               ${nav('admin/igrejas', 'Igrejas', '⌂')}${nav('admin/usuarios', 'Usuários e acessos', '☺')}
               ${nav('admin/modelos', 'Modelos de relatório', '☰')}${nav('admin/comissoes', 'Comissões', '⚑')}${nav('admin/registro', 'Registro de ações', '≡')}` : ''}
           </nav>
           <div class="side-foot">
-            <div class="who"><b>${esc(u.nome)}</b><span>${esc(ROLE_NOMES[u.role] || u.role)} · ${esc(u.igrejaId ? igNome(u.igrejaId) : 'Presbitério')}</span></div>
+            <div class="who"><b>${esc(u.nome)}</b><span>${esc(ROLE_NOMES[u.role] || u.role)} · ${esc(u.igrejaId ? igNome(u.igrejaId) : ORG.tipo)}</span></div>
             <div class="row">
               <button class="side-btn" id="bConta">Minha senha</button>
               <button class="side-btn" id="bTema">Tema</button>
@@ -353,6 +450,32 @@
         <button type="button" id="bMais"><span class="i">☰</span>Mais</button>
       </nav>`;
     $('#mnu').onclick = () => $('#side').classList.toggle('open');
+    // menu recolhido: etiqueta com o nome da tela ao passar o mouse (ou focar com o teclado)
+    let etq = document.getElementById('navEtq');
+    if (!etq) { etq = document.createElement('div'); etq.id = 'navEtq'; etq.className = 'nav-etq'; etq.setAttribute('role', 'tooltip'); document.body.appendChild(etq); }
+    const mostrarEtq = el => {
+      if (!$('#app') || !$('#app').classList.contains('menu-min') || innerWidth <= 820) return;
+      const r = el.getBoundingClientRect();
+      etq.textContent = el.getAttribute('data-rotulo') || el.getAttribute('aria-label') || '';
+      etq.style.left = (r.right + 10) + 'px'; etq.style.top = (r.top + r.height / 2) + 'px';
+      etq.classList.add('on');
+    };
+    const esconderEtq = () => etq.classList.remove('on');
+    $$('#side .nav a, #side .brand, #bRecolher, #bSair').forEach(el => {
+      el.addEventListener('mouseenter', () => mostrarEtq(el)); el.addEventListener('focus', () => mostrarEtq(el));
+      el.addEventListener('mouseleave', esconderEtq); el.addEventListener('blur', esconderEtq);
+    });
+    $('#side').addEventListener('scroll', esconderEtq);
+    $('#side .brand').setAttribute('data-rotulo', 'Página inicial (Painel)');
+    $('#bSair').setAttribute('data-rotulo', 'Sair do sistema');
+    $('#bRecolher').onclick = () => {
+      esconderEtq();
+      const min = !menuRecolhido();
+      try { localStorage.setItem(MENU_KEY, min ? '1' : '0'); } catch (e) { /* sem armazenamento */ }
+      $('#app').classList.toggle('menu-min', min);
+      const b = $('#bRecolher'); b.textContent = min ? '»' : '«';
+      b.title = b.ariaLabel = min ? 'Abrir o menu' : 'Recolher o menu'; b.setAttribute('aria-expanded', String(!min)); b.setAttribute('data-rotulo', b.title);
+    };
     $('#bMais').onclick = () => $('#side').classList.toggle('open');
     if ($('#bInstalar')) $('#bInstalar').onclick = instalarApp;
     $('#bSair').onclick = () => sair();
@@ -361,8 +484,16 @@
     $$('#side a').forEach(a => a.addEventListener('click', () => $('#side').classList.remove('open')));
   }
   function head(titulo, sub, acoes) {
-    return `<div class="page-head"><div><h1>${titulo}</h1>${sub ? `<p>${sub}</p>` : ''}</div><div class="actions no-print">${acoes || ''}</div></div>`;
+    const inicio = /^#?\/?(painel)?$/.test(location.hash);
+    return `<div class="page-head"><div class="ph-t">${inicio ? '' : '<button type="button" class="voltar no-print" aria-label="Voltar para a página anterior" title="Voltar">←</button>'}<div><h1>${titulo}</h1>${sub ? `<p>${sub}</p>` : ''}</div></div><div class="actions no-print">${acoes || ''}</div></div>`;
   }
+  // volta para a tela anterior do sistema; se não houver, vai ao Painel
+  let navegacoes = 0;
+  window.addEventListener('hashchange', () => { navegacoes++; });
+  function voltar() {
+    if (navegacoes > 0) { navegacoes -= 2; history.back(); } else location.hash = '#/painel';
+  }
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.voltar')) voltar(); });
 
   /* ======================= modal ======================= */
   function modal(titulo, corpo, botoes, wide) {
@@ -408,9 +539,50 @@
     });
   }
   function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+  /* ---------- chave da forma do gráfico (colunas, barras, linhas, pizza), lembrada por gráfico ---------- */
+  const GTIPO_KEY = 'ipb-graficos-forma';
+  let GT = {};
+  try { GT = JSON.parse(localStorage.getItem(GTIPO_KEY) || '{}') || {}; } catch (e) { GT = {}; }
+  const GSPEC = {};
+  let gseq = 0;
+  const GOPC = [['colunas', 'Colunas', '<svg viewBox="0 0 16 16"><path d="M2 14h12M4 13V8M8 13V3M12 13V6" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>'],
+    ['barras', 'Barras', '<svg viewBox="0 0 16 16"><path d="M2 2v12M3 4h6M3 8h10M3 12h4" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>'],
+    ['linhas', 'Linhas', '<svg viewBox="0 0 16 16"><path d="M2 12l4-5 3 3 5-7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'],
+    ['pizza', 'Pizza', '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 2v6h6" stroke="currentColor" stroke-width="2" fill="none"/></svg>']];
+  // id: nome estável do gráfico (a escolha fica guardada); sp: { cats, series, fmt:{l,c} }; proprio: desenho próprio para a forma padrão
+  function grafChave(id, sp, padrao, proprio, mini) {
+    const k = 'g' + (++gseq);
+    GSPEC[k] = { id, sp, padrao, proprio };
+    if (gseq % 400 === 0) Object.keys(GSPEC).slice(0, 200).forEach(x => delete GSPEC[x]);
+    const tipo = GOPC.some(o => o[0] === GT[id]) ? GT[id] : padrao;
+    return `<div class="gsw${mini ? ' mini' : ''}" data-gsw="${k}"><div class="gsw-bar" role="group" aria-label="Forma do gráfico">${GOPC.map(([t, l, ic]) => `<button type="button" class="gsw-b${t === tipo ? ' on' : ''}" data-gt="${t}" title="${l}" aria-label="${l}" aria-pressed="${t === tipo}">${ic}${mini ? '' : `<span>${l}</span>`}</button>`).join('')}</div><div class="gsw-c">${grafDesenho(GSPEC[k], tipo)}</div></div>`;
+  }
+  function grafDesenho(g, tipo) {
+    if (tipo === g.padrao && g.proprio) return g.proprio();
+    return window.IPB_GRAFICOS ? window.IPB_GRAFICOS.grafico(tipo, g.sp) : (g.proprio ? g.proprio() : '');
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('.gsw-b');
+    if (!b) return;
+    const w = b.closest('.gsw'), g = GSPEC[w.getAttribute('data-gsw')];
+    if (!g) return;
+    const t = b.getAttribute('data-gt');
+    GT[g.id] = t;
+    try { localStorage.setItem(GTIPO_KEY, JSON.stringify(GT)); } catch (err) { /* sem armazenamento */ }
+    $$('.gsw-b', w).forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); });
+    const c = $('.gsw-c', w);
+    c.innerHTML = grafDesenho(g, t);
+    ligarTips(c);
+  });
+  const fmtObj = fmt => ({ l: v => fmt(v), c: v => fmt(v, true) });
+
   /* barras verticais agrupadas: cats=['2024','2025'], series=[{nome, cor, vals:[]}] */
   function barras(cats, series, fmt, opts) {
     opts = opts || {};
+    const id = 'b:' + (location.hash.split('/')[1] || '') + ':' + (opts.id || opts.label || series.map(s => s.nome).join('+'));
+    return grafChave(id, { cats, series: series.map(s => ({ nome: s.nome, cor: s.cor, vals: s.vals })), fmt: fmtObj(fmt), h: opts.h, titulo: opts.label }, 'colunas', () => barrasSvg(cats, series, fmt, opts));
+  }
+  function barrasSvg(cats, series, fmt, opts) {
     const W = 640, H = opts.h || 240, L = 64, R = 12, T = 14, B = 34;
     const max = niceMax(Math.max(1, ...series.flatMap(s => s.vals.map(v => Number(v) || 0))));
     const gw = (W - L - R) / cats.length;
@@ -437,7 +609,12 @@
     return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.label || '')}">${g}</svg>${leg}</div>`;
   }
   /* barras horizontais (uma série) */
-  function hbarras(itens, fmt, cor) {
+  function hbarras(itens, fmt, cor, idG) {
+    const id = 'h:' + (location.hash.split('/')[1] || '') + ':' + (idG || (cor || '') + ':' + itens.map(i => i.nome).sort().join(',').slice(0, 80));
+    const sp = { cats: itens.map(i => i.nome), series: [{ nome: '', cor: cor && !/^var\(/.test(cor) ? cor : undefined, vals: itens.map(i => i.v) }], fmt: fmtObj(fmt) };
+    return grafChave(id, sp, 'barras', () => hbarrasHtml(itens, fmt, cor));
+  }
+  function hbarrasHtml(itens, fmt, cor) {
     const max = Math.max(1, ...itens.map(i => Math.abs(i.v)));
     return itens.map(i => `<div class="bar-row" data-tip="${esc('<b>' + esc(i.nome) + '</b><br>' + esc(fmt(i.v)) + (i.extra ? '<br>' + esc(i.extra) : ''))}"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.nome)}</span><div class="bar"><i style="width:${Math.max(0, i.v) / max * 100}%;background:${i.cor || cor};border-radius:0 4px 4px 0"></i></div><span class="num small" style="text-align:right">${esc(fmt(i.v, true))}</span></div>`).join('');
   }
@@ -449,15 +626,34 @@
     const anos = {};
     rels.forEach(r => {
       if (r.status === 'Rascunho') return;
-      const a = anos[r.ano] = anos[r.ano] || { ano: r.ano, com: 0, nc: 0, rec: 0, desp: 0, diz: 0, dizSC: 0, alunos: 0, prof: 0, igrejasEst: 0, igrejasCon: 0, cons: [] };
+      const a = anos[r.ano] = anos[r.ano] || { ano: r.ano, com: 0, nc: 0, rec: 0, desp: 0, diz: 0, ofe: 0, saldo: 0, dizSC: 0, verba: 0, alunos: 0, prof: 0, igrejasEst: 0, igrejasCon: 0, cons: [] };
       const C = ctx(r.modelo || modelo(r.modeloId), r.dados || {});
       if (r.modeloId === 'estatistico') {
         a.igrejasEst++;
         a.com += C.V('com_atual'); a.nc += C.V('nc_atual'); a.rec += C.V('fin_rec_total'); a.desp += C.V('fin_desp_total');
-        a.diz += C.V('fin_dizimos'); a.dizSC += C.V('fin_dizimo_sc'); a.alunos += C.V('est_alunos'); a.prof += C.V('com_profissoes');
-      } else if (r.modeloId === 'conselho') { a.igrejasCon++; a.cons.push(r.dados || {}); }
+        a.ofe += C.V('fin_ofertas'); a.saldo += C.V('fin_saldo_seguinte');
+        a.diz += C.V('fin_dizimos'); a.dizSC += C.V('fin_dizimo_sc'); a.verba += C.V('fin_verba_presb'); a.alunos += C.V('est_alunos'); a.prof += C.V('com_profissoes');
+      } else if (r.modeloId === 'conselho') { a.igrejasCon++; a.cons.push(Object.assign({ __igreja: r.igrejaId }, r.dados || {})); }
     });
     return Object.values(anos).sort((x, y) => x.ano - y.ano);
+  }
+  // caixa da tesouraria do presbitério: entradas e saídas por mês do último ano com lançamentos
+  function caixaPresbiterio(C1, C2) {
+    const T = window.IPB_TESOURARIA;
+    const anosT = T ? T.anosTes().filter(a => T.contas(a).length).sort((a, b) => a - b) : [];
+    const head = ano => `<div class="card-head"><h2>Caixa do ${esc(ORG.tipo)}</h2><span class="muted small">${ano ? 'tesouraria · ' + ano : 'tesouraria'}</span></div>`;
+    if (!anosT.length) return `<div class="card">${head('')}<div class="list-empty">Ainda não há lançamentos da tesouraria.</div></div>`;
+    const ano = anosT[anosT.length - 1];
+    const mAte = T.ultimoMes(ano);
+    const res = T.resumoAno(ano, mAte);
+    const ls = res.linhas.slice(0, mAte);
+    const M3 = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    const ant = T.saldoAnterior(ano);
+    return `<div class="card">${head(ano)}
+      <div class="caixa-res"><div><span>Saldo anterior</span><b>${money(ant)}</b></div><div><span>Entradas</span><b class="up">${money(res.ent)}</b></div><div><span>Saídas</span><b class="down">${money(res.sai)}</b></div><div><span>Saldo em ${M3[mAte - 1]}</span><b class="${res.saldo < 0 ? 'down' : ''}">${money(res.saldo)}</b></div></div>
+      ${barras(ls.map(l => M3[l.mes - 1]), [{ nome: 'Entradas', cor: C1, vals: ls.map(l => l.ent) }, { nome: 'Saídas', cor: C2, vals: ls.map(l => l.sai) }], (v, ax) => ax ? moneyK(v) : money(v), { label: 'Entradas e saídas do caixa por mês' })}
+      <p class="small muted" style="margin:6px 0 0">Até ${M3[mAte - 1]}/${ano}: ${pct(res.tot.previstoRec ? res.tot.realRec / res.tot.previstoRec : 0)} da receita prevista e ${pct(res.tot.previstoDesp ? res.tot.realDesp / res.tot.previstoDesp : 0)} da despesa prevista. <a href="#/tesouraria/${ano}">Abrir a tesouraria</a></p>
+    </div>`;
   }
   function telaPainel() {
     const igs = S.d.igrejas.filter(i => i.ativo !== false);
@@ -465,8 +661,8 @@
     const igId = unica || S.filtroIgreja || '';
     const anos = indicadoresAno(igId);
     const ult = anos[anos.length - 1] || {}, pen = anos[anos.length - 2] || null;
-    const delta = (a, b, fmt) => b ? `<div class="d ${a >= b ? 'up' : 'down'}">${a >= b ? '▲' : '▼'} ${fmt(Math.abs(a - b))} desde ${pen.ano}</div>` : '';
-    const c = contagens();
+    // evolução em % sobre o ano anterior (verde se cresceu)
+    const delta = (a, b) => b ? `<div class="d ${a >= b ? 'up' : 'down'}">${a >= b ? '▲' : '▼'} ${pct(Math.abs(a - b) / b)} sobre ${pen.ano}</div>` : '<div class="d muted">sem ano anterior</div>';
     const C1 = 'var(--c1)', C2 = 'var(--c2)';
     const maxEst = Math.max(0, ...anos.map(a => a.igrejasEst));
     const anosEst = anos.filter(a => a.igrejasEst && a.igrejasEst >= maxEst / 2);
@@ -480,8 +676,13 @@
       const C = e ? ctx(e.modelo, e.dados) : null, C0 = e0 ? ctx(e0.modelo, e0.dados) : null;
       const pend = S.d.relatorios.filter(r => r.igrejaId === i.id && r.ano === anoRef).reduce((n, r) => n + verificar(r).filter(x => x.nivel === 'erro').length, 0);
       return { i, e, com: C ? C.V('com_atual') : null, com0: C0 ? C0.V('com_atual') : null, rec: C ? C.V('fin_rec_total') : null, desp: C ? C.V('fin_desp_total') : null,
-        diz: C ? C.V('fin_dizimos') : 0, sc: C ? C.V('fin_dizimo_sc') : 0, alunos: C ? C.V('est_alunos') : null, prof: C ? C.V('com_profissoes') : 0, pend };
-    });
+        diz: C ? C.V('fin_dizimos') : 0, ofe: C ? C.V('fin_ofertas') : 0, sc: C ? C.V('fin_dizimo_sc') : 0, verba: C ? C.V('fin_verba_presb') : 0, rec0: C0 ? C0.V('fin_rec_total') : null,
+        saldo: C ? C.V('fin_saldo_seguinte') : null, saldo0: C0 ? C0.V('fin_saldo_seguinte') : null, prof: C ? C.V('com_profissoes') : 0, pend };
+    }).map((p, k) => Object.assign(p, { _k: k }))
+      .sort((a, b) => (ehCongregacao(a.i) - ehCongregacao(b.i)) || (temFin(b) - temFin(a)) || (a._k - b._k));
+    function vR(v) { return (v < 0 ? '−' : '') + new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(Number(v) || 0)); }
+    function nomeTabela(n) { return String(n || '').replace(/^Igreja Presbiteriana (d[aoe]s? |em )?/i, 'IP ').replace(/^Congrega[çc][ãa]o Presbiterial (d[aoe]s? |em )?/i, 'CP ').replace(/^Congrega[çc][ãa]o /i, 'Cong. '); }
+    function temFin(p) { return p.e && (p.rec != null || p.diz || p.ofe || p.verba || p.sc) ? 1 : 0; }
 
     // Conformidade do Relatório do Conselho (último ano)
     const anoCon = anos.filter(a => a.igrejasCon).slice(-1)[0];
@@ -489,52 +690,69 @@
       ['previdencia', 'Previdência do pastor'], ['plan_estrategico', 'Planejamento estratégico'], ['seguro', 'Seguro patrimonial'], ['alvara', 'Alvará'], ['avcb', 'Licença dos Bombeiros']];
     const conf = anoCon ? itensCon.map(([k, l]) => {
       const sim = anoCon.cons.filter(d => d[k] === 'sim').length;
-      return { nome: l, v: anoCon.cons.length ? sim / anoCon.cons.length : 0, extra: sim + ' de ' + anoCon.cons.length + ' relatórios' };
+      return { k, nome: l, v: anoCon.cons.length ? sim / anoCon.cons.length : 0, extra: sim + ' de ' + anoCon.cons.length + ' relatórios · clique para ver as igrejas' };
     }) : [];
+    const sigla = id => { const i = igreja(id) || {}; return i.sigla || i.nome || ''; };
+    const marca = v => v === 'sim' ? '<span class="up" title="Sim">✓</span>' : v === 'nao' || v === 'não' ? '<span class="down" title="Não">✗</span>' : '<span class="muted" title="Sem resposta">–</span>';
+    const matriz = anoCon ? `<details class="conf-det"><summary>Ver quais igrejas atendem a cada indicador</summary><div class="tbl-wrap" style="margin-top:10px"><table class="conf-tab"><thead><tr><th>Igreja</th>${itensCon.map(([, l]) => `<th class="c">${esc(l)}</th>`).join('')}</tr></thead><tbody>
+      ${anoCon.cons.slice().sort((a, b) => sigla(a.__igreja).localeCompare(sigla(b.__igreja), 'pt-BR')).map(d => `<tr><td>${esc((igreja(d.__igreja) || {}).nome || '')}</td>${itensCon.map(([k]) => `<td class="c">${marca(d[k])}</td>`).join('')}</tr>`).join('')}
+      </tbody></table></div><p class="small muted" style="margin:6px 0 0">✓ sim · ✗ não · – sem resposta no Relatório do Conselho de ${anoCon.ano}.</p></details>` : '';
 
-    const html = head('Painel', esc(unica ? igNome(unica) : 'Presbitério Litorâneo do RN · ' + igs.length + ' igrejas e congregações'),
-      unica ? '' : `<select id="fIg" aria-label="Filtrar igreja" style="min-width:240px"><option value="">Todas as igrejas</option>${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>`) + `
-      <div class="kpis">
-        <div class="kpi"><div class="l">Membros comungantes ${ult.igrejasEst ? '(' + ult.ano + ')' : ''}</div><div class="v">${num(ult.com)}</div>${delta(ult.com, pen && pen.com, num)}</div>
-        <div class="kpi"><div class="l">Não comungantes</div><div class="v">${num(ult.nc)}</div>${delta(ult.nc, pen && pen.nc, num)}</div>
-        <div class="kpi"><div class="l">Receita do ano</div><div class="v">${moneyK(ult.rec)}</div>${delta(ult.rec, pen && pen.rec, moneyK)}</div>
-        <div class="kpi"><div class="l">Dízimo ao Supremo Concílio</div><div class="v">${moneyK(ult.dizSC)}</div><div class="d muted">${ult.diz ? pct(ult.dizSC / ult.diz) + ' dos dízimos' : ''}</div></div>
-        <a class="kpi" href="#/relatorios/analisar"><div class="l">Relatórios aguardando análise</div><div class="v">${c.analisar}</div><div class="d muted">${c.devolvidos} devolvido(s)</div></a>
-        <a class="kpi" href="#/atas"><div class="l">Atas a examinar</div><div class="v">${c.atas}</div></a>
+    const nCong = igs.filter(ehCongregacao).length, nIgr = igs.length - nCong;
+    const contagem = ORG.unidades === 'igrejas' ? nIgr + (nIgr === 1 ? ' igreja' : ' igrejas') + (nCong ? ' e ' + nCong + (nCong === 1 ? ' congregação' : ' congregações') : '') : igs.length + ' ' + (igs.length === 1 ? ORG.unidade : ORG.unidades);
+    const base3 = x => ((x.diz || 0) + (x.ofe || 0)) * TAXA_PRESB();
+    const html = head('Painel', esc(unica || igId ? igNome(unica || igId) : ORG.nome + ' · ' + contagem),
+      unica ? '' : `<select id="fIg" aria-label="Filtrar igreja" style="min-width:240px"><option value="">${esc(ORG.sigla || ORG.tipo)} · todas as igrejas</option>${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>`) + `
+      <div class="escopo ${igId ? 'igreja' : ''}"><span>Dados de</span> <b>${esc(igId ? igNome(igId) : (ORG.sigla ? ORG.sigla + ' · ' : '') + ORG.nome + ' (todas as igrejas)')}</b>${igId && !unica ? ' <button class="btn sm ghost" id="bEscopo">Voltar para o ' + esc(ORG.sigla || ORG.tipo) + '</button>' : ''}</div>
+      <div class="kpis kpis-painel">
+        <div class="kpi"><div class="l">Total de membros${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${num((ult.com || 0) + (ult.nc || 0))}</div>${delta((ult.com || 0) + (ult.nc || 0), pen && (pen.com + pen.nc))}<div class="s">${num(ult.com)} comungantes · ${num(ult.nc)} não comungantes</div></div>
+        <div class="kpi"><div class="l">Receita do ano${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.rec)}</div>${delta(ult.rec, pen && pen.rec)}<div class="s">${igId ? 'da igreja selecionada' : 'soma das igrejas'}</div></div>
+        <div class="kpi"><div class="l">${igId ? 'Verba ao ' : 'Receita do '}${esc(ORG.tipo)}${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.verba)}</div>${delta(ult.verba, pen && pen.verba)}<div class="s">${base3(ult) ? pct(ult.verba / base3(ult)) + ' dos ' + pct(TAXA_PRESB()) + ' devidos (' + moneyK(base3(ult)) + ')' : (igId ? 'verba presbiterial desta igreja' : 'verba presbiterial das igrejas')}</div></div>
+        <div class="kpi"><div class="l">Dízimo ao Supremo Concílio${ult.ano ? ' (' + ult.ano + ')' : ''}</div><div class="v">${moneyK(ult.dizSC)}</div>${delta(ult.dizSC, pen && pen.dizSC)}<div class="s">${ult.diz ? pct(ult.dizSC / ult.diz) + ' dos dízimos recebidos' : '&nbsp;'}</div></div>
       </div>
       <div class="grid g2">
         <div class="card"><div class="card-head"><h2>Membros por ano</h2><span class="muted small">comungantes e não comungantes</span></div>
           ${anosEst.length ? barras(anosEst.map(a => String(a.ano)), [{ nome: 'Comungantes', cor: C1, vals: anosEst.map(a => a.com) }, { nome: 'Não comungantes', cor: C2, vals: anosEst.map(a => a.nc) }], (v) => num(v), { label: 'Membros por ano' }) : '<div class="list-empty">Sem relatórios estatísticos.</div>'}
           <p class="small muted">Igrejas com formulário de estatística: ${anosEst.map(a => a.ano + ': ' + a.igrejasEst).join(' · ')}.${anosFora.length ? ' Fora do gráfico por terem poucos relatórios: ' + anosFora.map(a => a.ano + ' (' + a.igrejasEst + ')').join(', ') + '.' : ''}</p>
         </div>
-        <div class="card"><div class="card-head"><h2>Receitas e despesas</h2><span class="muted small">movimento financeiro realizado</span></div>
-          ${anosEst.length ? barras(anosEst.map(a => String(a.ano)), [{ nome: 'Receitas', cor: C1, vals: anosEst.map(a => a.rec) }, { nome: 'Despesas', cor: C2, vals: anosEst.map(a => a.desp) }], (v, ax) => ax ? moneyK(v) : money(v), { label: 'Receitas e despesas por ano' }) : '<div class="list-empty">Sem dados financeiros.</div>'}
-        </div>
+        ${igId ? `<div class="card"><div class="card-head"><h2>Receitas e despesas</h2><span class="muted small">${esc(igNome(igId))}</span></div>
+          ${anosEst.length ? barras(anosEst.map(a => String(a.ano)), [{ nome: 'Receitas', cor: C1, vals: anosEst.map(a => a.rec) }, { nome: 'Despesas', cor: C2, vals: anosEst.map(a => a.desp) }], (v, ax) => ax ? moneyK(v) : money(v), { label: 'Receitas e despesas por ano' }) : '<div class="list-empty">Sem dados financeiros desta igreja.</div>'}
+        </div>` : caixaPresbiterio(C1, C2)}
       </div>
       ${anoRef ? `<div class="grid g2" style="margin-top:16px">
         <div class="card"><div class="card-head"><h2>Comungantes por igreja</h2><span class="muted small">${anoRef}</span></div>${hbarras(porIgreja.filter(p => p.com != null).sort((a, b) => b.com - a.com).map(p => ({ nome: p.i.sigla || p.i.nome, v: p.com, extra: p.i.nome + (p.com0 != null ? ' · ' + (anoRef - 1) + ': ' + num(p.com0) : '') })), v => num(v), C1)}</div>
         <div class="card"><div class="card-head"><h2>Novos membros por profissão de fé</h2><span class="muted small">${anoRef}</span></div>${hbarras(porIgreja.filter(p => p.e).sort((a, b) => b.prof - a.prof).map(p => ({ nome: p.i.sigla || p.i.nome, v: p.prof, extra: p.i.nome })), v => num(v), C1)}</div>
       </div>` : ''}
-      ${conf.length ? `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Relatório do Conselho: situação das igrejas</h2><span class="muted small">${anoCon.ano} · % dos relatórios que responderam "Sim"</span></div>${hbarras(conf, (v) => pct(v), C1)}</div>` : ''}
-      <div class="card" style="margin-top:16px"><div class="card-head"><h2>Igrejas em ${anoRef || '–'}</h2><button class="btn sm ghost no-print" id="bCsv">Baixar planilha (CSV)</button></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Igreja</th><th class="num">Comungantes</th><th class="num">Variação</th><th class="num">Receitas</th><th class="num">Despesas</th><th class="num">Dízimo SC</th><th class="num">Alunos ED</th><th class="num">Problemas</th></tr></thead><tbody>
-        ${porIgreja.map(p => `<tr class="${p.e ? 'click' : ''}" ${p.e ? `data-go="relatorio/${esc(p.e.id)}"` : ''}><td>${esc(p.i.nome)}${p.i.tipo && p.i.tipo !== 'Igreja' ? ` <span class="tag gray">${esc(p.i.tipo)}</span>` : ''}</td>
-          <td class="num">${p.com == null ? '–' : num(p.com)}</td>
-          <td class="num">${p.com != null && p.com0 != null ? `<span class="${p.com >= p.com0 ? 'up' : 'down'}">${p.com >= p.com0 ? '+' : ''}${num(p.com - p.com0)}</span>` : '–'}</td>
-          <td class="num">${p.rec == null ? '–' : money(p.rec)}</td><td class="num">${p.desp == null ? '–' : money(p.desp)}</td>
-          <td class="num">${p.e ? (p.sc ? money(p.sc) + ' <span class="muted small">(' + pct(p.diz ? p.sc / p.diz : 0) + ')</span>' : '<span class="down">não repassou</span>') : '–'}</td>
-          <td class="num">${p.alunos == null ? '–' : num(p.alunos)}</td>
-          <td class="num">${p.pend ? `<span class="down">${p.pend}</span>` : (p.e ? '0' : '–')}</td></tr>`).join('')}
+      ${conf.length ? `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Relatório do Conselho: situação das igrejas</h2><span class="muted small">${anoCon.ano} · % dos relatórios que responderam "Sim"</span></div><div id="confBars">${hbarras(conf, (v) => pct(v), C1)}</div>${matriz}</div>` : ''}
+      <div class="card" style="margin-top:16px"><div class="card-head"><div><h2>Igrejas em ${anoRef || '–'}</h2><span class="muted small">Valores em R$</span></div><button class="btn sm ghost no-print" id="bCsv">Baixar planilha (CSV)</button></div>
+        <div class="tbl-wrap"><table class="tab-fin"><thead><tr><th>Igreja</th><th class="num">Receitas</th><th class="num">Despesas</th><th class="num">Resultado</th><th class="num">Dízimo SC</th><th class="num">Verba presbiterial</th><th class="num">Saldo final</th></tr></thead><tbody>
+        ${porIgreja.map(p => `<tr class="${p.e ? 'click' : ''}" ${p.e ? `data-go="relatorio/${esc(p.e.id)}"` : ''}><td class="nome" title="${esc(p.i.nome)}">${esc(nomeTabela(p.i.nome))}</td>
+          <td class="num">${p.rec == null ? '–' : vR(p.rec) + (p.rec0 ? `<div class="sub ${p.rec >= p.rec0 ? 'up' : 'down'}">${p.rec >= p.rec0 ? '+' : '−'}${pct(Math.abs(p.rec - p.rec0) / p.rec0)}</div>` : '')}</td>
+          <td class="num">${p.desp == null ? '–' : vR(p.desp)}</td>
+          <td class="num">${p.rec == null ? '–' : `<span class="${p.rec - p.desp >= 0 ? '' : 'down'}">${vR(p.rec - p.desp)}</span>`}</td>
+          <td class="num">${p.e ? (p.sc ? vR(p.sc) + `<div class="sub muted">${pct(p.diz ? p.sc / p.diz : 0)}</div>` : '<span class="down">não repassou</span>') : '–'}</td>
+          <td class="num">${p.e ? (p.verba ? vR(p.verba) : '<span class="down">não repassou</span>') + (base3(p) ? `<div class="sub ${p.verba >= base3(p) - 0.5 ? 'up' : 'down'}">${pct(p.verba / ((p.diz || 0) + (p.ofe || 0)))} · devido ${vR(base3(p))}</div>` : '') : '–'}</td>
+          <td class="num">${p.saldo == null ? '–' : vR(p.saldo) + (p.saldo0 != null ? `<div class="sub muted">${anoRef - 1}: ${vR(p.saldo0)}</div><div class="sub ${p.saldo >= p.saldo0 ? 'up' : 'down'}">${p.saldo >= p.saldo0 ? '+' : '−'}${vR(Math.abs(p.saldo - p.saldo0))}</div>` : '')}</td></tr>`).join('')}
         </tbody></table></div>
-        <p class="small muted">Linhas sem dados: a igreja não enviou o formulário de estatística de ${anoRef || ''} (congregações enviam só o relatório do Conselho).</p>
+        <p class="small muted">Só informações financeiras, do formulário de estatística de ${anoRef || ''}. Abaixo de cada valor: na receita, a evolução sobre ${anoRef ? anoRef - 1 : 'o ano anterior'}; no dízimo SC, o percentual dos dízimos; na verba, o percentual repassado e o valor devido; no saldo, o saldo do ano anterior e a variação. Verba presbiterial: a taxa devida é ${pct(TAXA_PRESB())} da receita de dízimos e ofertas. Saldo: a sobra de um ano para o outro é movimento normal do caixa e varia a cada ano. Linhas sem dados: a igreja não enviou o formulário (congregações enviam só o relatório do Conselho).</p>
       </div>`;
     shell('painel', html);
     const sel = $('#fIg'); if (sel) sel.onchange = () => { S.filtroIgreja = sel.value; render(); };
+    if ($('#bEscopo')) $('#bEscopo').onclick = () => { S.filtroIgreja = ''; render(); };
     $$('[data-go]').forEach(tr => tr.onclick = () => ir(tr.getAttribute('data-go')));
     ligarTips($('#main'));
+    // situação das igrejas: clicar num indicador mostra quais igrejas atendem e quais não
+    $$('#confBars .bar-row').forEach((row, i) => { row.classList.add('click'); row.onclick = () => {
+      const [k, l] = itensCon[i];
+      const grupo = f => anoCon.cons.filter(f).map(d => (igreja(d.__igreja) || {}).nome || '').sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      const sim = grupo(d => d[k] === 'sim'), nao = grupo(d => d[k] === 'nao' || d[k] === 'não'), sem = grupo(d => d[k] !== 'sim' && d[k] !== 'nao' && d[k] !== 'não');
+      const lista = (t, xs, cls) => `<div class="lbl" style="margin-top:10px">${t} <span class="muted">(${xs.length})</span></div>${xs.length ? `<ul class="${cls}" style="margin:4px 0 0;padding-left:18px">${xs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="muted small" style="margin:4px 0 0">Nenhuma.</p>'}`;
+      const m = modal(l + ' · ' + anoCon.ano, lista('Sim', sim, '') + lista('Não', nao, 'down') + lista('Sem resposta', sem, 'muted'), '<button class="btn" data-x>Fechar</button>');
+      $('[data-x]', m.el).onclick = m.fechar;
+    }; });
     $('#bCsv').onclick = () => {
-      const linhas = [['Igreja', 'Comungantes', 'Comungantes ano anterior', 'Receitas', 'Despesas', 'Dízimos', 'Dízimo SC', 'Alunos ED', 'Profissões de fé']]
-        .concat(porIgreja.map(p => [p.i.nome, p.com, p.com0, p.rec, p.desp, p.diz, p.sc, p.alunos, p.prof]));
+      const linhas = [['Igreja', 'Tipo', 'Receitas', 'Receitas ano anterior', 'Despesas', 'Resultado', 'Dízimos', 'Ofertas', 'Dízimo SC', 'Verba presbiterial', 'Verba devida (' + pct(TAXA_PRESB()) + ')', 'Saldo para o ano seguinte', 'Saldo do ano anterior']]
+        .concat(porIgreja.map(p => [p.i.nome, ehCongregacao(p.i) ? 'Congregação' : 'Igreja', p.rec, p.rec0, p.desp, p.rec == null ? null : p.rec - p.desp, p.diz, p.ofe, p.sc, p.verba, p.e ? Math.round(base3(p) * 100) / 100 : null, p.saldo, p.saldo0]));
       baixar('igrejas-' + anoRef + '.csv', '﻿' + linhas.map(l => l.map(v => v == null ? '' : typeof v === 'number' ? String(v).replace('.', ',') : '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'), 'text/csv');
     };
   }
@@ -591,7 +809,10 @@
     });
     return { M, anos: [...anos].sort() };
   }
-  function miniBarras(anos, vals, f) {
+  function miniBarras(anos, vals, f, idG) {
+    return grafChave('m:' + (idG || f), { cats: anos.map(String), series: [{ nome: '', vals }], fmt: { l: v => fmtInd(v, f), c: v => fmtInd(v, f, true) }, h: 170 }, 'colunas', () => miniBarrasSvg(anos, vals, f), true);
+  }
+  function miniBarrasSvg(anos, vals, f) {
     const W = 260, H = 112, T = 18, B = 20, L = 6, R = 6;
     const nums = vals.map(v => v == null ? null : Number(v));
     const max = Math.max(0, ...nums.filter(v => v != null)), min = Math.min(0, ...nums.filter(v => v != null));
@@ -620,8 +841,26 @@
   function csvInd(nome, linhas) {
     baixar(nome, '﻿' + linhas.map(l => l.map(v => v == null ? '' : typeof v === 'number' ? String(v).replace('.', ',') : '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'), 'text/csv');
   }
+  // soma do presbitério: totais somados; percentuais refeitos a partir das somas (ou média das igrejas)
+  const PRESB = '__presb';
+  function somaPresbiterio(M, anos) {
+    const P = {};
+    anos.forEach(a => {
+      const ds = Object.keys(M).map(k => M[k][a]).filter(Boolean);
+      if (!ds.length) return;
+      const o = P[a] = { _est: ds.some(d => d._est), _con: ds.some(d => d._con), _n: ds.length };
+      const soma = id => { const v = ds.map(d => d[id]).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) : null; };
+      const media = id => { const v = ds.map(d => d[id]).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+      const razao = (n, d) => { const x = soma(n), y = soma(d); return x != null && y ? x / y : null; };
+      IND.forEach(i => { o[i.id] = i.fmt === 'pct' ? media(i.id) : soma(i.id); });
+      o.percap = razao('diz', 'com'); o.dizscPct = razao('dizsc', 'diz'); o.missPct = razao('miss', 'desp'); o.alunosPct = razao('alunos', 'rol');
+    });
+    return P;
+  }
   function telaIndicadores() {
     const { M, anos } = matrizInd();
+    if (!S.user.igrejaId) M[PRESB] = somaPresbiterio(M, anos);
+    const nomeEsc = id => id === PRESB ? (ORG.sigla ? ORG.sigla + ' · ' : '') + ORG.nome + ' (todas as igrejas)' : igNome(id);
     const igs = S.d.igrejas.filter(i => M[i.id]);
     const presb = isPresb();
     const modo = presb ? S.ind.modo : 'igreja';
@@ -633,7 +872,8 @@
       return;
     }
     if (modo === 'igreja') {
-      const igId = S.user.igrejaId || (M[S.ind.igreja] ? S.ind.igreja : igs[0].id);
+      const igId = S.user.igrejaId || (M[S.ind.igreja] ? S.ind.igreja : PRESB);
+      const ehPresb = igId === PRESB;
       const D = M[igId] || {};
       const anosIg = anos.filter(a => D[a]);
       const ult = anosIg[anosIg.length - 1], pen = anosIg[anosIg.length - 2];
@@ -646,21 +886,22 @@
           const vals = anosIg.map(a => D[a][i.id] == null ? null : D[a][i.id]);
           const ua = [...anosIg].reverse().find(a => D[a][i.id] != null);
           const pa = anosIg.filter(a => a < ua).reverse().find(a => D[a][i.id] != null);
-          return `<div class="ind-card"><h4>${esc(i.nome)}</h4><div class="small muted">${ua}: <b style="color:var(--text);font-size:15px">${esc(fmtInd(D[ua][i.id], i.fmt))}</b>${pa ? ' · ' + variacao(D[ua][i.id], D[pa][i.id], i.fmt) + ' desde ' + pa : ''}</div>${miniBarras(anosIg, vals, i.fmt)}</div>`;
+          return `<div class="ind-card"><h4>${esc(i.nome)}</h4><div class="small muted">${ua}: <b style="color:var(--text);font-size:15px">${esc(fmtInd(D[ua][i.id], i.fmt))}</b>${pa ? ' · ' + variacao(D[ua][i.id], D[pa][i.id], i.fmt) + ' desde ' + pa : ''}</div>${miniBarras(anosIg, vals, i.fmt, i.id)}</div>`;
         }).join('')}</div></div>`;
       }).join('');
       const linhas = IND.filter(i => anosIg.some(a => D[a][i.id] != null));
-      html = head('Indicadores', 'Evolução dos relatórios de uma igreja ao longo dos anos.', seg) + `
-        <div class="card"><div class="filters" style="margin:0">${S.user.igrejaId ? `<div><b>${esc(igNome(igId))}</b></div>` : `<div class="field" style="min-width:300px"><label for="iIg">Igreja</label><select id="iIg">${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select></div>`}
-          <p class="small muted" style="margin:0;align-self:end">Relatórios: ${anosIg.map(a => a + ' (' + [D[a]._est ? 'estatística' : '', D[a]._con ? 'Conselho' : ''].filter(Boolean).join(' e ') + ')').join(' · ')}</p></div></div>
+      html = head('Indicadores', ehPresb ? 'Evolução do ' + esc(ORG.tipoMin) + ' ao longo dos anos: soma das igrejas (percentuais pela soma ou pela média das igrejas).' : 'Evolução dos relatórios de uma igreja ao longo dos anos.', seg) + `
+        <div class="escopo ${ehPresb ? '' : 'igreja'}"><span>Dados de</span> <b>${esc(nomeEsc(igId))}</b></div>
+        <div class="card"><div class="filters" style="margin:0">${S.user.igrejaId ? `<div><b>${esc(igNome(igId))}</b></div>` : `<div class="field" style="min-width:300px"><label for="iIg">Igreja</label><select id="iIg"><option value="${PRESB}" ${ehPresb ? 'selected' : ''}>${esc(ORG.sigla || ORG.tipo)} · todas as igrejas</option>${igs.map(i => `<option value="${esc(i.id)}" ${i.id === igId ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select></div>`}
+          <p class="small muted" style="margin:0;align-self:end">Relatórios: ${anosIg.map(a => a + ' (' + (D[a]._n ? D[a]._n + (D[a]._n === 1 ? ' igreja' : ' igrejas') : [D[a]._est ? 'estatística' : '', D[a]._con ? 'Conselho' : ''].filter(Boolean).join(' e ')) + ')').join(' · ')}${ehPresb ? '. Anos com menos igrejas somam valores menores.' : ''}</p></div></div>
         ${cards}
         <div class="card"><div class="card-head"><h2>Tabela de indicadores</h2><button class="btn sm ghost no-print" id="bCsvI">Baixar planilha (CSV)</button></div>
-          <div class="tbl-wrap"><table><thead><tr><th>Indicador</th>${anosIg.map(a => `<th class="num">${a}</th>`).join('')}<th class="num">Variação${pen ? ' ' + pen + '→' + ult : ''}</th>${presb ? `<th class="num">Média do Presbitério ${ult}</th>` : ''}</tr></thead><tbody>
-          ${grupos.map(g => { const ls = linhas.filter(i => i.grupo === g); return ls.length ? `<tr class="tot"><td colspan="${anosIg.length + (presb ? 3 : 2)}"><b>${esc(g)}</b></td></tr>` + ls.map(i => `<tr><td>${esc(i.nome)}</td>${anosIg.map(a => `<td class="num">${esc(fmtInd(D[a][i.id], i.fmt))}</td>`).join('')}<td class="num">${pen ? variacao(D[ult][i.id], D[pen][i.id], i.fmt) : '–'}</td>${presb ? `<td class="num muted">${esc(fmtInd(media(i.id), i.fmt))}</td>` : ''}</tr>`).join('') : ''; }).join('')}
+          <div class="tbl-wrap"><table><thead><tr><th>Indicador</th>${anosIg.map(a => `<th class="num">${a}</th>`).join('')}<th class="num">Variação${pen ? ' ' + pen + '→' + ult : ''}</th>${presb && !ehPresb ? `<th class="num">Média do Presbitério ${ult}</th>` : ''}</tr></thead><tbody>
+          ${grupos.map(g => { const ls = linhas.filter(i => i.grupo === g); return ls.length ? `<tr class="tot"><td colspan="${anosIg.length + (presb && !ehPresb ? 3 : 2)}"><b>${esc(g)}</b></td></tr>` + ls.map(i => `<tr><td>${esc(i.nome)}</td>${anosIg.map(a => `<td class="num">${esc(fmtInd(D[a][i.id], i.fmt))}</td>`).join('')}<td class="num">${pen ? variacao(D[ult][i.id], D[pen][i.id], i.fmt) : '–'}</td>${presb && !ehPresb ? `<td class="num muted">${esc(fmtInd(media(i.id), i.fmt))}</td>` : ''}</tr>`).join('') : ''; }).join('')}
           </tbody></table></div></div>`;
       shell('indicadores', html);
       const sel = $('#iIg'); if (sel) sel.onchange = () => { S.ind.igreja = sel.value; telaIndicadores(); };
-      $('#bCsvI').onclick = () => csvInd('indicadores-' + (igreja(igId) || {}).sigla + '.csv', [['Indicador'].concat(anosIg)].concat(linhas.map(i => [i.nome].concat(anosIg.map(a => D[a][i.id])))));
+      $('#bCsvI').onclick = () => csvInd('indicadores-' + (ehPresb ? (ORG.sigla || 'presbiterio') : (igreja(igId) || {}).sigla) + '.csv', [['Indicador'].concat(anosIg)].concat(linhas.map(i => [i.nome].concat(anosIg.map(a => D[a][i.id])))));
     } else {
       const ind = IND.find(i => i.id === S.ind.indicador) || IND[0];
       const anosInd = anos.filter(a => igs.filter(i => M[i.id][a] && M[i.id][a][ind.id] != null).length);
@@ -673,14 +914,14 @@
       const tot = ind.fmt === 'pct' ? null : vs.reduce((a, b) => a + b, 0);
       const med = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
       const maxAbs = Math.max(1e-9, ...igs.flatMap(i => anosInd.map(a => Math.abs(val(i, a) || 0))));
-      html = head('Indicadores', 'Compare um indicador entre as igrejas do Presbitério.', seg) + `
+      html = head('Indicadores', 'Compare um indicador entre as ' + ORG.unidades + ' do ' + ORG.tipo + '.', seg) + `
         <div class="card"><div class="filters" style="margin:0">
           <div class="field" style="min-width:320px"><label for="iInd">Indicador</label><select id="iInd">${grupos.map(g => `<optgroup label="${esc(g)}">${IND.filter(i => i.grupo === g).map(i => `<option value="${i.id}" ${i.id === ind.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</optgroup>`).join('')}</select></div>
           <div class="field"><label for="iAno">Ano</label><select id="iAno">${anosInd.map(a => `<option ${a === ano ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
         </div></div>
         <div class="kpis">
           <div class="kpi"><div class="l">Igrejas com dado em ${ano}</div><div class="v">${rank.length}</div></div>
-          ${tot != null ? `<div class="kpi"><div class="l">Total do Presbitério</div><div class="v">${esc(fmtInd(tot, ind.fmt, true))}</div></div>` : ''}
+          ${tot != null ? `<div class="kpi"><div class="l">Total do ${esc(ORG.tipo)}</div><div class="v">${esc(fmtInd(tot, ind.fmt, true))}</div></div>` : ''}
           <div class="kpi"><div class="l">Média por igreja</div><div class="v">${esc(fmtInd(med, ind.fmt, true))}</div></div>
           ${rank.length ? `<div class="kpi"><div class="l">Maior valor</div><div class="v" style="font-size:18px">${esc(rank[0].i.sigla || rank[0].i.nome)}</div><div class="d muted">${esc(fmtInd(rank[0].v, ind.fmt))}</div></div>` : ''}
         </div>
@@ -688,7 +929,7 @@
           <div class="card"><div class="card-head"><h2>${esc(ind.nome)}</h2><span class="muted small">${ano} · da maior para a menor</span></div>
             ${rank.length ? hbarras(rank.map(x => ({ nome: x.i.sigla || x.i.nome, v: x.v, extra: x.i.nome + (x.p != null ? ' · ' + (ano - 1) + ': ' + fmtInd(x.p, ind.fmt) : '') })), (v, c) => fmtInd(v, ind.fmt, c), 'var(--c1)') : '<div class="list-empty">Sem dados neste ano.</div>'}
             ${ind.id === 'dizscPct' ? '<p class="small muted">Referência: o dízimo ao Supremo Concílio é 10% dos dízimos.</p>' : ''}</div>
-          <div class="card"><div class="card-head"><h2>Total ou média do Presbitério por ano</h2><span class="muted small">${ind.fmt === 'pct' ? 'média das igrejas' : 'soma das igrejas com dado'}</span></div>
+          <div class="card"><div class="card-head"><h2>Total ou média do ${esc(ORG.tipo)} por ano</h2><span class="muted small">${ind.fmt === 'pct' ? 'média das igrejas' : 'soma das igrejas com dado'}</span></div>
             ${barras(anosInd.map(String), [{ nome: ind.nome, cor: 'var(--c1)', vals: anosInd.map(a => { const v = igs.map(i => val(i, a)).filter(x => x != null); return ind.fmt === 'pct' ? (v.length ? v.reduce((x, y) => x + y, 0) / v.length : 0) : v.reduce((x, y) => x + y, 0); }) }], (v, ax) => fmtInd(v, ind.fmt, ax), { label: ind.nome, h: 220 })}
             <p class="small muted">Igrejas com dado: ${anosInd.map(a => a + ': ' + contagem(a)).join(' · ')}. Anos com poucas igrejas não são comparáveis com os demais.</p></div>
         </div>
@@ -725,6 +966,13 @@
       (!f.q || (r.titulo + ' ' + igNome(r.igrejaId)).toLowerCase().includes(f.q.toLowerCase()))
     ).sort((a, b) => b.ano - a.ano || igNome(a.igrejaId).localeCompare(igNome(b.igrejaId)) || a.modeloId.localeCompare(b.modeloId));
     const podeCriar = isAdmin() || S.user.role === 'editor';
+    if (!isPresb()) {
+      shell('relatorios', head('Relatórios da igreja', esc(igNome(S.user.igrejaId)) + ' · formulários do exercício e acervo dos anos anteriores') + areaIgreja());
+      ligarAreaIgreja();
+      $$('[data-go]').forEach(tr => tr.onclick = () => ir(tr.getAttribute('data-go')));
+      if ($('#bNovo')) $('#bNovo').onclick = modalNovo;
+      return;
+    }
     shell('relatorios', head('Relatórios', 'Formulários enviados pelas igrejas e o andamento da análise.', podeCriar ? '<button class="btn primary" id="bNovo">+ Novo relatório</button>' : '') + `
       <div class="card">
         <div class="filters">
@@ -735,7 +983,7 @@
           <div class="field"><label>Situação</label><select id="fst"><option value="">Todas</option><option value="pendentes" ${f.status === 'pendentes' ? 'selected' : ''}>Aguardando análise</option>${STATUS.map(s => `<option ${f.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
         </div>
         <div class="tbl-wrap"><table><thead><tr><th>Ano</th><th>Relatório</th><th>Igreja</th><th>Situação</th><th class="num">Verificações</th><th>Atualizado</th></tr></thead><tbody>
-          ${lista.map(r => { const v = verificar(r); const e = v.filter(x => x.nivel === 'erro').length; return `<tr class="click" data-go="relatorio/${esc(r.id)}"><td>${r.ano}</td><td>${esc(r.titulo)}</td><td>${esc(igNome(r.igrejaId))}</td><td>${badge(r.status)}</td><td class="num">${e ? `<span class="down">${e} problema(s)</span>` : v.length ? `<span class="muted">${v.length} atenção</span>` : '<span class="up">ok</span>'}</td><td class="small muted">${dt(r.updatedAt)}</td></tr>`; }).join('') || '<tr><td colspan="6" class="list-empty">Nenhum relatório encontrado.</td></tr>'}
+          ${lista.map(r => { const v = verificar(r).filter(x => x.nivel !== 'info'); const e = v.filter(x => x.nivel === 'erro').length; return `<tr class="click" data-go="relatorio/${esc(r.id)}"><td>${r.ano}</td><td>${esc(r.titulo)}</td><td>${esc(igNome(r.igrejaId))}</td><td>${badge(r.status)}</td><td class="num">${e ? `<span class="down">${e} problema(s)</span>` : v.length ? `<span class="muted">${v.length} atenção</span>` : '<span class="up">ok</span>'}</td><td class="small muted">${dt(r.updatedAt)}</td></tr>`; }).join('') || '<tr><td colspan="6" class="list-empty">Nenhum relatório encontrado.</td></tr>'}
         </tbody></table></div>
         <p class="small muted">${lista.length} relatório(s).</p>
       </div>`);
@@ -757,21 +1005,94 @@
     $('[data-x]', m.el).onclick = m.fechar;
     $('#nOk', m.el).onclick = async () => {
       const igrejaId = $('#nIg', m.el).value, modeloId = $('#nMod', m.el).value, ano = Number($('#nAno', m.el).value);
-      const mod = modelo(modeloId), ig = igreja(igrejaId) || {};
-      const dados = {};
-      (mod.secoes || []).forEach(s => (s.campos || []).forEach(c => { if (c.origem && c.origem.startsWith('igreja.')) dados[c.id] = ig[c.origem.slice(7)] || ''; }));
-      // ponto de partida a partir do ano anterior
-      const ant = S.d.relatorios.find(r => r.igrejaId === igrejaId && r.modeloId === modeloId && r.ano === ano - 1);
-      if (ant && modeloId === 'estatistico') {
-        const C = ctx(ant.modelo, ant.dados);
-        Object.assign(dados, { com_ant_m: C.V('com_atual_m'), com_ant_f: C.V('com_atual_f'), nc_ant_m: C.V('nc_atual_m'), nc_ant_f: C.V('nc_atual_f'), fin_saldo_ant: C.V('fin_saldo_seguinte'), est_alunos_ant: C.V('est_alunos') });
-      }
-      const r = await acao(() => api({ action: 'salvar', entidade: 'relatorio', item: { igrejaId, modeloId, ano, documento: $('#nDoc', m.el).value.trim(), titulo: mod.nome + ' ' + ano + ($('#nDoc', m.el).value.trim() ? ' · ' + $('#nDoc', m.el).value.trim() : ''), dados } }), 'Relatório criado.');
+      const r = await criarRelatorio(igrejaId, modeloId, ano, $('#nDoc', m.el).value.trim());
       if (!r) return;
       const arq = $('#nArq', m.el).files[0];
       if (arq) await acao(() => anexarArquivo(r.item.id, arq, true), 'Relatório original anexado.');
       m.fechar(); await recarregar(); S.tab = 'form'; ir('relatorio/' + r.item.id);
     };
+  }
+
+  /* ======================= área da igreja ======================= */
+  // cada igreja vê só os próprios relatórios (o servidor filtra); aqui ficam os formulários obrigatórios do exercício e o acervo
+  const exercicio = () => ORG.exercicio || (new Date().getFullYear() - 1);
+  const obrigatorios = ig => (ehCongregacao(ig) ? (ORG.relatoriosCongregacao || ['conselho']) : (ORG.relatoriosObrigatorios || ['estatistico', 'conselho'])).map(modelo).filter(Boolean);
+  async function criarRelatorio(igrejaId, modeloId, ano, doc) {
+    const mod = modelo(modeloId), ig = igreja(igrejaId) || {};
+    const dados = {};
+    (mod.secoes || []).forEach(s => (s.campos || []).forEach(c => { if (c.origem && c.origem.startsWith('igreja.')) dados[c.id] = ig[c.origem.slice(7)] || ''; }));
+    // ponto de partida a partir do ano anterior
+    const ant = S.d.relatorios.find(r => r.igrejaId === igrejaId && r.modeloId === modeloId && r.ano === ano - 1);
+    if (ant && modeloId === 'estatistico') {
+      const C = ctx(ant.modelo || mod, ant.dados || {});
+      Object.assign(dados, { com_ant_m: C.V('com_atual_m'), com_ant_f: C.V('com_atual_f'), nc_ant_m: C.V('nc_atual_m'), nc_ant_f: C.V('nc_atual_f'), fin_saldo_ant: C.V('fin_saldo_seguinte'), est_alunos_ant: C.V('est_alunos') });
+    }
+    return acao(() => api({ action: 'salvar', entidade: 'relatorio', item: { igrejaId, modeloId, ano, documento: doc || '', titulo: mod.nome + ' ' + ano + (doc ? ' · ' + doc : ''), dados } }), 'Formulário criado. Preencha, salve e, no fim, assine e envie.');
+  }
+  function areaIgreja() {
+    const ig = igreja(S.user.igrejaId) || {};
+    const ex = exercicio();
+    const meus = S.d.relatorios.filter(r => r.igrejaId === ig.id);
+    const podeCriar = isAdmin() || S.user.role === 'editor';
+    const passo = r => !r ? 0 : ['Rascunho', 'Devolvido'].includes(r.status) ? 1 : 3;
+    const etapas = ['Preencher', 'Salvar', 'Assinar e enviar', 'Análise do ' + ORG.tipoMin];
+    const cards = obrigatorios(ig).map(m => {
+      const r = meus.find(x => x.modeloId === m.id && x.ano === ex);
+      const p = passo(r);
+      return `<div class="ig-form"><div class="ig-form-t"><b>${esc(m.nome)}</b><span>${r ? badge(r.status) : '<span class="badge" style="background:var(--warn-soft);color:var(--warn)">Não iniciado</span>'}</span></div>
+        <ol class="ig-passos">${etapas.map((e, i) => `<li class="${i < p ? 'ok' : i === p ? 'at' : ''}">${esc(e)}</li>`).join('')}</ol>
+        ${r && r.assinaturaEnvio ? `<p class="small muted" style="margin:0">Assinado por ${esc(r.assinaturaEnvio.nome)} (${esc(r.assinaturaEnvio.cargo || '')}) em ${dt(r.assinaturaEnvio.em, true)} · código <b class="code">${esc(r.assinaturaEnvio.codigo)}</b></p>` : ''}
+        <div class="row-wrap" style="margin-top:auto">${r ? `<a class="btn ${p === 1 ? 'primary' : ''}" href="#/relatorio/${esc(r.id)}">${p === 1 ? (r.status === 'Devolvido' ? 'Corrigir e reenviar' : 'Continuar o preenchimento') : 'Abrir'}</a>`
+          : podeCriar ? `<button class="btn primary" data-criar="${esc(m.id)}">Abrir o formulário em branco</button>` : '<span class="small muted">Quem preenche é o secretário do Conselho.</span>'}</div></div>`;
+    }).join('');
+    const anos = [...new Set(meus.map(r => r.ano))].sort((a, b) => b - a);
+    const acervo = anos.map(a => {
+      const rs = meus.filter(r => r.ano === a && !(a === ex && obrigatorios(ig).some(m => m.id === r.modeloId)));
+      return rs.length ? `<tr class="ig-ano"><td colspan="4">${a}</td></tr>` + rs.map(r => `<tr class="click" data-go="relatorio/${esc(r.id)}"><td>${esc(r.titulo)}</td><td>${badge(r.status)}</td><td class="small">${r.assinaturaEnvio ? 'Assinado · <span class="code">' + esc(r.assinaturaEnvio.codigo) + '</span>' : r.assinaturaOriginal ? 'Original assinado' : '–'}</td><td class="small muted">${dt(r.enviadoEm || r.updatedAt)}</td></tr>`).join('') : '';
+    }).join('');
+    return `<div class="card"><div class="card-head"><h2>Relatórios obrigatórios do exercício ${ex}</h2><span class="muted small">${esc(ig.nome || '')}</span></div>
+        <p class="small muted" style="margin-top:0">Preencha cada formulário, salve quantas vezes precisar e, ao terminar, <b>assine eletronicamente e envie</b> ao ${esc(ORG.tipoMin)}. Depois do envio, só a Mesa pode reabrir.</p>
+        <div class="ig-forms">${cards || '<p class="muted">Nenhum formulário obrigatório configurado.</p>'}</div></div>
+      <div class="card"><div class="card-head"><h2>Acervo dos relatórios da igreja</h2>${podeCriar ? '<button class="btn sm" id="bNovo">+ Outro relatório</button>' : ''}</div>
+        <div class="tbl-wrap"><table><thead><tr><th>Relatório</th><th>Situação</th><th>Assinatura</th><th>Enviado</th></tr></thead><tbody>${acervo || '<tr><td colspan="4" class="list-empty">Nenhum relatório de anos anteriores.</td></tr>'}</tbody></table></div>
+        <p class="small muted" style="margin:8px 0 0">Aqui aparecem só os relatórios da sua igreja.</p></div>`;
+  }
+  function ligarAreaIgreja() {
+    $$('[data-criar]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      const r = await criarRelatorio(S.user.igrejaId, b.getAttribute('data-criar'), exercicio(), '');
+      if (r) { await recarregar(); S.tab = 'form'; ir('relatorio/' + r.item.id); } else b.disabled = false;
+    });
+  }
+  // assinatura eletrônica do envio: login + senha + assinatura desenhada (como de próprio punho) + código e hash do conteúdo
+  function assinarEnvio(r) {
+    return new Promise(res => {
+      const ig = igreja(r.igrejaId) || {};
+      const m = modal('Assinar e enviar', `<p style="margin-top:0">Você vai assinar eletronicamente o <b>${esc(r.titulo)}</b> da ${esc(ig.nome || 'igreja')} e enviá-lo ao ${esc(ORG.tipoMin)}. A assinatura fica ligada ao conteúdo: se o relatório mudar depois, a verificação acusa.</p>
+        <div class="grid g2"><div class="field"><label>Assinante</label><input type="text" value="${esc(S.user.nome)}" disabled></div>
+        <div class="field"><label for="aCar">Cargo</label><select id="aCar">${['Secretário do Conselho', 'Presidente do Conselho', 'Vice-presidente do Conselho', 'Tesoureiro', 'Secretário da Mesa Administrativa'].map(c => `<option ${(S.user.cargo || '') === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div></div>
+        <div class="field"><label>Assine no quadro, com o dedo ou o mouse (como de próprio punho)</label><canvas class="sig-pad" id="aPad" width="800" height="220"></canvas><div><button class="btn sm" id="aLimpa" type="button">Limpar</button></div></div>
+        <div class="field"><label for="aPw">Sua senha</label><input type="password" id="aPw" autocomplete="current-password"></div>
+        <label class="chk"><input type="checkbox" id="aDec"> Declaro que as informações deste relatório conferem com os registros da igreja.</label>`,
+        '<button class="btn" data-x>Cancelar</button><button class="btn primary" id="aOk">Assinar e enviar</button>');
+      const pad = assinaturaPad($('#aPad', m.el));
+      $('#aLimpa', m.el).onclick = pad.limpar;
+      $('[data-x]', m.el).onclick = () => { m.fechar(); res(null); };
+      $('#aOk', m.el).onclick = () => {
+        if (pad.vazio()) return toast('Faça a sua assinatura no quadro.', true);
+        if (!$('#aPw', m.el).value) return toast('Informe a sua senha.', true);
+        if (!$('#aDec', m.el).checked) return toast('Marque a declaração para assinar.', true);
+        const out = { senha: $('#aPw', m.el).value, desenho: pad.png(), cargo: $('#aCar', m.el).value };
+        m.fechar(); res(out);
+      };
+    });
+  }
+  function assinaturaEnvioHTML(r) {
+    const s = r.assinaturaEnvio;
+    if (!s) return '';
+    return `<div class="card assin-envio" style="margin-bottom:16px"><div class="card-head" style="margin-bottom:6px"><h3>Assinatura eletrônica do envio</h3><span class="small muted">confira em Verificar assinatura</span></div>
+      <div class="assin-envio-c">${s.desenho ? `<img src="${esc(s.desenho)}" alt="Assinatura de ${esc(s.nome)}">` : ''}<div><b>${esc(s.nome)}</b><div class="small">${esc(s.cargo || '')} · ${esc((igreja(r.igrejaId) || {}).nome || '')}</div>
+      <div class="small muted">${dt(s.em, true)} · ${esc(s.tipo || '')}</div><div class="small">Código de verificação: <b class="code">${esc(s.codigo)}</b></div><div class="small muted code" style="font-size:11px;word-break:break-all">Resumo do conteúdo (SHA-256): ${esc(s.conteudoHash || '')}</div></div></div></div>`;
   }
 
   /* ======================= formulário ======================= */
@@ -874,7 +1195,7 @@
     const tabs = [['form', 'Formulário'], ['anexos', 'Original e anexos' + (nAnx ? ' (' + nAnx + ')' : '')], ['analise', 'Análise da comissão' + (a.final ? ' ✓' : '')], ['hist', 'Histórico']];
     const temFolha = window.IPB_FOLHA && window.IPB_FOLHA.disponivel(r);
     const acoes = [];
-    if (!ro) acoes.push(`<button class="btn primary" id="bSalvar">${S.edit.sujo ? 'Salvar alterações' : 'Salvar'}</button><button class="btn" id="bEnviar">Enviar para análise</button>`);
+    if (!ro) acoes.push(`<button class="btn primary" id="bSalvar">${S.edit.sujo ? 'Salvar alterações' : 'Salvar'}</button><button class="btn" id="bEnviar">Assinar e enviar</button>`);
     if (temFolha) acoes.push('<button class="btn" id="bPrintF" title="Imprime só o formulário, no layout do relatório físico (A4)">Imprimir formulário</button>');
     acoes.push(`<button class="btn" id="bPrint">${temFolha ? 'Imprimir com parecer' : 'Imprimir / PDF'}</button>`);
     if (isAdmin() || (S.user.role === 'editor' && r.status === 'Rascunho')) acoes.push('<button class="btn danger" id="bExcluir">Excluir</button>');
@@ -885,6 +1206,7 @@
       ${head(esc(r.titulo), `${esc(igNome(r.igrejaId))} · ano ${r.ano} · ${badge(r.status)}${r.assinaturaOriginal ? ' · <span class="small">documento original assinado: ' + esc(r.assinaturaOriginal) + '</span>' : ''}`, acoes.join(''))}
       <div class="tabs no-print" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div class="tab-pane ${S.tab === 'form' ? '' : 'hidden'}" id="tForm">
+        ${assinaturaEnvioHTML(r)}
         <div class="card no-print" style="margin-bottom:16px"><div class="card-head" style="margin-bottom:8px"><h3>Verificações automáticas</h3><span class="small muted">regras do modelo e comparação com ${anterior(r) ? 'o relatório de ' + (r.ano - 1) : 'o ano anterior (não encontrado)'}</span></div><div id="verifs">${alertasHTML(v)}</div></div>
         <div class="card">${temFolha ? `<div class="card-head no-print" style="margin-bottom:10px"><span class="small muted">${usaFolha(r) ? 'Layout do formulário impresso (CSM-IPB). As células amarelas são para preencher; os totais são calculados.' : 'Formulário em lista, campo a campo.'}</span><div class="layout-sw" role="group" aria-label="Layout do formulário"><button data-lay="folha" class="${usaFolha(r) ? 'on' : ''}">Como no papel</button><button data-lay="lista" class="${usaFolha(r) ? '' : 'on'}">Em lista</button></div></div>` : ''}${r.status === 'Devolvido' && a.final ? `<div class="alert err" style="margin-bottom:12px"><div><b>Devolvido pela comissão para correção.</b><div style="white-space:pre-wrap">${esc(a.final.texto)}</div></div></div>` : ''}${formHTML(r, ro)}</div>
       </div>
@@ -913,7 +1235,10 @@
       const er = verificar(r).filter(x => x.nivel === 'erro');
       if (er.length && !(await confirmar(`Há ${er.length} problema(s) apontado(s) nas verificações automáticas. Enviar mesmo assim? A comissão verá esses apontamentos.`, 'Enviar mesmo assim'))) return;
       if (S.edit.sujo && !(await acao(() => api({ action: 'salvar', entidade: 'relatorio', item: { id: r.id, dados: r.dados } })))) return;
-      if (await acao(() => api({ action: 'relatorio', id: r.id, op: 'enviar' }), 'Relatório enviado para análise.')) { await recarregar(); S.edit = null; telaRelatorio(id); }
+      S.edit.sujo = false;
+      const ass = await assinarEnvio(r);
+      if (!ass) return;
+      if (await acao(() => api(Object.assign({ action: 'relatorio', id: r.id, op: 'enviar' }, ass)), 'Relatório assinado e enviado ao ' + ORG.tipoMin + '.')) { await recarregar(); S.edit = null; telaRelatorio(id); }
     };
     if ($('#bExcluir')) $('#bExcluir').onclick = async () => {
       if (!(await confirmar('Excluir este relatório? Isso não pode ser desfeito.', 'Excluir'))) return;
@@ -952,7 +1277,7 @@
       ${lista.map(an => {
         const pdf = an.tipo === 'application/pdf';
         const podeExcluir = isAdmin() || (an.porId && an.porId === S.user.id);
-        return `<div class="anx"><span class="ic">${pdf ? 'PDF' : 'IMG'}</span><div class="grow"><b>${esc(an.nome)}</b>${an.original ? ' <span class="tag">relatório original</span>' : ''}<div class="small muted">${tamanho(an.tamanho || 0)} · ${an.origem === 'pacote' ? 'importado do arquivo enviado pelo Presbitério' : 'anexado por ' + esc(an.porNome || '') + ' em ' + dt(an.em, true)}</div></div>
+        return `<div class="anx"><span class="ic">${pdf ? 'PDF' : 'IMG'}</span><div class="grow"><b>${esc(an.nome)}</b>${an.original ? ' <span class="tag">relatório original</span>' : ''}<div class="small muted">${tamanho(an.tamanho || 0)} · ${an.origem === 'pacote' || an.origem === 'reunioes' ? 'importado do arquivo enviado pelo ' + ORG.tipo : 'anexado por ' + esc(an.porNome || '') + ' em ' + dt(an.em, true)}</div></div>
           <div class="actions"><button class="btn sm primary" data-cmp="${esc(an.id)}">Comparar com o formulário</button><button class="btn sm" data-abr="${esc(an.id)}">Abrir</button>${podeExcluir ? `<button class="btn sm ghost" data-axc="${esc(an.id)}">Excluir</button>` : ''}</div></div>`;
       }).join('') || '<p class="muted" style="margin:0">Nenhum arquivo anexado a este relatório.</p>'}
       ${podeAnexar() ? `<div class="filters" style="margin:14px 0 0"><div class="field" style="min-width:280px"><label for="axF">Anexar PDF ou imagem (até 15 MB)</label><input type="file" id="axF" accept="application/pdf,image/*"></div><button class="btn" id="bAnexar">Anexar</button></div>` : ''}
@@ -1050,7 +1375,19 @@
       }).join('') || '<p class="muted" style="margin:0">Designe a comissão para colher as assinaturas.</p>'}
       ${pode && a.final && (a.membros || []).length && (a.assinaturas || []).length === a.membros.length ? `<div class="actions no-print" style="margin-top:12px"><button class="btn primary" id="bConcluir">Concluir análise: ${esc(a.final.decisao)}</button></div>` : ''}
     </div>`;
+
+    if (a.final && window.IPB_REUNIAO && window.IPB_REUNIAO.folhaRelatorio) {
+      const falta = (a.membros || []).filter((m, i) => !assinou(i)).length;
+      h += `<div class="card" id="cVersaoFinal"><div class="card-head"><h2>7. Versão final do parecer</h2><span class="small muted">no modelo do ${esc(ORG.sigla || '')}, com logo, cabeçalho, participantes e assinaturas</span></div>
+        <p class="small ${falta ? 'down' : 'up'}" style="margin:0 0 10px">${falta ? `Faltam ${falta} assinatura(s). O documento sai marcado como MINUTA até todos assinarem.` : '✓ Todos os membros assinaram. Este é o documento final.'}</p>
+        <div class="actions no-print" style="margin-bottom:12px"><button class="btn primary" id="bVFpdf" title="Só a folha do parecer, no modelo do concílio">Imprimir / PDF sem o formulário</button>${window.IPB_FOLHA && window.IPB_FOLHA.disponivel(r) ? '<button class="btn" id="bVFpdfF" title="Parecer e, em seguida, o formulário do relatório no layout diagramado (como no papel)">Imprimir / PDF com o formulário</button>' : ''}</div>
+        <div class="folha-wrap">${folhaFinal(r)}</div></div>`;
+    }
     return h;
+  }
+  function folhaFinal(r) {
+    const mod = r.modelo || {};
+    return window.IPB_REUNIAO.folhaRelatorio(r, { igreja: igNome(r.igrejaId), modelo: mod.nome || r.titulo, verificarUrl: location.href.replace(/[#?].*$/, '') + '#/verificar' });
   }
   function propostaLocal(r, verifs) {
     const comp = comparacao(r);
@@ -1071,6 +1408,27 @@
   }
   function ligarAnalise(r) {
     const op = async (o, p, msg) => { if (await acao(() => api(Object.assign({ action: 'relatorio', id: r.id, op: o }, p)), msg)) { await recarregar(); S.edit = null; S.tab = 'analise'; telaRelatorio(r.id); } };
+    if ($('#bVFpdf')) $('#bVFpdf').onclick = () => {
+      const nome = ('Parecer ' + (r.analise.comissaoNome || '') + ' - ' + igNome(r.igrejaId) + ' ' + r.ano).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+      window.IPB_REUNIAO.h.imprimir(nome, folhaFinal(r));
+    };
+    if ($('#bVFpdfF')) $('#bVFpdfF').onclick = () => {
+      // parecer + formulário no layout diagramado do relatório (mesmo padrão do botão "Imprimir formulário")
+      const antes = S.layout, tabAntes = S.tab;
+      S.layout = 'folha'; telaRelatorio(r.id, true);
+      const card = $('#tForm > .card:last-child');
+      if (card) card.insertAdjacentHTML('afterbegin', `<div class="pf-print-par">${folhaFinal(r)}</div>`);
+      document.body.classList.add('print-folha', 'print-par');
+      const tituloAntes = document.title;
+      document.title = ('Parecer e relatório - ' + igNome(r.igrejaId) + ' ' + r.ano).replace(/[\\/:*?"<>|]+/g, ' ');
+      const fim = () => {
+        document.body.classList.remove('print-folha', 'print-par'); document.title = tituloAntes;
+        window.removeEventListener('afterprint', fim);
+        S.layout = antes; S.tab = tabAntes; telaRelatorio(r.id, true);
+      };
+      window.addEventListener('afterprint', fim);
+      setTimeout(() => print(), 80);
+    };
     if ($('#bAtrib')) $('#bAtrib').onclick = () => { const v = $('#aCom').value; if (!v) return toast('Escolha a comissão.', true); op('atribuir', { comissaoId: v }, 'Relatório encaminhado à comissão.'); };
     if ($('#bIA')) $('#bIA').onclick = async () => {
       const b = $('#bIA'); b.disabled = true; b.textContent = 'Gerando proposta…';
@@ -1151,17 +1509,32 @@
   function telaAtas() {
     const atas = (S.d.atas || []).slice().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
     const podeEnviar = isAdmin() || S.user.role === 'editor' || S.user.role === 'analista';
-    shell('atas', head('Exame de atas', 'Anexe as imagens das atas. A IA confere cada página com o Regulamento para Confecção de Atas e a Constituição da IPB, e o relator escreve o parecer final.', podeEnviar ? '<button class="btn primary" id="bNovaAta">+ Enviar atas para exame</button>' : '') + `
-      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Igreja</th><th>Reunião</th><th>Livro / atas</th><th class="num">Páginas</th><th>Situação</th><th>Resultado</th><th>Atualizado</th></tr></thead><tbody>
+    shell('atas', head('Exame de atas', 'Anexe o PDF ou as fotos das atas. A IA confere cada página com o Regulamento para Confecção de Atas e a Constituição da IPB, e o relator escreve o parecer final.', podeEnviar ? '<button class="btn primary" id="bNovaAta">+ Enviar atas para exame</button>' : '') + `
+      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Igreja</th><th>Reunião</th><th>Livro / atas</th><th class="num">Arquivos</th><th>Situação</th><th>Resultado</th><th>Atualizado</th></tr></thead><tbody>
       ${atas.map(a => `<tr class="click" data-go="ata/${esc(a.id)}"><td>${esc(igNome(a.igrejaId))}</td><td>${esc(a.tipoReuniao || '')}${a.dataReuniao ? ' · ' + dt(a.dataReuniao) : ''}</td><td>${esc(a.livro ? 'Livro ' + a.livro : '')}${a.numeros ? ' · ' + esc(a.numeros) : ''}</td><td class="num">${a.nPaginas || 0}</td><td>${badge(a.status)}</td><td>${a.final ? esc(a.final.conclusao) : a.ia ? '<span class="muted">proposta da IA pronta</span>' : '–'}</td><td class="small muted">${dt(a.updatedAt)}</td></tr>`).join('') || '<tr><td colspan="7" class="list-empty">Nenhuma ata enviada para exame.</td></tr>'}
       </tbody></table></div></div>
       <div class="card"><h3>Como funciona</h3><ol class="small" style="margin:8px 0 0;padding-left:18px">
-        <li>A igreja (ou a comissão) fotografa ou digitaliza as páginas das atas e envia aqui.</li>
-        <li>A IA lê as imagens e confere ${(window.IPB_REGRAS_ATAS || []).length} regras do Manual Presbiteriano, marcando cada uma como conforme, não conforme ou não verificável, com a evidência encontrada.</li>
+        <li>A igreja (ou a comissão) envia o PDF do livro de atas (digitalizado ou gerado no computador) ou fotos das páginas.</li>
+        <li>A IA lê o PDF ou as imagens e confere ${(window.IPB_REGRAS_ATAS || []).length} regras do Manual Presbiteriano, marcando cada uma como conforme, não conforme ou não verificável, com a evidência encontrada.</li>
         <li>O relator revisa a conferência, ajusta o que for preciso e escreve o parecer final, que é o texto oficial do exame.</li></ol></div>`);
     $$('[data-go]').forEach(tr => tr.onclick = () => ir(tr.getAttribute('data-go')));
     if ($('#bNovaAta')) $('#bNovaAta').onclick = () => modalAta(null);
   }
+  // páginas da ata: imagens (data:image/...) ou PDFs (data:application/pdf;name=...;base64,...)
+  const ehPdf = p => /^data:application\/pdf[;,]/.test(p || '');
+  const nomePdf = p => { const m = /^data:application\/pdf;name=([^;]*);/.exec(p || ''); try { return m ? decodeURIComponent(m[1]) : 'Arquivo PDF'; } catch (e) { return 'Arquivo PDF'; } };
+  const MAX_PDF = 15 * 1024 * 1024;
+  async function lerPdf(file) {
+    if (file.size > MAX_PDF) throw new Error(file.name + ' tem ' + tamanho(file.size) + '. O limite é 15 MB por PDF: divida o arquivo ou reduza a resolução da digitalização.');
+    const url = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+    return String(url).replace(/^data:[^;,]*(;base64)?,/, 'data:application/pdf;name=' + encodeURIComponent(file.name.replace(/[;,]/g, ' ')) + ';base64,');
+  }
+  function blobDe(dataUrl) {
+    const i = dataUrl.indexOf(','), bin = atob(dataUrl.slice(i + 1)), u = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k);
+    return new Blob([u], { type: ehPdf(dataUrl) ? 'application/pdf' : 'image/jpeg' });
+  }
+  const pdfIcone = '<svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M6 2h9l5 5v15H6z" fill="#fff" stroke="currentColor" stroke-width="1.5"/><path d="M15 2v5h5" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="13" y="18" text-anchor="middle" font-size="6" font-weight="700" fill="#b3261e">PDF</text></svg>';
   async function reduzirImagem(file) {
     const url = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
     const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Não consegui abrir a imagem ' + file.name + '. Use JPG ou PNG.')); i.src = url; });
@@ -1184,18 +1557,21 @@
         <div class="field"><label>Ata(s)</label><input type="text" id="aNum" placeholder="Ex.: Ata 245 ou Atas 240 a 252" value="${esc(ata ? ata.numeros || '' : '')}"></div>
         <div class="field"><label>Data da reunião (se for uma só)</label><input type="date" id="aData" value="${esc(ata ? ata.dataReuniao || '' : '')}"></div>
       </div>
-      <div class="field"><label>Imagens das páginas (JPG ou PNG, até 20)</label><input type="file" id="aImgs" accept="image/*" multiple><span class="help">Fotografe cada página inteira, de frente e com boa luz. As imagens são reduzidas antes do envio.</span></div>
+      <div class="field"><label>PDF ou imagens das atas (até 20 arquivos)</label><input type="file" id="aImgs" accept="application/pdf,.pdf,image/*" multiple><span class="help">PDF do livro de atas (até 15 MB cada) ou fotos de cada página inteira, de frente e com boa luz. As fotos são reduzidas antes do envio.</span></div>
       <div class="thumbs" id="aThumbs"></div>
       <div class="field"><label>Observações (opcional)</label><textarea id="aObs">${esc(ata ? ata.observacoes || '' : '')}</textarea></div>`,
       '<button class="btn" data-x>Cancelar</button><button class="btn primary" id="aOk">Enviar</button>', true);
     const thumbs = () => {
-      $('#aThumbs', m.el).innerHTML = paginas.map((p, i) => `<figure><img src="${p}" alt="Página ${i + 1}"><figcaption>Pág. ${i + 1} <button type="button" class="btn ghost sm" data-rm="${i}" aria-label="Remover página ${i + 1}">×</button></figcaption></figure>`).join('');
+      $('#aThumbs', m.el).innerHTML = paginas.map((p, i) => `<figure>${ehPdf(p) ? `<div class="pdf-tile" title="${esc(nomePdf(p))}">${pdfIcone}<span>${esc(nomePdf(p))}</span></div>` : `<img src="${p}" alt="Página ${i + 1}">`}<figcaption>${ehPdf(p) ? 'PDF' : 'Pág.'} ${i + 1} <button type="button" class="btn ghost sm" data-rm="${i}" aria-label="Remover página ${i + 1}">×</button></figcaption></figure>`).join('');
       $$('[data-rm]', m.el).forEach(b => b.onclick = () => { paginas.splice(Number(b.getAttribute('data-rm')), 1); thumbs(); });
     };
     thumbs();
     $('#aImgs', m.el).onchange = async e => {
       const files = Array.from(e.target.files || []);
-      for (const f of files) { if (paginas.length >= 20) { toast('Máximo de 20 páginas.', true); break; } try { paginas.push(await reduzirImagem(f)); } catch (err) { toast(err.message, true); } }
+      for (const f of files) {
+        if (paginas.length >= 20) { toast('Máximo de 20 arquivos.', true); break; }
+        try { paginas.push(/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name) ? await lerPdf(f) : await reduzirImagem(f)); } catch (err) { toast(err.message, true); }
+      }
       e.target.value = ''; thumbs();
     };
     $('[data-x]', m.el).onclick = m.fechar;
@@ -1227,18 +1603,18 @@
     const grupos = [...new Set(regras.map(g => g.grupo))];
     const editarMeta = (isAdmin() || a.criadoPor === S.user.id) && a.status !== 'Analisada';
     shell('atas', head(`Exame de atas · ${esc(igNome(a.igrejaId))}`, `${esc(a.tipoReuniao || '')} · livro ${a.formato === 'manuscrito' ? 'manuscrito' : 'digital'}${a.livro ? ' nº ' + esc(a.livro) : ''}${a.numeros ? ' · ' + esc(a.numeros) : ''}${a.dataReuniao ? ' · ' + dt(a.dataReuniao) : ''} · ${badge(a.status)}`,
-      `${editarMeta ? '<button class="btn" id="bEdAta">Editar / trocar imagens</button>' : ''}<button class="btn" id="bPrintAta">Imprimir / PDF</button>${isAdmin() || (a.criadoPor === S.user.id && a.status === 'Enviada') ? '<button class="btn danger" id="bExAta">Excluir</button>' : ''}${a.status === 'Analisada' && (isAdmin() || (a.final && a.final.porId === S.user.id)) ? '<button class="btn ghost" id="bReAta">Reabrir</button>' : ''}`) + `
+      `${editarMeta ? '<button class="btn" id="bEdAta">Editar / trocar arquivos</button>' : ''}<button class="btn" id="bPrintAta">Imprimir / PDF</button>${isAdmin() || (a.criadoPor === S.user.id && a.status === 'Enviada') ? '<button class="btn danger" id="bExAta">Excluir</button>' : ''}${a.status === 'Analisada' && (isAdmin() || (a.final && a.final.porId === S.user.id)) ? '<button class="btn ghost" id="bReAta">Reabrir</button>' : ''}`) + `
       <div class="ata-grid">
         <div class="card ata-view no-print">
-          <div class="card-head"><h3>Página ${E.pag + 1} de ${(a.paginas || []).length}</h3><div class="actions"><button class="btn sm" id="pgAnt" ${E.pag ? '' : 'disabled'}>‹ Anterior</button><button class="btn sm" id="pgProx" ${E.pag < (a.paginas || []).length - 1 ? '' : 'disabled'}>Próxima ›</button></div></div>
-          <a href="${a.paginas[E.pag]}" target="_blank" rel="noopener"><img src="${a.paginas[E.pag]}" alt="Página ${E.pag + 1} da ata"></a>
-          <div class="thumbs small-th">${(a.paginas || []).map((p, i) => `<button type="button" data-pg="${i}" class="${i === E.pag ? 'on' : ''}"><img src="${p}" alt="Página ${i + 1}"></button>`).join('')}</div>
+          <div class="card-head"><h3>${ehPdf(a.paginas[E.pag]) ? esc(nomePdf(a.paginas[E.pag])) : 'Página'} ${(a.paginas || []).length > 1 ? `<span class="muted small">${E.pag + 1} de ${(a.paginas || []).length}</span>` : ''}</h3><div class="actions"><button class="btn sm" id="pgAnt" ${E.pag ? '' : 'disabled'}>‹ Anterior</button><button class="btn sm" id="pgProx" ${E.pag < (a.paginas || []).length - 1 ? '' : 'disabled'}>Próxima ›</button></div></div>
+          ${ehPdf(a.paginas[E.pag]) ? `<div class="pdf-view"><iframe id="pdfFrame" title="${esc(nomePdf(a.paginas[E.pag]))}"></iframe><p class="small" style="margin:6px 0 0"><a href="#" id="pdfAbrir">Abrir o PDF em outra aba</a></p></div>` : `<a href="${a.paginas[E.pag]}" target="_blank" rel="noopener"><img src="${a.paginas[E.pag]}" alt="Página ${E.pag + 1} da ata"></a>`}
+          ${(a.paginas || []).length > 1 ? `<div class="thumbs small-th">${(a.paginas || []).map((p, i) => `<button type="button" data-pg="${i}" class="${i === E.pag ? 'on' : ''}" title="${ehPdf(p) ? esc(nomePdf(p)) : 'Página ' + (i + 1)}">${ehPdf(p) ? `<span class="pdf-mini">${pdfIcone}</span>` : `<img src="${p}" alt="Página ${i + 1}">`}</button>`).join('')}</div>` : ''}
           ${a.observacoes ? `<p class="small muted">${esc(a.observacoes)}</p>` : ''}
         </div>
         <div>
           <div class="card"><div class="card-head"><h2>Proposta da IA</h2>${pode && SERVER ? `<button class="btn ${a.ia ? '' : 'primary'}" id="bIAata">${a.ia ? 'Analisar novamente' : 'Analisar com IA'}</button>` : ''}</div>
             ${a.ia ? `<div class="ia-box"><div class="small muted" style="margin-bottom:6px">Gerada em ${dt(a.ia.em, true)}${a.ia.modelo ? ' · ' + esc(a.ia.modelo) : ''}. Proposta inicial: o relator confere e decide.</div><div class="txt">${esc(a.ia.resultado.resumo || '')}</div>${(a.ia.resultado.transcricao_resumida ? `<details style="margin-top:8px"><summary class="small">O que a IA leu nas imagens</summary><div class="small" style="white-space:pre-wrap;margin-top:6px">${esc(a.ia.resultado.transcricao_resumida)}</div></details>` : '')}</div>`
-              : `<p class="muted" style="margin:0">${SERVER ? 'Clique em "Analisar com IA" para a conferência automática das páginas.' : 'A leitura das imagens pela IA precisa do sistema conectado ao servidor. No modo demonstração, faça a conferência manual abaixo.'}</p>`}
+              : `<p class="muted" style="margin:0">${SERVER ? 'Clique em "Analisar com IA": a IA lê o PDF ou as imagens e confere cada regra do Manual.' : 'A leitura do PDF ou das imagens pela IA precisa do sistema conectado ao servidor (Supabase com a chave da IA). No modo demonstração, faça a conferência manual abaixo.'}</p>`}
           </div>
           <div class="card"><div class="card-head"><h2>Conferência com o Manual Presbiteriano</h2><span class="small"><span class="sit sit-conforme">${cont.conforme} conformes</span> <span class="sit sit-nao_conforme">${cont.nao_conforme} não conformes</span> <span class="sit sit-nao_verificavel">${cont.nao_verificavel} não verificáveis</span></span></div>
             ${grupos.map(gr => `<h3 class="section-title">${esc(gr)}</h3>${regras.filter(g => g.grupo === gr).map(g => {
@@ -1258,6 +1634,12 @@
         </div>
       </div>`);
     $$('[data-pg]').forEach(b => b.onclick = () => { E.pag = Number(b.getAttribute('data-pg')); telaAta(id); });
+    if ($('#pdfFrame')) {
+      if (S.pdfUrl) URL.revokeObjectURL(S.pdfUrl);
+      S.pdfUrl = URL.createObjectURL(blobDe(a.paginas[E.pag]));
+      $('#pdfFrame').src = S.pdfUrl;
+      $('#pdfAbrir').onclick = e => { e.preventDefault(); window.open(S.pdfUrl, '_blank', 'noopener'); };
+    }
     if ($('#pgAnt')) $('#pgAnt').onclick = () => { E.pag--; telaAta(id); };
     if ($('#pgProx')) $('#pgProx').onclick = () => { E.pag++; telaAta(id); };
     $$('[data-sit]').forEach(s => s.onchange = () => { const k = s.getAttribute('data-sit'); E.conf[k] = Object.assign({}, E.conf[k], { situacao: s.value }); s.className = 'sit-sel sit-' + s.value; });
@@ -1265,7 +1647,7 @@
     const fim = async (req, msg) => { const r = await acao(() => api(Object.assign({ action: 'ata', id }, req)), msg); if (r) { await recarregar(); S.ataEdit = r.item ? { id, a: r.item, conf: JSON.parse(JSON.stringify(r.item.conferencia || {})), pag: E.pag } : null; return r; } return null; };
     if ($('#bConf')) $('#bConf').onclick = async () => { if (await fim({ op: 'conferencia', itens: E.conf }, 'Conferência salva.')) telaAta(id); };
     if ($('#bIAata')) $('#bIAata').onclick = async () => {
-      const b = $('#bIAata'); b.disabled = true; b.textContent = 'Lendo as páginas… (pode levar 1 a 2 minutos)';
+      const b = $('#bIAata'); b.disabled = true; b.textContent = 'Lendo as atas… (pode levar 1 a 3 minutos)';
       try {
         const res = await ia({ tipo: 'ata', ataId: id, regras: regras.map(g => ({ id: g.id, artigo: g.artigo, texto: g.texto })), meta: { igreja: igNome(a.igrejaId), tipoReuniao: a.tipoReuniao, formato: a.formato, livro: a.livro, numeros: a.numeros } });
         if (await fim({ op: 'ia', resultado: res.resultado, modelo: res.modelo || '' }, 'Análise da IA pronta. Confira cada item.')) { E.conf = {}; S.ataEdit.conf = JSON.parse(JSON.stringify(S.ataEdit.a.conferencia || {})); telaAta(id); }
@@ -1296,7 +1678,7 @@
 
   /* ======================= verificação pública ======================= */
   function telaVerificar(cod) {
-    const html = head('Verificar assinatura', 'Confira se uma assinatura de parecer é autêntica e se o conteúdo assinado não foi alterado depois.') + `
+    const html = head('Verificar assinatura', 'Confira se uma assinatura (envio de relatório pela igreja ou parecer da comissão) é autêntica e se o conteúdo assinado não foi alterado depois.') + `
       <div class="card" style="max-width:640px"><form id="fVer" class="filters" style="margin:0"><div class="field" style="flex:1"><label>Código de verificação</label><input type="text" id="vCod" class="code" placeholder="XXXX-XXXX-XXXX" value="${esc(cod || '')}"></div><button class="btn primary">Verificar</button></form><div id="vRes" style="margin-top:14px"></div></div>`;
     if (S.user) shell('verificar', html); else root().innerHTML = `<div class="main" style="max-width:760px;margin:0 auto">${html}<p><a href="#/">← Entrar no sistema</a></p></div>`;
     const go = async () => {
@@ -1306,7 +1688,7 @@
       $('#vRes').innerHTML = !r.encontrado ? '<div class="alert err">Código não encontrado.</div>' :
         `<div class="alert ${r.integro ? 'ok' : 'err'}"><div><b>${r.integro ? '✓ Assinatura válida. O conteúdo não foi alterado desde a assinatura.' : '✗ A assinatura existe, mas o conteúdo do relatório ou do parecer foi alterado depois dela.'}</b>
         <div style="margin-top:6px">${esc(r.assinatura.nome)} (${esc(r.assinatura.funcao)}) assinou em ${dt(r.assinatura.em, true)} · ${esc(r.assinatura.tipo)}</div>
-        <div>${esc(r.relatorio.titulo)} · ${esc(r.relatorio.igreja)} · ${esc(r.relatorio.comissao || '')} · situação: ${esc(r.relatorio.status)}</div></div></div>`;
+        <div>${esc(r.relatorio.titulo)} · ${esc(r.relatorio.igreja)}${r.relatorio.comissao ? ' · ' + esc(r.relatorio.comissao) : ''} · situação: ${esc(r.relatorio.status)}</div></div></div>`;
     };
     $('#fVer').onsubmit = e => { e.preventDefault(); go(); };
     if (cod) go();
@@ -1347,16 +1729,16 @@
         <div><b>Editor</b><br><span class="muted">Preenche e envia os relatórios da sua igreja. Envia atas.</span></div>
         <div><b>Analista</b><br><span class="muted">Membro de comissão: analisa, escreve pareceres e assina.</span></div>
         <div><b>Somente leitura</b><br><span class="muted">Vê relatórios e o painel, sem alterar nada.</span></div>
-      </div><p class="small muted" style="margin:10px 0 0">Usuários sem igreja são do Presbitério e veem todas as igrejas. Usuários de uma igreja veem só a própria.</p></div>
+      </div><p class="small muted" style="margin:10px 0 0">Usuários sem igreja são do ${esc(ORG.tipo)} e veem todas as ${esc(ORG.unidades)}. Usuários de uma igreja veem só a própria.</p></div>
       <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Nome</th><th>Usuário</th><th>Igreja</th><th>Perfil</th><th>Cargo</th><th>Situação</th></tr></thead><tbody>
-      ${us.map(u => `<tr class="click" data-ed="${esc(u.id)}"><td>${esc(u.nome)}</td><td class="code">${esc(u.username)}</td><td>${esc(u.igrejaId ? igNome(u.igrejaId) : 'Presbitério')}</td><td>${esc(ROLE_NOMES[u.role] || u.role)}</td><td>${esc(u.cargo || '')}</td><td>${u.ativo === false ? '<span class="tag gray">inativo</span>' : '<span class="tag">ativo</span>'}</td></tr>`).join('')}
+      ${us.map(u => `<tr class="click" data-ed="${esc(u.id)}"><td>${esc(u.nome)}</td><td class="code">${esc(u.username)}</td><td>${esc(u.igrejaId ? igNome(u.igrejaId) : ORG.tipo)}</td><td>${esc(ROLE_NOMES[u.role] || u.role)}</td><td>${esc(u.cargo || '')}</td><td>${u.ativo === false ? '<span class="tag gray">inativo</span>' : '<span class="tag">ativo</span>'}</td></tr>`).join('')}
       </tbody></table></div></div>`);
     const abrir = u => {
       u = u || { ativo: true, role: 'editor', igrejaId: '' };
       const m = modal(u.id ? 'Editar usuário' : 'Novo usuário', `<div class="grid g2">
         <div class="field"><label>Nome completo</label><input type="text" id="uN" value="${esc(u.nome || '')}"></div>
         <div class="field"><label>Usuário (login)</label><input type="text" id="uU" value="${esc(u.username || '')}"></div>
-        <div class="field"><label>Igreja</label><select id="uI"><option value="">Presbitério (todas)</option>${S.d.igrejas.map(i => `<option value="${esc(i.id)}" ${u.igrejaId === i.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select></div>
+        <div class="field"><label>Igreja</label><select id="uI"><option value="">${esc(ORG.tipo)} (todas)</option>${S.d.igrejas.map(i => `<option value="${esc(i.id)}" ${u.igrejaId === i.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select></div>
         <div class="field"><label>Perfil de acesso</label><select id="uR">${Object.entries(ROLE_NOMES).map(([k, l]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="field"><label>Cargo / função</label><input type="text" id="uC" value="${esc(u.cargo || '')}" placeholder="Ex.: Secretário do Conselho"></div>
         <div class="field"><label>E-mail</label><input type="email" id="uE" value="${esc(u.email || '')}"></div>
@@ -1377,13 +1759,14 @@
   function admComissoes() {
     const cs = S.d.comissoes;
     const analistas = S.d.usuarios.filter(u => u.ativo !== false && ['analista', 'admin'].includes(u.role));
-    shell('admin', head('Comissões', 'Comissões que examinam os relatórios. Cada membro assina o parecer; o relator escreve o texto final.', '<button class="btn primary" id="bNC">+ Nova comissão</button>') + `
+    shell('admin', head('Comissões', 'Comissões que examinam os relatórios. Cada membro assina o parecer; o relator escreve o texto final.', (window.IPB_REUNIAO ? '<button class="btn" id="bPadrao">Criar comissões do concílio</button>' : '') + '<button class="btn primary" id="bNC">+ Nova comissão</button>') + `
       <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Comissão</th><th>Tipo</th><th>Ano</th><th>Membros</th><th>Situação</th></tr></thead><tbody>
-      ${cs.map(c => `<tr class="click" data-ed="${esc(c.id)}"><td>${esc(c.nome)}</td><td>${esc(c.tipo || '')}</td><td>${esc(c.ano || '')}</td><td class="small">${(c.membros || []).map(m => esc(m.nome) + ' <span class="muted">(' + esc(m.funcao) + ')</span>').join('<br>')}</td><td>${c.ativa === false ? '<span class="tag gray">inativa</span>' : '<span class="tag">ativa</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="list-empty">Nenhuma comissão.</td></tr>'}
+      ${cs.map(c => `<tr class="click" data-ed="${esc(c.id)}"><td>${esc(c.nome)}</td><td>${esc(c.tipo || c.grupo || '')}</td><td>${esc(c.ano || '')}</td><td class="small">${(c.membros || []).map(m => esc(m.nome) + ' <span class="muted">(' + esc(m.funcao) + ')</span>').join('<br>')}</td><td>${c.ativa === false ? '<span class="tag gray">inativa</span>' : '<span class="tag">ativa</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="list-empty">Nenhuma comissão.</td></tr>'}
       </tbody></table></div></div>`);
     const abrir = c => {
       c = c ? JSON.parse(JSON.stringify(c)) : { ativa: true, ano: new Date().getFullYear(), tipo: 'Exame de relatórios', membros: [] };
       const m = modal(c.id ? 'Editar comissão' : 'Nova comissão', `<div class="grid g3"><div class="field span2"><label>Nome</label><input type="text" id="cN" value="${esc(c.nome || '')}"></div><div class="field"><label>Ano</label><input type="number" id="cA" value="${esc(c.ano || '')}"></div><div class="field span2"><label>Tipo</label><input type="text" id="cT" value="${esc(c.tipo || '')}"></div><label style="align-self:end"><input type="checkbox" id="cAt" ${c.ativa !== false ? 'checked' : ''}> Ativa</label></div>
+        ${window.IPB_REUNIAO ? window.IPB_REUNIAO.camposComissao(c) : ''}
         <div class="lbl">Membros</div><div id="cM"></div><div><button class="btn sm" id="cAdd" type="button">+ Adicionar membro</button></div>
         <p class="small muted" style="margin:0">Vincule cada membro a um usuário para que ele possa assinar com a própria senha. Membros sem usuário assinam de forma presencial (desenho), colhida por outro membro. Marque um membro como Relator.</p>`,
         `${c.id ? '<button class="btn danger" id="cDel" style="margin-right:auto">Excluir</button>' : ''}<button class="btn" data-x>Cancelar</button><button class="btn primary" id="cOk">Salvar</button>`, true);
@@ -1399,12 +1782,14 @@
       $('[data-x]', m.el).onclick = m.fechar;
       $('#cOk', m.el).onclick = async () => {
         if (c.membros.filter(x => x.funcao === 'Relator').length > 1) return toast('Escolha apenas um relator.', true);
-        const item = { id: c.id, nome: $('#cN', m.el).value.trim(), ano: Number($('#cA', m.el).value) || null, tipo: $('#cT', m.el).value.trim(), ativa: $('#cAt', m.el).checked, membros: c.membros };
+        const item = Object.assign({ id: c.id, nome: $('#cN', m.el).value.trim(), ano: Number($('#cA', m.el).value) || null, tipo: $('#cT', m.el).value.trim(), ativa: $('#cAt', m.el).checked, membros: c.membros },
+          window.IPB_REUNIAO ? window.IPB_REUNIAO.lerCamposComissao(m.el) : {});
         if (await acao(() => api({ action: 'salvar', entidade: 'comissao', item }), 'Comissão salva.')) { m.fechar(); await recarregar(); render(); }
       };
       if ($('#cDel', m.el)) $('#cDel', m.el).onclick = async () => { if (await confirmar('Excluir esta comissão? Relatórios já encaminhados mantêm os membros.', 'Excluir') && await acao(() => api({ action: 'excluir', entidade: 'comissao', id: c.id }), 'Comissão excluída.')) { m.fechar(); await recarregar(); render(); } };
     };
     $('#bNC').onclick = () => abrir(null);
+    if ($('#bPadrao')) $('#bPadrao').onclick = () => window.IPB_REUNIAO.criarPadrao();
     $$('[data-ed]').forEach(tr => tr.onclick = () => abrir(cs.find(x => x.id === tr.getAttribute('data-ed'))));
   }
   function admRegistro() {
@@ -1509,6 +1894,11 @@
       case 'ata': return telaAta(a[0]);
       case 'verificar': return telaVerificar(a[0]);
       case 'admin': return telaAdmin(a[0]);
+      case 'acervo': if (window.IPB_ACERVO) return window.IPB_ACERVO.render(a); return telaPainel();
+      case 'tesouraria': if (window.IPB_TESOURARIA) return window.IPB_TESOURARIA.render(a); return telaPainel();
+      case 'reuniao': case 'reunioes': case 'ata-geral': case 'comissoes': case 'comissao': case 'documentos': case 'delegados': case 'historico': case 'parecer': case 'mesa': case 'pareceres': case 'plenario': case 'numeracao':
+        if (window.IPB_REUNIAO) return window.IPB_REUNIAO.render(p, a);
+        return telaPainel();
       default: return telaPainel();
     }
   }
@@ -1518,6 +1908,8 @@
     if (S.token) { try { await recarregar(); } catch (e) { S.token = null; S.user = null; } }
     render();
   }
+  // funções do app usadas pelo módulo da reunião do concílio (reunioes.js)
+  window.IPB_APP = { ORG, SERVER, ia, S, api, esc, $, $$, shell, head, modal, confirmar, toast, acao, recarregar, render, ir, barras, hbarras, ligarTips, baixar, isAdmin, num, money, moneyK, pct, dt, lerArquivo, tamanho, logo, ctx, modelo };
   window.addEventListener('beforeunload', e => { if (S.edit && S.edit.sujo) { e.preventDefault(); e.returnValue = ''; } });
   iniciar();
 })();

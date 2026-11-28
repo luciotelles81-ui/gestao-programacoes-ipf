@@ -6,12 +6,16 @@
  * quando o sistema está conectado ao Supabase.
  */
 (function () {
-  const KEY = 'ipb-relatorios-db-v1';
+  // outro concílio escolhido na tela de entrada: banco próprio e sem os dados cifrados do concílio padrão
+  const OUTRO = !!(window.IPB_ORG && window.IPB_ORG.outro);
+  const KEY = 'ipb-relatorios-db-v1' + (OUTRO ? '-' + window.IPB_ORG.chaveDados : '');
   const SALT = 'ipb::';
   const SESSION_DAYS = 7;
   const MAX_FAILS = 5;
   const ROLES = ['admin', 'editor', 'analista', 'leitor'];
   const IGREJA_CAMPOS = ['nome', 'sigla', 'tipo', 'igrejaMae', 'endereco', 'bairro', 'cidade', 'uf', 'cep', 'telefone', 'email', 'site', 'cnpj', 'dataOrg', 'secretario', 'pastor', 'presbiterio', 'sinodo', 'ativo'];
+  // campos da comissão: os de sempre e os da reunião do concílio (grupo, modelo de parecer, ordem, base legal, título do relatório)
+  const COMISSAO_CAMPOS = ['nome', 'tipo', 'ano', 'grupo', 'modelo', 'ordem', 'base', 'titulo'];
   const ATA_STATUS = ['Enviada', 'Em análise', 'Analisada'];
   const DECISOES = { 'Aprovar': 'Aprovado', 'Aprovar com ressalvas': 'Aprovado com ressalvas', 'Devolver para correção': 'Devolvido' };
 
@@ -34,7 +38,7 @@
   /* ---------------- anexos (IndexedDB) e pacote cifrado ---------------- */
   function idb() {
     return new Promise((res, rej) => {
-      const rq = indexedDB.open('ipb-anexos', 1);
+      const rq = indexedDB.open('ipb-anexos' + (OUTRO ? '-' + window.IPB_ORG.chaveDados : ''), 1);
       rq.onupgradeneeded = () => rq.result.createObjectStore('f');
       rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
     });
@@ -45,10 +49,25 @@
   }
   const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   const b64e = u => { let s = ''; u.forEach(b => { s += String.fromCharCode(b); }); return btoa(s); };
-  async function pacoteInfo() { try { const r = await fetch('dados/pacote.json', { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; } }
+  async function pacoteInfo() { if (OUTRO) return null; try { const r = await fetch('dados/pacote.json', { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; } }
   async function chavePacote(senha, p) {
     const base = await crypto.subtle.importKey('raw', enc.encode(senha), 'PBKDF2', false, ['deriveKey']);
     return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64d(p.salt), iterations: p.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
+  }
+  // igrejas e relatórios de anos anteriores (mesmo formato do pacote dos dados do Presbitério)
+  function juntarRelatorios(H) {
+    const temRel = id => db.relatorios.some(r => r.igrejaId === id);
+    db.igrejas = db.igrejas.filter(i => temRel(i.id) || db.usuarios.some(u => u.igrejaId === i.id) || !H.igrejas.some(h => h.nome === i.nome));
+    H.igrejas.forEach(i => { const ex = db.igrejas.find(x => x.id === i.id); if (ex) Object.assign(ex, i); else db.igrejas.push(i); });
+    let n = 0;
+    H.relatorios.forEach(h => {
+      const ex = db.relatorios.find(r => r.id === h.id);
+      if (ex) { if (!(ex.anexos || []).length && (h.anexos || []).length) { ex.anexos = h.anexos; n++; } return; }
+      const m = h.modelo || snapshot(db.modelos.find(x => x.id === h.modeloId) || (window.IPB_MODELOS_PADRAO || []).find(x => x.id === h.modeloId));
+      db.relatorios.push(Object.assign(h, { modelo: m, criadoPor: null, criadoPorNome: h.criadoPorNome || 'Importação', createdAt: h.createdAt || h.enviadoEm, updatedAt: h.updatedAt || h.enviadoEm, analise: h.analise || novaAnalise() }));
+      n++;
+    });
+    return n;
   }
   async function abrirPacote(senha) {
     const p = await pacoteInfo();
@@ -70,6 +89,43 @@
     db.pacote = { chave: b64e(new Uint8Array(await crypto.subtle.exportKey('raw', key))), em: now() };
     return true;
   }
+  // pacote das reuniões (reuniões, comissões, membros, acervo e tesouraria), cifrado com a senha dos dados;
+  // os PDFs ficam em dados/reunioes/*.bin, cifrados com uma chave que vem dentro do pacote
+  let motivoReunioes = '';
+  async function abrirReunioes(senha, u) {
+    let p;
+    if (OUTRO) return 0;
+    try { const r = await fetch('dados/reunioes.json', { cache: 'no-store' }); if (!r.ok) { motivoReunioes = 'o arquivo dos dados das reuniões não foi encontrado (erro ' + r.status + ')'; return 0; } p = await r.json(); } catch (e) { motivoReunioes = 'não consegui baixar os dados das reuniões (' + (e.message || e) + ')'; return 0; }
+    let corpo;
+    // aceita a senha digitada com espaços, traços diferentes ou letras em outra caixa
+    const limpa = senha.replace(/\s+/g, '').replace(/[\u2010-\u2015\u2212_.]/g, '-');
+    const semTraco = limpa.replace(/-/g, '');
+    const comTraco = semTraco.length === 20 ? semTraco.match(/.{5}/g).join('-') : limpa;
+    const tentativas = [...new Set([senha, limpa, comTraco, comTraco.charAt(0).toUpperCase() + comTraco.slice(1).toLowerCase(), comTraco.toLowerCase()])];
+    try {
+      for (const t of tentativas) {
+        try {
+          const key = await chavePacote(t, p);
+          const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(p.iv) }, key, b64d(p.ct));
+          corpo = JSON.parse(new TextDecoder().decode(pt));
+          break;
+        } catch (e) { /* tenta a próxima forma */ }
+      }
+      if (!corpo) throw new Error('senha');
+    } catch (e) { motivoReunioes = 'a senha digitada (' + senha.length + ' caracteres) não abre os dados das reuniões' + (crypto.subtle ? '' : ' (navegador sem criptografia)'); return 0; }
+    let n = importarItens(u, corpo.itens || [], now(), true);
+    if (Array.isArray(corpo.igrejas) && Array.isArray(corpo.relatorios)) n += juntarRelatorios(corpo);
+    db.pacoteReunioes = { chave: corpo.chaveArquivos, em: now(), versao: p.salt };
+    return n;
+  }
+  async function lerArquivoReuniao(d) {
+    if (!db.pacoteReunioes || !d.arquivo || !d.arquivo.pacote) return null;
+    const key = await crypto.subtle.importKey('raw', b64d(db.pacoteReunioes.chave), 'AES-GCM', false, ['decrypt']);
+    const r = await fetch(d.arquivo.pacote);
+    if (!r.ok) return null;
+    const buf = new Uint8Array(await r.arrayBuffer());
+    return new Blob([await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12))], { type: d.arquivo.tipo || 'application/pdf' });
+  }
   async function lerPacoteArquivo(arq) {
     if (!db.pacote) fail('Os dados do Presbitério ainda não foram abertos neste navegador. Entre como admin com a senha dos dados.');
     const key = await crypto.subtle.importKey('raw', b64d(db.pacote.chave), 'AES-GCM', false, ['decrypt']);
@@ -89,10 +145,10 @@
 
   async function seed() {
     const t = now();
-    db = { igrejas: [], usuarios: [], modelos: [], comissoes: [], relatorios: [], atas: [], sessoes: [], log: [] };
-    const H = window.IPB_HISTORICO || { igrejas: [], relatorios: [] };
+    db = { igrejas: [], usuarios: [], modelos: [], comissoes: [], relatorios: [], atas: [], reuniao: [], sessoes: [], log: [] };
+    const H = (!OUTRO && window.IPB_HISTORICO) || { igrejas: [], relatorios: [] };
     db.igrejas = clone(H.igrejas);
-    if (!db.igrejas.length) db.igrejas = [{ id: 'ig_filadelfia', nome: 'Igreja Presbiteriana Filadélfia', sigla: 'IPF', tipo: 'Igreja', cidade: 'Parnamirim', uf: 'RN', presbiterio: 'Presbitério Litorâneo do Rio Grande do Norte (PLRN)', sinodo: 'Sínodo do Rio Grande do Norte (SRN)', ativo: true }];
+    if (!db.igrejas.length) db.igrejas = [{ id: 'ig_filadelfia', nome: 'Igreja Presbiteriana Filadélfia', sigla: 'IPF', tipo: 'Igreja', cidade: 'Parnamirim', uf: 'RN', presbiterio: OUTRO ? window.IPB_ORG.nome + (window.IPB_ORG.sigla ? ' (' + window.IPB_ORG.sigla + ')' : '') : 'Presbitério Litorâneo do Rio Grande do Norte (PLRN)', sinodo: OUTRO ? window.IPB_ORG.sinodo || '' : 'Sínodo do Rio Grande do Norte (SRN)', ativo: true }];
     const u = (id, nome, username, igrejaId, role, senha, cargo) => ({ id, nome, username, igrejaId, role, ativo: true, email: '', cargo: cargo || '', createdAt: t, senha });
     const users = [
       u('us_admin', 'Administrador', 'admin', null, 'admin', 'admin123', 'Administrador do sistema'),
@@ -150,11 +206,12 @@
     return r;
   }
   async function conteudoHash(r) { return sha256(stable({ dados: r.dados || {}, final: r.analise.final || null })); }
+  async function hashEnvio(r) { return sha256(stable({ dados: r.dados || {} })); }
 
   /* ---------------- ações ---------------- */
   const A = {};
 
-  A.publico = async () => ({ igrejas: db.igrejas.filter(i => i.ativo).map(i => ({ id: i.id, nome: i.nome, sigla: i.sigla })), modo: 'local', pacoteAberto: !!db.pacote, pacoteFechado: !db.pacote && !!(await pacoteInfo()) });
+  A.publico = async () => ({ igrejas: db.igrejas.filter(i => i.ativo).map(i => ({ id: i.id, nome: i.nome, sigla: i.sigla })), modo: 'local', pacoteAberto: !!db.pacote, pacoteFechado: !db.pacote && !!(await pacoteInfo()), reunioesFechadas: !OUTRO && !db.pacoteReunioes && await fetch('dados/reunioes.json', { method: 'HEAD', cache: 'no-store' }).then(r => r.ok).catch(() => false) });
 
   A.login = async ({ igrejaId, username, senha }) => {
     let aberto = 0;
@@ -165,21 +222,33 @@
       log(ad, 'sistema', 'Dados do Presbitério abertos: ' + db.igrejas.length + ' igrejas e ' + db.relatorios.length + ' relatórios', '', '');
       save();
     }
+    let reunioes = 0; motivoReunioes = '';
+    // abre o pacote das reuniões na primeira vez e de novo quando ele é atualizado
+    const versaoReunioes = !OUTRO && !igrejaId && norm(username) === 'admin' && senha ? await fetch('dados/reunioes.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(p => p && p.salt).catch(() => null) : null;
+    if (versaoReunioes && (!db.pacoteReunioes || db.pacoteReunioes.versao !== versaoReunioes)) {
+      const ad = db.usuarios.find(x => x.id === 'us_admin') || db.usuarios.find(x => x.role === 'admin' && !x.igrejaId);
+      if (!ad) motivoReunioes = 'não há administrador do Presbitério neste navegador';
+      if (ad && (reunioes = await abrirReunioes(senha, ad))) {
+        ad.senhaHash = await sha256(SALT + senha); ad.ativo = true; ad.falhas = 0; ad.bloqueadoAte = null;
+        log(ad, 'sistema', 'Dados das reuniões abertos: ' + reunioes + ' itens', '', '');
+        save();
+      }
+    }
     const u = db.usuarios.find(x => norm(x.username) === norm(username) && (x.igrejaId || '') === (igrejaId || ''));
-    if (!u || !u.ativo) fail('Usuário, igreja ou senha incorretos.', 'LOGIN');
+    if (!u || !u.ativo) fail('Usuário, igreja ou senha incorretos.' + (motivoReunioes ? ' Detalhe: ' + motivoReunioes + '.' : !u && !igrejaId && norm(username) === 'admin' ? ' Detalhe: não há usuário admin do Presbitério neste navegador.' : ''), 'LOGIN');
     if (u.bloqueadoAte && u.bloqueadoAte > Date.now()) fail('Muitas tentativas. Aguarde 5 minutos.', 'LOCKED');
     if (u.senhaHash !== await sha256(SALT + (senha || ''))) {
       u.falhas = (u.falhas || 0) + 1;
       if (u.falhas >= MAX_FAILS) { u.bloqueadoAte = Date.now() + 5 * 60000; u.falhas = 0; }
       log(u, 'login_falhou', 'Senha incorreta', 'usuario', u.id); save();
-      fail('Usuário, igreja ou senha incorretos.', 'LOGIN');
+      fail('Usuário, igreja ou senha incorretos.' + (motivoReunioes ? ' Detalhe: ' + motivoReunioes + '.' : ''), 'LOGIN');
     }
     u.falhas = 0; u.bloqueadoAte = null;
     const token = uid('tk_') + uid();
     db.sessoes = db.sessoes.filter(s => s.expira > Date.now());
     db.sessoes.push({ token, usuarioId: u.id, expira: Date.now() + SESSION_DAYS * 86400000 });
     log(u, 'login', '', 'usuario', u.id); save();
-    return { token, usuario: pubUser(u), pacoteAberto: aberto || undefined };
+    return { token, usuario: pubUser(u), pacoteAberto: aberto || undefined, reunioesAbertas: reunioes || undefined };
   };
 
   A.logout = ({ token }) => { db.sessoes = db.sessoes.filter(s => s.token !== token); save(); return {}; };
@@ -195,6 +264,7 @@
       comissoes: clone(db.comissoes),
       relatorios: clone(rels),
       atas: (db.atas || []).filter(x => veIgreja(u, x.igrejaId)).map(resumoAta),
+      reuniao: clone(db.reuniao || []),
       log: isAdmin(u) ? clone(db.log.slice(0, 500)) : []
     };
   };
@@ -254,7 +324,7 @@
         return { userId: us ? us.id : null, nome: us ? us.nome : String(m.nome), funcao: m.funcao || 'Membro' };
       });
       const ex = db.comissoes.find(x => x.id === item.id);
-      const rec = Object.assign(ex || { id: uid('co_') }, pick(item, ['nome', 'tipo', 'ano']), { membros, ativa: item.ativa !== false });
+      const rec = Object.assign(ex || { id: uid('co_') }, pick(item, COMISSAO_CAMPOS), { membros, ativa: item.ativa !== false });
       if (!ex) db.comissoes.push(rec);
       log(u, ex ? 'editar' : 'criar', rec.nome, 'comissao', rec.id); save();
       return { item: clone(rec) };
@@ -331,12 +401,20 @@
     const t = now();
     let acao = '';
     switch (op) {
-      case 'enviar':
+      case 'enviar': {
         if (!podeEditarDados(u, r)) fail('Este relatório não pode ser enviado por você agora.', 'FORBIDDEN');
+        // assinatura eletrônica de quem envia: senha + assinatura desenhada, ligada ao conteúdo por hash
+        if (!/^data:image\/png;base64,/.test(p.desenho || '')) fail('Faça a sua assinatura no quadro para enviar.');
+        if (u.senhaHash !== await sha256(SALT + (p.senha || ''))) fail('Senha incorreta. O relatório não foi enviado.');
+        const ch = await hashEnvio(r);
+        const hash = await sha256([r.id, u.id, u.nome, p.cargo || '', t, ch].join('|'));
+        const codigo = hash.slice(0, 12).toUpperCase().replace(/(.{4})(?=.)/g, '$1-');
+        r.assinaturaEnvio = { nome: u.nome, userId: u.id, cargo: String(p.cargo || '').slice(0, 80), em: t, tipo: 'Eletrônica (login, senha e assinatura desenhada)', desenho: p.desenho, conteudoHash: ch, hash, codigo };
         a.final = null; a.assinaturas = [];
         r.status = a.comissaoId ? 'Em análise' : 'Enviado';
-        r.enviadoEm = t; acao = 'Enviado para análise';
+        r.enviadoEm = t; acao = 'Assinado por ' + u.nome + (p.cargo ? ' (' + p.cargo + ')' : '') + ' e enviado para análise · ' + codigo;
         break;
+      }
       case 'atribuir': {
         if (!podeAnalisar(u, r)) fail('Você não pode analisar este relatório.', 'FORBIDDEN');
         const c = db.comissoes.find(x => x.id === p.comissaoId);
@@ -442,6 +520,7 @@
       if (!an) fail('Anexo não encontrado.', 'NOTFOUND');
       let bytes;
       if (an.origem === 'pacote') bytes = await lerPacoteArquivo(an.arquivo);
+      else if (an.origem === 'reunioes') { const bl = await lerArquivoReuniao({ arquivo: { pacote: an.arquivo, tipo: an.tipo } }); if (!bl) fail('O arquivo original ainda não foi aberto neste navegador. Entre como admin com a senha dos dados.'); return { blob: bl, nome: an.nome, tipo: an.tipo }; }
       else { const v = await idbOp('readonly', st => st.get(an.id)); if (!v) fail('O arquivo não está neste navegador.'); return { blob: v, nome: an.nome, tipo: an.tipo }; }
       return { blob: new Blob([bytes], { type: an.tipo }), nome: an.nome, tipo: an.tipo };
     }
@@ -473,7 +552,10 @@
   };
 
   /* ---------------- exame de atas ---------------- */
-  function resumoAta(x) { const { paginas, ...r } = x; return Object.assign(clone(r), { nPaginas: (paginas || []).length }); }
+  function resumoAta(x) { const { paginas, ...r } = x; return Object.assign(clone(r), { nPaginas: r.nPaginas != null ? r.nPaginas : (paginas || []).length }); }
+  // as páginas (imagens e PDFs) ficam no IndexedDB, que aguenta arquivos grandes; o banco guarda só os dados da ata
+  const okPagina = x => typeof x === 'string' && (x.startsWith('data:image/') || x.startsWith('data:application/pdf'));
+  async function paginasAta(x) { if (!x.paginasIdb) return x.paginas || []; return (await idbOp('readonly', st => st.get('ata_' + x.id)).catch(() => null)) || []; }
   function getAta(u, id) {
     const x = (db.atas || []).find(a => a.id === id);
     if (!x || !veIgreja(u, x.igrejaId)) fail('Ata não encontrada.', 'NOTFOUND');
@@ -487,7 +569,7 @@
     const u = session(token);
     db.atas = db.atas || [];
     const t = now();
-    if (op === 'abrir') return { item: clone(getAta(u, id)) };
+    if (op === 'abrir') { const x = getAta(u, id); return { item: Object.assign(clone(x), { paginas: await paginasAta(x) }) }; }
     if (op === 'salvar') {
       const it = p.item || {};
       const ex = it.id ? getAta(u, it.id) : null;
@@ -495,22 +577,26 @@
       const igrejaId = ex ? ex.igrejaId : (isAdmin(u) || !u.igrejaId ? it.igrejaId : u.igrejaId);
       if (!igrejaId || !db.igrejas.find(i => i.id === igrejaId)) fail('Escolha a igreja.');
       if (ex && ex.status === 'Analisada' && !isAdmin(u)) fail('Esta ata já foi analisada.', 'FORBIDDEN');
-      const paginas = Array.isArray(it.paginas) ? it.paginas.filter(x => typeof x === 'string' && x.startsWith('data:image/')) : (ex ? ex.paginas : []);
-      if (!paginas.length) fail('Anexe pelo menos uma imagem da ata.');
-      if (paginas.length > 20) fail('Envie no máximo 20 páginas por exame.');
+      const paginas = Array.isArray(it.paginas) ? it.paginas.filter(okPagina) : (ex ? await paginasAta(ex) : []);
+      if (!paginas.length) fail('Anexe o PDF ou pelo menos uma imagem da ata.');
+      if (paginas.length > 20) fail('Envie no máximo 20 arquivos por exame.');
       const rec = Object.assign(ex || { id: uid('at_'), status: 'Enviada', ia: null, conferencia: {}, final: null, criadoPor: u.id, criadoPorNome: u.nome, createdAt: t, historico: [] },
-        pick(it, ['livro', 'numeros', 'dataReuniao', 'tipoReuniao', 'formato', 'observacoes']), { igrejaId, paginas, updatedAt: t });
+        pick(it, ['livro', 'numeros', 'dataReuniao', 'tipoReuniao', 'formato', 'observacoes']), { igrejaId, updatedAt: t, nPaginas: paginas.length, paginasIdb: true });
+      delete rec.paginas;
+      await idbOp('readwrite', st => st.put(paginas, 'ata_' + rec.id));
       if (ex) { rec.ia = null; rec.final = null; }
-      rec.historico.push({ em: t, por: u.nome, acao: ex ? 'Imagens/dados da ata atualizados' : 'Ata enviada para exame (' + paginas.length + ' página(s))' });
+      const nPdf = paginas.filter(x => x.startsWith('data:application/pdf')).length;
+      rec.historico.push({ em: t, por: u.nome, acao: ex ? 'Arquivos/dados da ata atualizados' : 'Ata enviada para exame (' + (nPdf ? nPdf + ' PDF' + (paginas.length > nPdf ? ' e ' + (paginas.length - nPdf) + ' imagem(ns)' : '') : paginas.length + ' página(s)') + ')' });
       if (!ex) db.atas.push(rec);
       log(u, ex ? 'editar' : 'criar', 'Ata ' + (rec.numeros || '') + ' · livro ' + (rec.livro || ''), 'ata', rec.id); save();
-      return { item: clone(rec) };
+      return { item: Object.assign(clone(rec), { paginas }) };
     }
     const x = getAta(u, id);
     let acao = '';
     if (op === 'excluir') {
       if (!(isAdmin(u) || (x.criadoPor === u.id && x.status === 'Enviada'))) fail('Você não pode excluir esta ata.', 'FORBIDDEN');
       db.atas = db.atas.filter(a => a.id !== id);
+      await idbOp('readwrite', st => st.delete('ata_' + id)).catch(() => {});
       log(u, 'excluir', 'Ata ' + (x.numeros || ''), 'ata', id); save();
       return {};
     }
@@ -538,12 +624,205 @@
     x.updatedAt = t;
     x.historico.push({ em: t, por: u.nome, acao });
     log(u, 'ata_' + op, 'Ata ' + (x.numeros || '') + ' · ' + acao, 'ata', x.id); save();
-    return { item: clone(x) };
+    return { item: Object.assign(clone(x), { paginas: await paginasAta(x) }) };
+  };
+
+  /* ---------------- reunião do concílio: comissões, delegados, documentos, pareceres ---------------- */
+  // Itens guardados em db.reuniao (no Supabase: tabela ipb_reuniao_itens). Tipos:
+  // cfg (dados do presbitério), reuniao, delegado, documento, parecer, estatistica, financa.
+  const R_TIPOS = ['cfg', 'reuniao', 'delegado', 'documento', 'parecer', 'estatistica', 'financa', 'ata', 'tesouraria'];
+  const R_SECOES = ['executiva', 'tesouraria', 'institucional', 'concilios', 'correspondencia', 'outros'];
+  const R_MIME = /^(application\/pdf|image\/(png|jpeg|webp|gif)|application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet)|application\/msword|application\/vnd\.ms-excel)$/;
+  const P_STATUS = ['rascunho', 'concluido', 'aprovado', 'emendas', 'rejeitado'];
+  const P_PLENARIO = ['aprovado', 'emendas', 'rejeitado'];
+  const rItens = () => (db.reuniao = db.reuniao || []);
+  const rGet = id => rItens().find(x => x.id === id);
+  const rSemArquivo = x => clone(x);
+  function delegadosDe(comissaoId, reuniaoId) { return rItens().filter(x => x.tipo === 'delegado' && x.comissaoId === comissaoId && x.reuniaoId === reuniaoId); }
+  // quem pode escrever o parecer de uma comissão naquela reunião
+  function podeParecer(u, comissaoId, reuniaoId) {
+    if (isAdmin(u)) return true;
+    if (u.role === 'leitor') return false;
+    const ds = delegadosDe(comissaoId, reuniaoId);
+    if (ds.some(d => d.userId === u.id)) return true;
+    return u.role === 'analista' && !ds.some(d => d.userId);
+  }
+  // a tesouraria do presbitério é editada só pelo administrador e pelos usuários marcados como tesoureiro (cfg.tesoureiros)
+  function ehTesoureiro(u) {
+    if (isAdmin(u)) return true;
+    const c = rGet('cfg');
+    return !!(c && Array.isArray(c.tesoureiros) && c.tesoureiros.includes(u.id) && u.role !== 'leitor');
+  }
+  // os secretários da Mesa (cfg.secretarios) numeram e editam os documentos da reunião e redigem a ata
+  function ehSecretario(u) {
+    if (isAdmin(u)) return true;
+    const c = rGet('cfg');
+    return !!(c && Array.isArray(c.secretarios) && c.secretarios.includes(u.id) && u.role !== 'leitor');
+  }
+  function souRelator(u, comissaoId, reuniaoId) {
+    if (isAdmin(u)) return true;
+    const ds = delegadosDe(comissaoId, reuniaoId);
+    const rel = ds.find(d => d.funcao === 'Relator' && d.userId);
+    return rel ? rel.userId === u.id : podeParecer(u, comissaoId, reuniaoId);
+  }
+  function importarItens(u, itens, t, doPacote) {
+    let n = 0;
+    for (const x of itens) {
+      if (!x || !R_TIPOS.includes(x.tipo) || !x.id) continue;
+      const ex = rGet(x.id);
+      const base = { id: String(x.id), tipo: x.tipo };
+      const rec = Object.assign(ex || base, pick(x, R_CAMPOS[x.tipo]), { updatedAt: t });
+      if (x.tipo === 'parecer') { rec.status = P_STATUS.includes(x.status) ? x.status : 'rascunho'; rec.emendas = x.emendas || ''; rec.historico = rec.historico || [{ em: t, por: u.nome, acao: 'Importado' }]; }
+      // o PDF é enviado depois, arquivo por arquivo; no pacote do presbitério ele vem cifrado em dados/reunioes/
+      if (x.tipo === 'documento') rec.arquivo = ex && ex.arquivo ? ex.arquivo : (doPacote && x.arquivo && /^dados\/reunioes\/[\w-]+\.bin$/.test(x.arquivo.pacote || '') ? clone(x.arquivo) : null);
+      if (!ex) rItens().push(rec);
+      n++;
+    }
+    for (const c of (itens || []).filter(x => x && x.tipo === 'comissao' && x.id && x.nome)) {
+      const ex = db.comissoes.find(y => y.id === c.id);
+      const rec = Object.assign(ex || { id: c.id, membros: [], ativa: true }, pick(c, COMISSAO_CAMPOS));
+      if (!ex) db.comissoes.push(rec);
+      n++;
+    }
+    return n;
+  }
+  const R_CAMPOS = {
+    cfg: ['nome', 'sigla', 'cidade', 'uf', 'sinodo', 'presidente', 'secretario', 'tesoureiro', 'tesoureiros', 'secretarios', 'igrejas', 'reuniaoAtual', 'anos', 'tesouraria'],
+    reuniao: ['tipoReuniao', 'numero', 'ano', 'dataInicio', 'dataFim', 'local', 'cidade', 'materia', 'codigo', 'nome', 'presidente', 'secretario', 'mesa', 'dataConvocacao', 'convocadaPor', 'pauta', 'legislatura', 'secretarias', 'tutores', 'representantes', 'campo'],
+    delegado: ['reuniaoId', 'comissaoId', 'tratamento', 'nome', 'igreja', 'funcao', 'userId'],
+    documento: ['reuniaoId', 'comissaoId', 'numero', 'titulo', 'tipoDoc', 'origem', 'resumo', 'arquivoNome', 'secao', 'pasta', 'ano', 'data', 'restrito', 'destino', 'dataProtocolo', 'despachadoEm', 'responsavelId'],
+    parecer: ['reuniaoId', 'comissaoId', 'modelo', 'data', 'destino', 'cidade', 'docNumero', 'titulo', 'assunto', 'docsAnalisados', 'origens', 'documentoIds', 'campos', 'assinaturas'],
+    estatistica: ['ano', 'igreja', 'valores', 'fonte'],
+    financa: ['ano', 'valores', 'fonte'],
+    ata: ['reuniaoId', 'numero', 'livro', 'folhas', 'data', 'horaInicio', 'horaFim', 'presentesMinistros', 'presentesPresbiteros', 'ausencias', 'devocional', 'expediente', 'registros', 'encerramento', 'incluirPareceres', 'situacao'],
+    tesouraria: ['ano', 'grupo', 'ordem', 'nome', 'previstoAnual', 'mensal', 'restoAnterior', 'lancamentos', 'obs']
+  };
+  function rValidar(tipo, it) {
+    if (tipo === 'reuniao' && !(it.ano > 1900 && it.numero > 0)) fail('Informe o número e o ano da reunião.');
+    if (tipo === 'delegado') {
+      if (!String(it.nome || '').trim() && !it.userId) fail('Informe o nome do membro.');
+      if (!['Relator', 'Participante'].includes(it.funcao)) fail('A função deve ser Relator ou Participante.');
+      if (!rGet(it.reuniaoId)) fail('Escolha a reunião.');
+      if (!db.comissoes.find(c => c.id === it.comissaoId)) fail('Escolha a comissão.');
+    }
+    if (tipo === 'documento') {
+      if (!String(it.titulo || '').trim()) fail('Informe o título do documento.');
+      // documento do acervo: ou pertence a uma reunião, ou a uma seção do ano, ou aos permanentes (institucional)
+      if (it.reuniaoId) { if (!rGet(it.reuniaoId)) fail('Escolha a reunião.'); }
+      else if (!R_SECOES.includes(it.secao)) fail('Escolha a reunião ou a seção do acervo.');
+      else if (it.secao !== 'institucional' && !(Number(it.ano) > 1900)) fail('Informe o ano do documento.');
+    }
+    if (tipo === 'tesouraria') {
+      if (!(Number(it.ano) > 1900)) fail('Informe o ano.');
+      if (!['pastores', 'igrejas', 'despesas'].includes(it.grupo)) fail('Escolha o grupo da conta.');
+      if (!String(it.nome || '').trim()) fail('Informe o nome da conta.');
+    }
+    if (tipo === 'ata' && !rGet(it.reuniaoId)) fail('Escolha a reunião.');
+    if (tipo === 'parecer') {
+      if (!rGet(it.reuniaoId)) fail('Escolha a reunião.');
+      if (!db.comissoes.find(c => c.id === it.comissaoId)) fail('Escolha a comissão.');
+      if (!String(it.assunto || '').trim()) fail('Informe o assunto do parecer.');
+    }
+    if ((tipo === 'estatistica' || tipo === 'financa') && !(Number(it.ano) > 1900)) fail('Informe o ano.');
+  }
+
+  A.reuniao = async ({ token, op, tipo, item, id, nome, dados, itens, status, emendas }) => {
+    const u = session(token);
+    const t = now();
+    if (op === 'arquivo') {
+      const d = rGet(id);
+      if (!d || d.tipo !== 'documento' || !d.arquivo) fail('Este documento não tem arquivo.', 'NOTFOUND');
+      if (d.restrito === true && !isAdmin(u)) fail('Documento de acesso restrito à Mesa (dados pessoais).', 'FORBIDDEN');
+      const v = await idbOp('readonly', st => st.get('rd_' + d.id)) || await lerArquivoReuniao(d).catch(() => null);
+      if (!v) fail('O PDF deste documento não está neste navegador. Envie o arquivo de novo.', 'NOTFOUND');
+      return { blob: v, nome: d.arquivo.nome, tipo: d.arquivo.tipo };
+    }
+    if (op === 'enviar_arquivo') {
+      if (!ehSecretario(u)) fail('Apenas a Mesa e os secretários enviam documentos.', 'FORBIDDEN');
+      const d = rGet(id);
+      if (!d || d.tipo !== 'documento') fail('Documento não encontrado.', 'NOTFOUND');
+      const m = /^data:([\w/.+-]+);base64,/.exec(dados || '');
+      if (!m || !R_MIME.test(m[1])) fail('Envie PDF, imagem, Word ou Excel.');
+      const bytes = b64d(dados.slice(m[0].length));
+      if (bytes.length > 15e6) fail('O arquivo passa de 15 MB.');
+      await idbOp('readwrite', st => st.put(new Blob([bytes], { type: m[1] }), 'rd_' + d.id));
+      let sha256 = '';
+      try { sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))).map(b => b.toString(16).padStart(2, '0')).join(''); } catch (e) { /* sem crypto.subtle */ }
+      d.arquivo = { nome: String(nome || 'documento.pdf'), tipo: m[1], tamanho: bytes.length, em: t, por: u.nome, sha256 };
+      d.updatedAt = t;
+      log(u, 'documento', 'Arquivo do documento ' + (d.numero || '') + ' enviado', 'documento', d.id); save();
+      return { item: rSemArquivo(d) };
+    }
+    if (op === 'importar') {
+      if (!Array.isArray(itens)) fail('Arquivo inválido.');
+      // o tesoureiro pode importar (copiar o ano) só itens da tesouraria
+      if (!isAdmin(u) && !(ehTesoureiro(u) && itens.every(x => x && x.tipo === 'tesouraria'))) fail('Apenas o administrador importa dados.', 'FORBIDDEN');
+      const n = importarItens(u, itens, t, false);
+      log(u, 'importar', n + ' itens da reunião importados', 'reuniao', ''); save();
+      return { importados: n };
+    }
+    if (op === 'decidir') {
+      if (!isAdmin(u)) fail('Só a Mesa registra a decisão do plenário.', 'FORBIDDEN');
+      const p = rGet(id);
+      if (!p || p.tipo !== 'parecer') fail('Parecer não encontrado.', 'NOTFOUND');
+      if (!P_STATUS.includes(status)) fail('Situação inválida.');
+      p.status = status; p.emendas = String(emendas || ''); p.updatedAt = t;
+      p.historico = (p.historico || []).concat({ em: t, por: u.nome, acao: 'Plenário: ' + status });
+      log(u, 'parecer', 'Decisão do plenário: ' + status, 'parecer', p.id); save();
+      return { item: clone(p) };
+    }
+    if (op === 'excluir') {
+      const x = rGet(id);
+      if (!x) fail('Registro não encontrado.', 'NOTFOUND');
+      const pode = isAdmin(u) || (x.tipo === 'tesouraria' && ehTesoureiro(u)) || (x.tipo === 'parecer' && x.status === 'rascunho' && x.criadoPor === u.id);
+      if (!pode) fail('Você não pode excluir este registro.', 'FORBIDDEN');
+      db.reuniao = rItens().filter(y => y.id !== id);
+      if (x.tipo === 'reuniao') db.reuniao = db.reuniao.filter(y => y.reuniaoId !== id);
+      if (x.tipo === 'documento') await idbOp('readwrite', st => st.delete('rd_' + id)).catch(() => {});
+      log(u, 'excluir', x.tipo + ' ' + (x.nome || x.titulo || x.assunto || id), x.tipo, id); save();
+      return {};
+    }
+    if (op !== 'salvar') fail('Operação desconhecida.');
+    if (!R_TIPOS.includes(tipo)) fail('Tipo desconhecido.');
+    const it = clone(item || {});
+    if (tipo === 'cfg') it.id = 'cfg';
+    const ex = it.id ? rGet(it.id) : null;
+    if (ex && ex.tipo !== tipo) fail('Registro de outro tipo.');
+    if (tipo === 'tesouraria') { if (!ehTesoureiro(u)) fail('Apenas o tesoureiro e o administrador editam a tesouraria.', 'FORBIDDEN'); }
+    else if (tipo === 'cfg' && !isAdmin(u) && ehTesoureiro(u)) { for (const k of Object.keys(it)) if (k !== 'id' && k !== 'tesouraria') delete it[k]; } // o tesoureiro só muda o saldo anterior
+    else if ((tipo === 'documento' || tipo === 'ata') && ehSecretario(u)) { /* secretário da Mesa */ }
+    else if (tipo !== 'parecer' && !isAdmin(u)) fail('Apenas a Mesa (administrador) pode fazer isso.', 'FORBIDDEN');
+    rValidar(tipo, Object.assign({}, ex || {}, it));
+    let rec;
+    if (tipo === 'parecer') {
+      const alvo = Object.assign({}, ex || {}, it);
+      if (!podeParecer(u, alvo.comissaoId, alvo.reuniaoId)) fail('Você não é membro desta comissão.', 'FORBIDDEN');
+      if (ex && P_PLENARIO.includes(ex.status) && !isAdmin(u)) fail('O plenário já decidiu sobre este parecer.', 'FORBIDDEN');
+      if (ex && (ex.comissaoId !== alvo.comissaoId || ex.reuniaoId !== alvo.reuniaoId) && !isAdmin(u)) fail('Não é possível mudar a comissão do parecer.', 'FORBIDDEN');
+      let st = it.status === 'concluido' ? 'concluido' : 'rascunho';
+      if (st === 'concluido' && !souRelator(u, alvo.comissaoId, alvo.reuniaoId)) fail('Só o relator da comissão conclui o parecer.', 'FORBIDDEN');
+      rec = Object.assign(ex || { id: uid('pa_'), tipo, criadoPor: u.id, criadoPorNome: u.nome, createdAt: t, historico: [], emendas: '' }, pick(it, R_CAMPOS.parecer), { status: st, updatedAt: t, atualizadoPorNome: u.nome });
+      rec.historico.push({ em: t, por: u.nome, acao: ex ? (st === 'concluido' ? 'Concluído e enviado ao plenário' : 'Editado') : 'Criado' });
+    } else {
+      rec = Object.assign(ex || { id: it.id && tipo === 'cfg' ? 'cfg' : uid({ reuniao: 'ru_', delegado: 'de_', documento: 'do_', estatistica: 'es_', financa: 'fi_', ata: 'ag_', tesouraria: 'te_' }[tipo] || 'x_'), tipo, createdAt: t }, pick(it, R_CAMPOS[tipo]), { updatedAt: t });
+      if (tipo === 'delegado' && rec.userId) { const us = db.usuarios.find(x => x.id === rec.userId); if (!us) rec.userId = null; else if (!rec.nome) rec.nome = us.nome; }
+      // um relator por comissão; no exame de atas, um por igreja (campo igreja)
+      if (tipo === 'delegado' && rec.funcao === 'Relator') delegadosDe(rec.comissaoId, rec.reuniaoId).forEach(d => { if (d.id !== rec.id && d.funcao === 'Relator' && (d.igreja || '') === (rec.igreja || '')) d.funcao = 'Participante'; });
+      if (tipo === 'documento') rec.arquivo = ex ? ex.arquivo || null : null;
+    }
+    if (!ex) rItens().push(rec);
+    log(u, ex ? 'editar' : 'criar', tipo + ' ' + (rec.nome || rec.titulo || rec.assunto || rec.ano || rec.id), tipo, rec.id); save();
+    return { item: clone(rec) };
   };
 
   A.verificar = async ({ codigo }) => {
     const c = String(codigo || '').trim().toUpperCase();
     for (const r of db.relatorios) {
+      const e = r.assinaturaEnvio;
+      if (e && e.codigo === c) {
+        const ig = db.igrejas.find(i => i.id === r.igrejaId);
+        return { encontrado: true, integro: (await hashEnvio(r)) === e.conteudoHash, assinatura: { nome: e.nome, funcao: (e.cargo || '') + ' · envio do relatório', em: e.em, tipo: e.tipo, codigo: e.codigo }, relatorio: { titulo: r.titulo, ano: r.ano, status: r.status, igreja: ig ? ig.nome : '', comissao: '' } };
+      }
       const s = (r.analise.assinaturas || []).find(x => x.codigo === c);
       if (s) {
         const ig = db.igrejas.find(i => i.id === r.igrejaId);
